@@ -4,7 +4,7 @@
 {% block page_css %}<link rel="stylesheet" href="{{ url_for('asset', filename='04_simulation/simulation.css') }}">{% endblock %}
 {% macro help(id, label, text, ingredient=false) %}
 <span class="simulation-help">
-  <button type="button" class="simulation-help-button" data-simulation-help="simulation-help-{{ id }}" aria-label="{{ label }} 설명" aria-expanded="false" aria-describedby="simulation-help-{{ id }}">?</button>
+  <button type="button" class="simulation-help-button" data-simulation-help="simulation-help-{{ id }}" aria-label="{{ label }} 설명" aria-expanded="false" aria-describedby="simulation-help-{{ id }}">!</button>
   <span class="simulation-tooltip" id="simulation-help-{{ id }}" role="tooltip" hidden><strong>{{ label }}</strong>{{ text }}{% if ingredient %}<small>분류 이해를 위한 예시이며, 현재 배합의 확정 전성분 목록은 아닙니다.</small>{% endif %}</span>
 </span>
 {% endmacro %}
@@ -19,9 +19,8 @@
   </header>
   <div class="simulation-top-grid">
     <section class="card simulation-preview" aria-label="실시간 샘플 미리보기">
-      <div class="card-header">
-        <div><p class="text-caption">실시간 샘플 미리보기 · <span id="simulation-modified">기본 배합</span></p><h2 class="card-title" id="simulation-sample-name">고농축 앰플</h2></div>
-        <div class="simulation-preset-row"><label class="form-label" for="simulation-preset">샘플 제형</label><select class="form-control form-control-sm" id="simulation-preset"><option value="serum">세럼</option><option value="ampoule" selected>고농축 앰플</option><option value="lotion">로션</option><option value="cream">크림</option></select></div>
+      <div class="card-header simulation-preview-header">
+        <div class="simulation-preset-row"><select class="form-control form-control-sm" id="simulation-preset" aria-label="샘플 제형"><option value="serum">샘플 제형 · 세럼</option><option value="ampoule" selected>샘플 제형 · 고농축 앰플</option><option value="lotion">샘플 제형 · 로션</option><option value="cream">샘플 제형 · 크림</option></select></div>
         <div class="simulation-sim-value"><span class="text-caption">예측 점도</span><strong id="simulation-viscosity"></strong><small>cPs</small></div>
       </div>
       <div class="card-body">
@@ -48,37 +47,32 @@
           </div>
           {% endfor %}
         </div>
-        <div class="simulation-stress-box">
-          <h3>성분 상성 · 안정화</h3>
-          <div class="simulation-stress-options">
-            <label class="form-check"><input type="checkbox" id="simulation-chk-vitaminc"><span title="산성 조건 시연">비타민 C 15%</span></label>
-            <label class="form-check"><input type="checkbox" id="simulation-chk-oilphase"><span title="상분리 조건 시연">고농도 유상</span></label>
-            <label class="form-check"><input type="checkbox" id="simulation-chk-capsule"><span title="안정화 적용">마이크로 캡슐화</span></label>
-          </div>
-        </div>
-      </div>
-    </section>
-  </div>
-  <div class="simulation-bottom-grid">
-    <section class="card simulation-packaging" aria-label="용기 적합성 확인">
-      <div class="card-header"><h2 class="card-title">용기 적합성 확인</h2><select class="form-control form-control-sm" id="simulation-pack" aria-label="타깃 용기"><option value="dropper">스포이드</option><option value="pump">디스펜서 펌프</option><option value="airless">에어리스 펌프</option><option value="jar">크림 자</option></select></div>
-      <div class="card-body">
-        <div id="simulation-status-card" class="alert simulation-status-card alert-info" role="status" aria-live="polite" data-state="optimal">
-          <div class="simulation-status-top"><div class="simulation-verdict"><span id="simulation-status-icon" aria-hidden="true">✓</span><strong id="simulation-status-label">적합</strong></div><span id="simulation-status-score"></span></div>
-          <p id="simulation-reason"></p>
-        </div>
-        <div class="simulation-recommendation"><span class="text-caption">추천 용기</span><div id="simulation-recommendations" class="simulation-recommendations"></div></div>
         <div class="simulation-hud" aria-label="제형 지표">
           <div class="stat-tile"><span>예상 질감 {{ help('texture', '예상 질감', '예측 점도를 사용감 표현으로 바꾼 지표입니다. 원하는 제형이 묽은지, 풍부하고 되직한지 비교하기 위해 표시합니다. 실제 관능평가 결과는 아닙니다.') }}</span><strong id="simulation-texture"></strong></div>
           <div class="stat-tile"><span>상대 유동성 {{ help('flow', '상대 유동성', '점도로 계산한 0~100 상대 지수입니다. 높을수록 잘 흐르는 방향이며, 배합별 퍼짐과 토출 특성을 비교하기 위해 표시합니다. 실측 유량이나 백분율은 아닙니다.') }}</span><strong id="simulation-flow"></strong></div>
           <div class="stat-tile"><span>유효 성분 농도 {{ help('concentration', '유효 성분 농도', '유효 활성 성분 함량을 ppm으로 환산합니다. 1% = 10,000 ppm이며 바이어의 농도 요구와 배합을 같은 단위로 비교하기 위해 표시합니다. 효능의 크기를 뜻하지는 않습니다.') }}</span><strong id="simulation-active-val"></strong></div>
-          <div class="stat-tile"><span>정제수 잔량비 {{ help('water', '정제수 잔량비', '100%에서 네 가지 배합 성분의 합을 뺀 값입니다. 배합 총량이 100%인지, 성분을 늘릴 때 물의 비중이 얼마나 줄어드는지 확인하기 위해 표시합니다. 상성 토글은 별도의 시연 조건입니다.') }}</span><strong id="simulation-water"></strong></div>
+          <div class="stat-tile"><span>정제수 잔량비 {{ help('water', '정제수 잔량비', '100%에서 네 가지 배합 성분의 합을 뺀 값입니다. 배합 총량이 100%인지, 성분을 늘릴 때 물의 비중이 얼마나 줄어드는지 확인하기 위해 표시합니다.') }}</span><strong id="simulation-water"></strong></div>
         </div>
       </div>
     </section>
-    <section class="card simulation-pitch" aria-label="바이어 제안 가이드">
+  </div>
+  <div class="card simulation-bottom-grid" aria-label="패키징 검토 및 제안 리포트">
+    <section class="simulation-packaging" aria-label="용기 적합성 확인">
+      <div class="card-header"><h2 class="card-title">용기 적합성 확인</h2><select class="form-control form-control-sm" id="simulation-pack" aria-label="타깃 용기"><option value="dropper">스포이드</option><option value="pump">디스펜서 펌프</option><option value="airless">에어리스 펌프</option><option value="jar">크림 자</option></select></div>
+      <div class="card-body">
+        <div id="simulation-status-card" class="alert simulation-status-card alert-info" role="status" aria-live="polite" data-state="optimal">
+          <div class="simulation-status-top"><div class="simulation-verdict"><span id="simulation-status-icon" aria-hidden="true">✓</span><strong id="simulation-status-label">적합</strong></div><span id="simulation-status-score"></span></div>
+        </div>
+        <div class="simulation-recommendation"><span class="text-caption">추천 용기</span><div id="simulation-recommendations" class="simulation-recommendations"></div></div>
+
+      </div>
+    </section>
+    <section class="simulation-pitch" aria-label="바이어 제안 가이드">
       <div class="card-header"><h2 class="card-title">바이어 제안 가이드</h2><button id="simulation-copy-pitch-btn" class="btn btn-soft btn-sm" type="button"><span aria-live="polite">스크립트 복사</span></button></div>
-      <div class="card-body"><p class="simulation-pitch-text" id="simulation-pitch-script"></p></div>
+      <div class="card-body simulation-report-list">
+        <section class="simulation-report" aria-labelledby="simulation-rd-title"><h3 id="simulation-rd-title">R&amp;D 연구소 리포트</h3><p id="simulation-rd-report"></p><p class="simulation-report-action" id="simulation-rd-action"></p></section>
+        <section class="simulation-report" aria-labelledby="simulation-sales-title"><h3 id="simulation-sales-title">바이어 세일즈 피칭</h3><p id="simulation-pitch-script"></p></section>
+      </div>
     </section>
   </div>
 </div>
