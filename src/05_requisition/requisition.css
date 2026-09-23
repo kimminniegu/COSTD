@@ -1,4 +1,104 @@
-/* 개발요청서 전용 CSS (담당자 E)
-   이 페이지에서만 필요한 스타일만 작성합니다.
-   Button / Card / Form 등 공통 요소는 src/common/style.css 를 사용하고 다시 정의하지 않습니다.
-   충돌 방지를 위해 class 이름은 "requisition-" 접두사를 사용합니다. */
+/* 공통 컴포넌트는 그대로 사용하고 개발요청서 배치만 정의합니다. */
+#requisition-app [hidden] { display: none !important; }
+.requisition-mode-card { margin-bottom: var(--space-6); border-radius: var(--radius-xl); }
+.requisition-mode-card > .card-body { padding: var(--space-2); }
+.requisition-mode-card .tabs { display: flex; }
+.requisition-mode-card .tab { flex: 1; }
+.requisition-section-tabs { display: flex; flex-wrap: nowrap; gap: var(--space-1); margin: 0 var(--space-8); padding: var(--space-1); background: var(--color-background); border-radius: var(--radius-sm); overflow-x: auto; }
+.requisition-section-tabs .tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 0 auto;
+  min-height: 44px;
+  white-space: nowrap;
+  text-align: center;
+}
+.requisition-section-tabs .tab:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+.requisition-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: var(--space-5); align-items: start; }
+.requisition-layout > *, .requisition-fields > * { min-width: 0; }
+#requisition-document { grid-template-columns: minmax(0, 1fr) 280px; }
+#requisition-document > .requisition-panel { align-self: start; box-sizing: border-box; }
+.requisition-section { margin: 0; }
+.requisition-section > h2 { margin-bottom: var(--space-5); }
+.requisition-reference-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.requisition-reference-grid:empty { display: none; }
+.requisition-reference { margin: 0; padding: var(--space-4); border: var(--border-default); border-radius: var(--radius-lg); background: var(--color-surface-muted); overflow-wrap: anywhere; }
+.requisition-reference img { object-fit: contain; }
+.requisition-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); }
+.requisition-paper { min-height: auto; border-radius: var(--radius-2xl); overflow: visible; }
+.requisition-paper > .card-header { padding: var(--space-8); }
+.requisition-paper > .card-body { padding: var(--space-6) var(--space-8) var(--space-8); }
+.requisition-fields > .form-group { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; margin: 0; }
+.requisition-fields > .form-group > .form-label { margin: 0; color: var(--color-text-body); font-size: var(--font-size-label); font-weight: var(--font-weight-bold); }
+.requisition-field-content { min-width: 0; }
+.requisition-fields > #requisition-field-export_countries { position: relative; z-index: 5; }
+.requisition-fields > #requisition-field-export_countries .requisition-country-list { z-index: 30; }
+.requisition-field-value { margin: 0; padding: var(--space-4); min-height: 56px; border: 1px solid transparent; border-radius: var(--radius-md); background: var(--color-background); line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
+.requisition-paper .form-control { border-radius: var(--radius-md); }
+.requisition-paper .form-help { margin-top: 8px; }
+.requisition-panel { border-radius: var(--radius-xl); position: sticky; top: var(--space-6); }
+.requisition-panel > .card-header { padding: var(--space-6) var(--space-6) 0; }
+.requisition-panel > .card-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); padding: var(--space-5) var(--space-6) var(--space-6); }
+.requisition-panel-actions { grid-template-columns: minmax(0, 1fr); }
+.requisition-panel-actions > p { text-align: left; }
+.requisition-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.requisition-options { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.requisition-choice-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.requisition-choice { position: relative; cursor: pointer; }
+.requisition-choice input { position: absolute; opacity: 0; pointer-events: none; }
+.requisition-choice span { display: flex; align-items: center; justify-content: center; min-height: 56px; padding: 0 var(--space-4); border: 1px solid transparent; border-radius: var(--radius-md); background: var(--color-background); color: var(--color-text-body); font-weight: var(--font-weight-bold); transition: background var(--transition-base), border-color var(--transition-base), color var(--transition-base), box-shadow var(--transition-base); }
+.requisition-choice:hover span { background: var(--color-border-strong); color: var(--color-text-primary); }
+.requisition-choice.is-selected span { border-color: var(--color-primary-bright); background: var(--color-primary-soft); color: var(--color-primary); }
+.requisition-choice input:checked + span { border-color: var(--color-primary-bright); background: var(--color-primary-soft); color: var(--color-primary); }
+.requisition-choice input:focus-visible + span { border-color: var(--color-primary-bright); box-shadow: var(--shadow-focus); }
+.requisition-drop { min-height: 280px; gap: var(--space-4); justify-content: center; }
+.requisition-drop:focus-within, .requisition-drop:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+.requisition-center { text-align: center; }
+.requisition-notice { margin-bottom: var(--space-6); }
+.requisition-summary { display: grid; gap: var(--space-5); }
+.requisition-summary > div { display: flex; gap: var(--space-4); justify-content: space-between; }
+.requisition-summary dt { color: var(--color-text-secondary); font-size: var(--font-size-label); }
+.requisition-summary dd { margin: 0; font-weight: var(--font-weight-bold); text-align: right; }
+.requisition-panel-section { padding-top: var(--space-6); border-top: var(--border-default); overflow-wrap: anywhere; }
+.requisition-panel-actions { display: grid; gap: var(--space-3); }
+.requisition-loading { min-height: 410px; text-align: center; }
+.requisition-chip-entry { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
+.requisition-chip-entry input { min-width: 0; flex: 1; }
+.requisition-chip-input { position: relative; flex: 1; min-width: 0; }
+.requisition-chip-input input { width: 100%; }
+.requisition-country-list { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20; max-height: 220px; overflow-y: auto; background: var(--color-surface, #fff); border: var(--border-default, 1px solid #ddd); border-radius: var(--radius-md, 8px); box-shadow: 0 4px 12px rgb(0 0 0 / 12%); padding: 4px; }
+.requisition-country-option { display: block; width: 100%; border: 0; background: transparent; color: var(--color-text-primary); padding: 8px 12px; text-align: left; font: inherit; cursor: pointer; border-radius: 4px; }
+.requisition-country-option:hover, .requisition-country-option[aria-selected="true"] { background: var(--color-primary-light, #eef2ff); }
+.requisition-country-empty { margin: 0; padding: 8px 12px; color: var(--color-text-secondary); font-size: var(--font-size-label); }
+.requisition-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.requisition-chips .multi-select__chip { max-width: 100%; height: auto; min-height: var(--space-8); overflow-wrap: anywhere; }
+.requisition-review-item { margin-top: var(--space-2); }
+.requisition-session-note { margin-top: var(--space-5); text-align: center; }
+.requisition-invalid { outline: 1px solid var(--color-danger); border-radius: var(--radius-md); }
+.requisition-print-frame { position: fixed; width: 1px; height: 1px; border: 0; bottom: 0; right: 0; }
+.requisition-reference-upload { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); margin-top: var(--space-5); padding: var(--space-5); border: 1px dashed var(--color-border-strong); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
+.requisition-reference-upload > div { min-width: 0; }
+.requisition-file-input { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.requisition-reference-help { margin-top: var(--space-2); }
+.requisition-reference-empty { display: grid; place-items: center; min-height: 120px; padding: var(--space-6); border: 1px dashed var(--color-border-strong); border-radius: var(--radius-lg); background: var(--color-surface-muted); color: var(--color-text-secondary); text-align: center; }
+@container page (max-width: 1100px) {
+  .requisition-fields { grid-template-columns: minmax(0, 1fr); }
+  .requisition-paper { min-height: auto; }
+}
+@container page (max-width: 880px) {
+  #requisition-upload { grid-template-columns: minmax(0, 1fr); }
+}
+@container page (max-width: 680px) {
+  #requisition-document { grid-template-columns: minmax(0, 1fr); }
+  #requisition-document > .requisition-panel { position: static; height: auto; margin-top: 0; }
+  .requisition-section-tabs { margin-inline: var(--space-4); }
+}
+@container page (max-width: 560px) {
+  .requisition-paper > .card-header { padding: var(--space-5); }
+  .requisition-paper > .card-body { padding: var(--space-5); }
+  .requisition-panel > .card-body { grid-template-columns: minmax(0, 1fr); }
+  .requisition-reference-grid { grid-template-columns: minmax(0, 1fr); }
+  .requisition-reference-upload { align-items: stretch; flex-direction: column; }
+  .requisition-reference-upload .btn { width: 100%; }
+}
