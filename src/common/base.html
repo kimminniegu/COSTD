@@ -10,6 +10,7 @@
     page_css   : 페이지 전용 CSS <link>
     content    : 페이지 본문
     page_js    : 페이지 전용 JS <script>
+    body_class : <body> 에 붙일 class (예: 홈의 한 화면 모드 "is-home")
 -->
 <html lang="ko">
 <head>
@@ -23,7 +24,7 @@
   <link rel="stylesheet" href="{{ url_for('asset', filename='common/style.css') }}">
   {% block page_css %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   {% set ep = request.endpoint %}
 
   {% macro brand() %}
@@ -84,15 +85,17 @@
       {% endcall %}
     </nav>
 
-    {# 사용자 영역 — 로그인 기능 구현 후 실제 사용자 정보 / 로그아웃 연결 (PM) #}
-    <div class="app-user" title="[사용자명] · [소속]">
-      <span class="app-user__avatar">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>
-      </span>
+    {# 사용자 영역 — 세션의 로그인 사용자 (app.py context_processor: current_user) + 로그아웃 #}
+    {% set u = current_user or {"name": "[사용자명]", "team": "[소속]"} %}
+    <div class="app-user" title="{{ u.name }} · {{ u.team }}">
+      <span class="app-user__avatar" aria-hidden="true">{{ u.name[:1] }}</span>
       <span class="app-user__text">
-        <span class="app-user__name">[사용자명]</span>
-        <span class="app-user__team">[소속]</span>
+        <span class="app-user__name">{{ u.name }}</span>
+        <span class="app-user__team">{{ u.team }}</span>
       </span>
+      <a class="app-user__logout" href="{{ url_for('logout') }}" title="로그아웃" aria-label="로그아웃">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="M16 17l5-5-5-5M21 12H9"></path></svg>
+      </a>
     </div>
   </aside>
   <div class="app-sidebar-backdrop" data-sidebar-close></div>

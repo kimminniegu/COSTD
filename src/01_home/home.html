@@ -1,91 +1,139 @@
 {% extends "common/base.html" %}
-{# 담당자 A — Home / 기능 명세: src/01_home/home.md
-   "바로가기" Section의 페이지 연결(Navigation)은 PM 관리 영역입니다.
-   디자인 원본: docs/reference/main.dc.html #}
+{# 담당자 A — Home / 기능 명세: src/01_home/home.md (v0.5)
+   1440×900 기준 스크롤 없는 한 화면 대시보드. (상단: 환율 + 현지 시각 / 왼쪽: 수출입 카드 3개 / 오른쪽: 뉴스 + 규제) 데이터는 src/01_home/home_data.py 가 만들고,
+   화면 그리기는 home.js 가 아래 #home-data JSON 으로 처리합니다. (갱신 시 같은 코드로 다시 그림) #}
 
 {% block title %}홈{% endblock %}
+{% block body_class %}is-home{% endblock %}
 
 {% block page_css %}
 <link rel="stylesheet" href="{{ url_for('asset', filename='01_home/home.css') }}">
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <div>
-    <p class="page-eyebrow" id="home-today"></p>
-    <h1 class="page-title">[사용자명]님, 오늘의 수출 환경이에요</h1>
+<div class="home" id="home">
+
+  <!-- 인사말 줄 (2-3) -->
+  <header class="home-top">
+    <p class="home-greeting">
+      <span class="home-greeting__date">{{ today_text }}</span>
+      <span class="home-greeting__sep" aria-hidden="true">·</span>
+      <span class="home-greeting__text"><strong>{{ user.name }}</strong>님, {{ greeting }}</span>
+    </p>
+  </header>
+
+  <!-- 상단 정보 줄: 환율 띠 (2/3) + 바이어 현지 시각 (1/3, 한 줄 요약형) -->
+  <section class="home-strip" aria-label="환율과 바이어 현지 시각">
+    <div class="card home-rates" id="home-rates">
+      <div class="home-rates__head">
+        <span>환율 <small>매매기준율 · 전일 대비</small></span>
+        <span class="home-rates__meta" id="home-rates-meta"></span>
+      </div>
+      <div class="home-rates__items" id="home-rates-items"><span class="home-loading">환율을 불러오는 중이에요</span></div>
+    </div>
+
+    <article class="card home-clock home-clock--strip" aria-labelledby="home-clock-title">
+      <header class="home-clock__head">
+        <h2 class="home-clock__title" id="home-clock-title">바이어 현지 시각</h2>
+        <div class="home-clock__tools">
+          <div class="tabs home-clock__tabs" role="tablist" aria-label="보기 전환">
+            <button class="tab is-active" type="button" role="tab" data-clock-mode="top_export" aria-selected="true">수출 상위국</button>
+            <button class="tab" type="button" role="tab" data-clock-mode="custom" aria-selected="false">내가 선택</button>
+          </div>
+          <button class="home-clock__edit" id="home-clock-edit" type="button" data-modal-open="home-city-modal" hidden>편집</button>
+        </div>
+      </header>
+      <ul class="home-clock__list" id="home-clock-list"></ul>
+    </article>
+  </section>
+
+  <!-- 아래 영역: 왼쪽 = 화장품 수출입 카드 3개 (pandas 분석) / 오른쪽 = 뉴스 + 규제 -->
+  <section class="home-body">
+
+    <div class="home-trade-col" id="home-trade-col" aria-label="화장품 수출입 정보">
+
+      <article class="card home-panel home-tcard home-tcard--summary" aria-labelledby="home-tsum-title">
+        <header class="home-panel__head">
+          <h2 class="home-panel__title" id="home-tsum-title">화장품 수출입 <span class="home-panel__sub" id="home-tsum-month"></span></h2>
+          <span class="home-panel__meta" id="home-tsum-meta"></span>
+        </header>
+        <div class="home-tcard__body" id="home-tsum-body"><span class="home-loading">수출입 실적을 불러오는 중이에요</span></div>
+      </article>
+
+      <article class="card home-panel home-tcard" aria-labelledby="home-tcountry-title">
+        <header class="home-panel__head">
+          <h2 class="home-panel__title" id="home-tcountry-title">수출 상위국 <span class="home-panel__sub">최근 12개월</span></h2>
+          <span class="home-panel__meta" id="home-tcountry-meta"></span>
+        </header>
+        <ol class="home-rank" id="home-tcountry-list"><li class="home-list__empty">불러오는 중이에요</li></ol>
+      </article>
+
+      <article class="card home-panel home-tcard" aria-labelledby="home-tproduct-title">
+        <header class="home-panel__head">
+          <h2 class="home-panel__title" id="home-tproduct-title">품목별 수출 <span class="home-panel__sub">HS 6단위 · 최근 12개월</span></h2>
+          <span class="home-panel__meta" id="home-tproduct-meta"></span>
+        </header>
+        <ol class="home-rank" id="home-tproduct-list"><li class="home-list__empty">불러오는 중이에요</li></ol>
+      </article>
+
+    </div>
+
+    <div class="home-side">
+
+      <article class="card home-panel home-news" aria-labelledby="home-news-title">
+        <header class="home-panel__head">
+          <h2 class="home-panel__title" id="home-news-title">화장품 최신 뉴스</h2>
+          <form class="home-search home-search--mini" method="get" action="{{ url_for('home_news') }}" role="search">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+            <input class="home-search__input" type="search" name="q" placeholder="검색" aria-label="뉴스 검색" autocomplete="off">
+          </form>
+          <span class="home-panel__tools">
+            <span class="home-panel__meta" id="home-news-meta"></span>
+            <a class="home-more" href="{{ url_for('home_news') }}">더보기 <span aria-hidden="true">→</span></a>
+          </span>
+        </header>
+        <ol class="home-list" id="home-news-list" data-fit>
+          <li class="home-list__empty">뉴스를 불러오는 중이에요</li>
+        </ol>
+      </article>
+
+      <article class="card home-panel home-reg" aria-labelledby="home-reg-title">
+        <header class="home-panel__head">
+          <h2 class="home-panel__title" id="home-reg-title">규제 업데이트 <span class="badge badge-danger home-live"><span class="home-live__dot" aria-hidden="true"></span>실시간</span></h2>
+          <span class="home-panel__tools">
+            <span class="home-panel__meta" id="home-reg-meta"></span>
+            <a class="home-more" href="{{ url_for('home_regulations') }}">더보기 <span aria-hidden="true">→</span></a>
+          </span>
+        </header>
+        <ol class="home-list" id="home-reg-list" data-fit>
+          <li class="home-list__empty">규제 소식을 확인하는 중이에요</li>
+        </ol>
+      </article>
+
+    </div>
+  </section>
+</div>
+
+<!-- 내가 선택: 도시 편집 (7-3) -->
+<div class="modal-backdrop" id="home-city-modal" role="dialog" aria-modal="true" aria-labelledby="home-city-title">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title" id="home-city-title">현지 시각 도시 선택 <span class="text-caption" id="home-city-count">0 / 4</span></h3>
+      <button class="modal-close" type="button" data-modal-close aria-label="닫기">×</button>
+    </div>
+    <div class="modal-body">
+      <input class="form-control form-control-sm" id="home-city-search" type="search" placeholder="국가명 · 도시명 검색" autocomplete="off">
+      <ul class="home-city-options" id="home-city-options"></ul>
+      <p class="form-help mt-2">최대 4곳까지 고를 수 있어요. 선택한 순서대로 표시됩니다.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" type="button" data-modal-close>취소</button>
+      <button class="btn btn-primary" type="button" id="home-city-save">저장</button>
+    </div>
   </div>
 </div>
 
-<!-- 환율 -->
-<section class="section">
-  <div class="section-header">
-    <h2 class="section-title">환율</h2>
-  </div>
-  <div class="card">
-    <div class="card-body">
-      <div class="placeholder">
-        <p class="placeholder-title">환율</p>
-        <p>이 영역은 home.md를 기준으로 담당자가 구현합니다.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- 트렌드 -->
-<section class="section">
-  <div class="section-header">
-    <h2 class="section-title">화장품 수출 트렌드</h2>
-  </div>
-  <div class="card">
-    <div class="card-body">
-      <div class="placeholder">
-        <p class="placeholder-title">트렌드</p>
-        <p>이 영역은 home.md를 기준으로 담당자가 구현합니다.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- AI 챗봇 -->
-<section class="section">
-  <div class="section-header">
-    <h2 class="section-title">AI 챗봇</h2>
-  </div>
-  <div class="card">
-    <div class="card-body">
-      <div class="placeholder">
-        <p class="placeholder-title">AI 챗봇</p>
-        <p>이 영역은 home.md를 기준으로 담당자가 구현합니다.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- 바로가기 Hub (PM 관리: 링크 구조 변경 금지) -->
-<section class="section">
-  <div class="section-header">
-    <h2 class="section-title">바로가기</h2>
-  </div>
-  <div class="grid grid-4">
-    <a class="card home-shortcut" href="{{ url_for('regulatory') }}">
-      <span class="icon-tile"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"></path></svg></span>
-      <span class="home-shortcut__title">국가별 인허가 규제</span>
-    </a>
-    <a class="card home-shortcut" href="{{ url_for('margin') }}">
-      <span class="icon-tile"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"></rect><path d="M9 7h6M9 11h.01M12 11h.01M15 11h.01M9 15h.01M12 15h.01M15 15h.01"></path></svg></span>
-      <span class="home-shortcut__title">원가 경쟁력 및 마진 시뮬레이션</span>
-    </a>
-    <a class="card home-shortcut" href="{{ url_for('simulation') }}">
-      <span class="icon-tile"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"></path></svg></span>
-      <span class="home-shortcut__title">AI 제형/샘플 시뮬레이션</span>
-    </a>
-    <a class="card home-shortcut" href="{{ url_for('dev_request') }}">
-      <span class="icon-tile"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6M8 13h8M8 17h5"></path></svg></span>
-      <span class="home-shortcut__title">개발요청서</span>
-    </a>
-  </div>
-</section>
+<script id="home-data" type="application/json">{{ data | tojson }}</script>
 {% endblock %}
 
 {% block page_js %}
