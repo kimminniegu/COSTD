@@ -147,9 +147,9 @@ Appearance/Sensory, Viscosity, Base Fragrance/Flavor, Base Finish, Base Coverage
 Map other explicit formulation or product development requests that do not fit those fields to product_development.other_requirements.
 Map Necessary Ingredients and Additional Ideal Ingredients to ingredients.necessary and ingredients.ideal.
 Map Application (leave on/rinse off) to product_development.application_type.
-Map ONLY Stability from Quality Testing to quality; required is true/false/null.
-Preserve stated stability duration and responsibility. Never assign an unstated owner.
-Keep missing quality requirement null. No regulatory research or approval claims.
+Map Quality Testing requirements to quality.stability, quality.skin_irritation, quality.eye_irritation, quality.sensory, quality.clinical, and quality.other_tests.
+For each named test, required is true/false/null; preserve stated duration and responsibility. Never assign an unstated owner.
+Keep missing quality requirements null. No regulatory research or approval claims.
 Read the WHOLE file. Preserve all remaining original information in raw_extracted_data groups with source page/sheet.
 commercial_data: SKU count, quantities, MOQ, Incoterms, terms, detailed costs (including formula/component), margins.
 schedule_data: submission due date, In DC Date, launch date.

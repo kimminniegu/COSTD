@@ -53,6 +53,13 @@ try {
   by('section-tab-2').click();
   assert(by('section-2').textContent.includes('수출 금지 원료'), 'prohibited ingredients moved to ingredients');
   assert(!by('section-0').textContent.includes('수출 금지 원료'), 'prohibited ingredients removed from basic information');
+  by('section-tab-3').click();
+  assert(by('section-3').textContent.includes('피부자극 테스트'), 'skin irritation test field');
+  assert(by('section-3').textContent.includes('안자극 테스트'), 'eye irritation test field');
+  assert(by('section-3').textContent.includes('관능 테스트'), 'sensory test field');
+  assert(by('section-3').textContent.includes('임상 테스트'), 'clinical test field');
+  assert(by('section-3').textContent.includes('기타 테스트'), 'other test field');
+  assert(by('section-tab-3').textContent.includes('05') && by('section-tab-4').textContent.includes('06'), 'quality and references order');
   by('section-tab-0').click();
   by('input-export_countries').focus();
   const countryListRect = by('country-list').getBoundingClientRect();

@@ -36,7 +36,14 @@
     source_file: "", version: 1, field_provenance: [], raw_extracted_data: {}, reference_files: [],
     product_development: Object.fromEntries(definitions.filter(([key]) => key.startsWith("product_development.")).map(([key]) => [key.split(".")[1], ""])),
     ingredients: { necessary: [], ideal: [] },
-    quality: { stability: { required: null, duration: "", responsibility: "" } }
+    quality: {
+      stability: { required: null, duration: "", responsibility: "" },
+      skin_irritation: { required: null, duration: "", responsibility: "" },
+      eye_irritation: { required: null, duration: "", responsibility: "" },
+      sensory: { required: null, duration: "", responsibility: "" },
+      clinical: { required: null, duration: "", responsibility: "" },
+      other_tests: ""
+    }
   });
   function notice(message = "") {
     $("notice").textContent = message;
