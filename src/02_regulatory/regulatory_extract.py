@@ -1,4 +1,9 @@
-"""국가별 인허가 규제 — 업로드 문서(텍스트 PDF · .xlsx)에서 성분명·함량을 추출하는 모듈 (담당자 B).
+"""국가별 인허가 규제 — 업로드 문서(텍스트 PDF · 스캔 PDF · 이미지 · .xlsx)에서 성분명·함량을 추출하는 모듈 (담당자 B).
+
+OCR (2026-09-23 추가): 텍스트가 없는 PDF 쪽과 PNG·JPG 이미지는 regulatory_ocr.py(Tesseract, 서버 로컬)로 읽는다.
+- PDF 는 쪽마다 텍스트 유무를 먼저 보고, 텍스트가 거의 없는 쪽에만 OCR 을 적용한다(한 쪽을 두 번 읽지 않음).
+- OCR 로 읽은 행은 모두 needs_review 로 표시한다. 인식 오류를 임의 확정하지 않는다.
+- OCR 이 준비되지 않은 환경에서도 텍스트 PDF·Excel 은 그대로 동작한다.
 
 app.py [B] 영역의 POST /api/regulatory/extract Route 에서만 사용한다. 규제 API 는 호출하지 않는다.
 
@@ -21,6 +26,12 @@ import tempfile
 import zipfile
 from datetime import datetime
 
+import importlib.util as _importlib_util
+
+_ocr_spec = _importlib_util.spec_from_file_location("regulatory_ocr", os.path.join(os.path.dirname(os.path.abspath(__file__)), "regulatory_ocr.py"))
+ocr = _importlib_util.module_from_spec(_ocr_spec)
+_ocr_spec.loader.exec_module(ocr)
+
 MAX_FILE_BYTES = 10 * 1024 * 1024
 MAX_PDF_PAGES = 20
 MAX_XLSX_SHEETS = 20
@@ -28,9 +39,10 @@ MAX_SCAN_ROWS = 2000
 MAX_ITEMS = 200
 MIN_TEXT_CHARS = 20            # 처리한 페이지 전체에서 이보다 적은 글자만 읽히면 스캔 PDF 로 본다
 
-SUPPORTED_EXT = {".pdf": "pdf", ".xlsx": "xlsx"}
-NOT_YET_EXT = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".tif", ".tiff", ".xls", ".csv", ".doc", ".docx", ".hwp", ".txt"}
-UNSUPPORTED_MESSAGE = "현재 텍스트 PDF와 Excel(.xlsx)만 지원합니다. 스캔 PDF·이미지 인식(OCR)은 준비 중이에요."
+SUPPORTED_EXT = {".pdf": "pdf", ".xlsx": "xlsx", ".png": "image", ".jpg": "image", ".jpeg": "image"}
+NOT_YET_EXT = {".gif", ".webp", ".tif", ".tiff", ".bmp", ".heic", ".xls", ".csv", ".doc", ".docx", ".hwp", ".txt"}
+UNSUPPORTED_MESSAGE = "현재 텍스트 PDF · 스캔 PDF · PNG/JPG 이미지 · Excel(.xlsx)만 지원합니다."
+MIN_PAGE_TEXT_CHARS = 20       # 쪽에서 읽힌 글자(공백 제외)가 이보다 적으면 텍스트 없는 쪽으로 보고 OCR 대상
 
 # 성분 표 헤더 인식 (한글·영문). 셀 하나가 이 패턴에 맞고 짧을 때만 헤더로 본다.
 NAME_HEADER = re.compile(r"(inci|ingredient|raw\s*material|성분\s*명?|원료\s*명?|물질\s*명?)", re.I)
@@ -59,7 +71,8 @@ USE_LABEL = re.compile(r"(application|product\s*type|usage|use\s*type|leave[- ]o
 class ExtractError(Exception):
     """추출 실패. kind: validation(400) | limit(400) | unsupported(415) | unreadable(422)"""
 
-    STATUS = {"validation": 400, "limit": 400, "unsupported": 415, "unreadable": 422}
+    STATUS = {"validation": 400, "limit": 400, "unsupported": 415, "unreadable": 422,
+              "ocr_unavailable": 503, "ocr_timeout": 422, "ocr_failed": 422}
 
     def __init__(self, kind, message):
         super().__init__(message)
@@ -126,6 +139,9 @@ def verify_real_format(path, kind):
     if kind == "pdf":
         if not head.startswith(b"%PDF"):
             raise ExtractError("unreadable", "PDF 파일로 읽을 수 없어요. 파일이 손상되었거나 확장자와 내용이 달라요.")
+    elif kind == "image":
+        if not (head.startswith(b"\x89PNG\r\n\x1a\n") or head.startswith(b"\xff\xd8\xff")):
+            raise ExtractError("unreadable", "PNG 또는 JPG 이미지로 읽을 수 없어요. 파일이 손상되었거나 확장자와 내용이 달라요.")
     elif kind == "xlsx":
         if not head.startswith(b"PK") or not zipfile.is_zipfile(path):
             raise ExtractError("unreadable", "Excel(.xlsx) 파일로 읽을 수 없어요. 파일이 손상되었거나 확장자와 내용이 달라요.")
@@ -142,8 +158,12 @@ def extract_upload(filename, stream, sheet=None):
         verify_real_format(path, kind)
         if kind == "pdf":
             result = extract_pdf(path)
+        elif kind == "image":
+            result = extract_image(path)
         else:
             result = extract_xlsx(path, sheet)
+    except ocr.OcrError as exc:
+        raise ExtractError(exc.kind, exc.message)
     finally:
         _remove_quietly(path)
     result["file"] = {"name": os.path.basename(filename or ""), "kind": kind, "size": size}
@@ -220,6 +240,7 @@ def make_item(index, name, amount, role, location, unit_hint=None):
         "amount_unit_hint": unit_hint,             # 열 제목에 단위가 있을 때만 (예: "%")
         "role_raw": (role or "").strip() or None,
         "location": location,
+        "source": "text",                          # text | ocr (OCR 로 읽은 행은 _mark_ocr_items 가 바꾼다)
         "needs_review": bool(reasons),
         "review_reasons": reasons,
     }
@@ -322,25 +343,106 @@ def parse_table_lines(lines, location_of):
     return items, doc_market, doc_use
 
 
+def _mark_ocr_items(items):
+    for it in items:
+        if "(OCR)" in (it.get("location") or ""):
+            it["source"] = "ocr"
+            it["needs_review"] = True
+            it["review_reasons"].append("OCR 인식 결과예요. 원문과 대조해서 성분명·함량을 확인해 주세요.")
+        else:
+            it.setdefault("source", "text")
+    return items
+
+
 def extract_pdf(path):
     pages, failed = _pdf_pages_text(path)
-    total_chars = sum(len(re.sub(r"\s+", "", p)) for p in pages)
-    if total_chars < MIN_TEXT_CHARS:
-        raise ExtractError("unsupported", "텍스트를 읽을 수 없는 PDF 예요(스캔·이미지 PDF 로 보여요). " + UNSUPPORTED_MESSAGE)
+    text_pages = [i + 1 for i, p in enumerate(pages) if len(re.sub(r"\s+", "", p)) >= MIN_PAGE_TEXT_CHARS]
+    image_pages = [i + 1 for i in range(len(pages)) if (i + 1) not in text_pages]   # 텍스트가 거의 없는 쪽 = OCR 대상
 
-    lines, line_page = [], []
-    for pno, text in enumerate(pages, start=1):
-        for ln in text.splitlines():
-            lines.append(ln)
-            line_page.append(pno)
-    items, doc_market, doc_use = parse_table_lines(lines, lambda i: "%d쪽" % line_page[i])
+    ocr_info = {"available": False, "applied_pages": [], "skipped_pages": [], "no_text_pages": [], "engine": None, "message": None}
+    ocr_lines_by_page = {}
+    if image_pages:
+        info = ocr.availability()
+        ocr_info["available"] = info["available"]
+        ocr_info["engine"] = ("tesseract " + str(info["version"])) if info["version"] else None
+        if not info["available"]:
+            if not text_pages:
+                raise ExtractError("ocr_unavailable", "텍스트를 읽을 수 없는 PDF(스캔·이미지)라 OCR 이 필요한데 " + info["message"])
+            ocr_info["skipped_pages"] = image_pages
+            ocr_info["message"] = "이미지 쪽은 OCR 이 준비되지 않아 읽지 못했어요. " + info["message"]
+        else:
+            budget = ocr.Budget()
+            for pno in image_pages:
+                if len(ocr_info["applied_pages"]) >= ocr.OCR_MAX_PAGES or budget.remaining() <= 1:
+                    ocr_info["skipped_pages"].append(pno)
+                    continue
+                img = ocr.render_pdf_page(path, pno - 1)
+                lines, chars = ocr.ocr_lines(img, timeout=budget.page_timeout())
+                ocr_info["applied_pages"].append(pno)
+                if chars < ocr.MIN_OCR_CHARS:
+                    ocr_info["no_text_pages"].append(pno)
+                else:
+                    ocr_lines_by_page[pno] = lines
+
+    if not text_pages and not ocr_lines_by_page:
+        if image_pages and ocr_info["available"]:
+            # OCR 은 돌았지만 글자를 거의 못 읽음 → 인식 결과 없음 (오류 아님)
+            result = _finish("pdf", [], ["OCR 로 읽었지만 인식된 글자가 거의 없어요. 해상도가 높은 스캔본이나 원본 파일을 올려 주세요."],
+                             {"pages": len(pages), "processed": "1~%d쪽" % len(pages)}, None, None)
+            result["ocr"] = ocr_info
+            return result
+        raise ExtractError("unsupported", "텍스트를 읽을 수 없는 PDF 예요. " + UNSUPPORTED_MESSAGE)
+
+    lines, line_loc = [], []
+    for pno in range(1, len(pages) + 1):
+        if pno in text_pages:
+            for ln in pages[pno - 1].splitlines():
+                lines.append(ln); line_loc.append("%d쪽" % pno)
+        elif pno in ocr_lines_by_page:
+            for ln in ocr_lines_by_page[pno]:
+                lines.append(ln); line_loc.append("%d쪽 (OCR)" % pno)
+    items, doc_market, doc_use = parse_table_lines(lines, lambda i: line_loc[i])
+    _mark_ocr_items(items)
 
     notes = []
-    empty_pages = [i + 1 for i, p in enumerate(pages) if len(re.sub(r"\s+", "", p)) < MIN_TEXT_CHARS]
-    if empty_pages or failed:
-        bad = sorted(set(empty_pages + failed))
-        notes.append("텍스트를 읽지 못한 쪽: %s (스캔 쪽은 아직 지원하지 않아요)" % ", ".join("%d쪽" % p for p in bad))
-    return _finish("pdf", items, notes, {"pages": len(pages), "processed": "1~%d쪽" % len(pages)}, doc_market, doc_use)
+    if ocr_info["applied_pages"]:
+        notes.append("OCR 적용: %s. 인식 결과는 원문과 대조가 필요해 모두 ‘확인 필요’로 표시했어요." % ", ".join("%d쪽" % p for p in ocr_info["applied_pages"]))
+    if ocr_info["no_text_pages"]:
+        notes.append("OCR 로 글자를 거의 읽지 못한 쪽: %s" % ", ".join("%d쪽" % p for p in ocr_info["no_text_pages"]))
+    if ocr_info["skipped_pages"]:
+        notes.append("읽지 않은 쪽: %s (%s)" % (", ".join("%d쪽" % p for p in ocr_info["skipped_pages"]),
+                                            ocr_info["message"] or "OCR 은 파일당 %d쪽·%d초까지만 처리해요" % (ocr.OCR_MAX_PAGES, ocr.OCR_TOTAL_BUDGET)))
+    if failed:
+        notes.append("텍스트 추출에 실패한 쪽: %s" % ", ".join("%d쪽" % p for p in failed))
+    result = _finish("pdf", items, notes, {"pages": len(pages), "processed": "1~%d쪽" % len(pages), "text_pages": text_pages, "ocr_pages": ocr_info["applied_pages"]}, doc_market, doc_use)
+    result["ocr"] = ocr_info
+    return result
+
+
+# ---------------------------------------------------------------------------
+# 이미지 (PNG · JPG) — 전체를 OCR
+# ---------------------------------------------------------------------------
+
+def extract_image(path):
+    info = ocr.availability()
+    if not info["available"]:
+        raise ExtractError("ocr_unavailable", "이미지 인식(OCR)이 준비되지 않았어요. " + info["message"])
+    img = ocr.open_image_file(path)
+    width, height = img.size
+    lines, chars = ocr.ocr_lines(img)
+    ocr_info = {"available": True, "applied_pages": [1], "skipped_pages": [], "no_text_pages": [] if chars >= ocr.MIN_OCR_CHARS else [1],
+                "engine": ("tesseract " + str(info["version"])) if info["version"] else "tesseract", "message": None}
+    scope = {"pages": 1, "processed": "이미지 1장 (%d x %d px)" % (width, height), "ocr_pages": [1]}
+    if chars < ocr.MIN_OCR_CHARS:
+        result = _finish("image", [], ["OCR 로 읽었지만 인식된 글자가 거의 없어요. 표가 선명하게 보이는 이미지를 올려 주세요."], scope, None, None)
+        result["ocr"] = ocr_info
+        return result
+    items, doc_market, doc_use = parse_table_lines(lines, lambda i: "이미지 (OCR)")
+    _mark_ocr_items(items)
+    notes = ["OCR 적용: 이미지 전체. 인식 결과는 원문과 대조가 필요해 모두 ‘확인 필요’로 표시했어요."]
+    result = _finish("image", items, notes, scope, doc_market, doc_use)
+    result["ocr"] = ocr_info
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -437,7 +539,7 @@ def _finish(kind, items, notes, scope, doc_market, doc_use):
         notes.append("성분 행이 %d개를 넘어 앞 %d개만 표시했어요." % (MAX_ITEMS, MAX_ITEMS))
         items = items[:MAX_ITEMS]
     status = "extracted" if items else "empty"
-    if not items:
+    if not items and not any("인식된 글자가 거의 없어요" in n for n in notes):
         notes.append("성분 표(INCI name · 성분명 · 원료명 등 제목이 있는 표)를 찾지 못했어요. 표 형식을 확인하거나 직접 입력해 주세요.")
     return {
         "status": status,

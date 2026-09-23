@@ -5,7 +5,8 @@
    자동완성: 2글자 이상 입력 후 300ms 대기 → 후보 최대 10개 (한글명·영문 INCI명, 시작 일치). 후보 선택은 성분 확정만.
    파일 탭: 텍스트 PDF·.xlsx 업로드 → (시트 선택) → 성분명·함량 추출 → 확인·수정 표 (POST /api/regulatory/extract → regulatory_extract.py).
    성분 확인·일괄 조회: 확인 버튼 → 행별 후보 검색(정확 일치 하나만 자동 확정, 복수 후보는 행에서 선택) → 확정 행만 시장별 규제 순차 조회 → 결과 표 + 상세 Modal.
-   미구현: 중간 포함 검색, 스캔 PDF·이미지 OCR, 함량 기준 비교(검토 상태). #}
+   OCR: 텍스트 없는 PDF 쪽과 PNG·JPG 는 서버 로컬 Tesseract(regulatory_ocr.py)로 읽고 결과 행은 모두 '확인 필요'. 외부 전송 없음.
+   미구현: 중간 포함 검색, 함량 기준 비교(검토 상태). #}
 
 {% block title %}국가별 인허가 규제{% endblock %}
 
@@ -27,7 +28,7 @@
 {# 구현 상태 안내 — 기능 구현 후 제거 #}
 <div class="alert alert-info mb-6" id="regulatory-dev-notice">
   <div>
-    <p class="alert-title">성분 직접 검색·자동완성 · 파일 성분 추출·확인·규제 일괄 조회 사용 가능 · 스캔 PDF·이미지와 함량 기준 비교는 준비 중</p>
+    <p class="alert-title">성분 직접 검색·자동완성 · 파일(텍스트 PDF·스캔 PDF·이미지·Excel) 성분 추출·확인·규제 일괄 조회 사용 가능 · 함량 기준 비교는 준비 중</p>
     <p id="regulatory-dev-notice-body" hidden></p>
   </div>
 </div>
@@ -120,7 +121,7 @@
               <label class="file-upload" id="regulatory-file-dropzone" for="regulatory-file-input">
                 <input type="file" id="regulatory-file-input" name="file" accept=".pdf,.xlsx,.jpg,.jpeg,.png">
                 <span class="file-upload__title">파일을 끌어다 놓거나 클릭하여 선택</span>
-                <span class="text-caption">지원: 텍스트 PDF · XLSX (10 MB 이하, PDF 20쪽 이하) / 스캔 PDF·이미지는 준비 중</span>
+                <span class="text-caption">지원: 텍스트 PDF · 스캔 PDF · PNG/JPG · XLSX (10 MB 이하, PDF 20쪽 이하, OCR 은 파일당 10쪽·90초까지)</span>
               </label>
               <p class="form-help" id="regulatory-file-name" hidden></p>
               <p class="form-error" id="regulatory-file-error" hidden>파일을 선택해 주세요.</p>

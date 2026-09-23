@@ -451,12 +451,20 @@ class ExtractPdfTest(unittest.TestCase):
         self.assertEqual(r["file"]["kind"], "pdf")
         self.assertEqual(_temp_leftovers(), [])
 
-    def test_scanned_like_pdf_is_unsupported_not_success(self):
-        with self.assertRaises(rx.ExtractError) as ctx:
-            rx.extract_upload("scan.pdf", _io.BytesIO(_pdf_blank_bytes()))
-        self.assertEqual(ctx.exception.kind, "unsupported")
-        self.assertEqual(ctx.exception.http_status, 415)
-        self.assertIn("텍스트 PDF와 Excel", ctx.exception.message)
+    def test_text_less_pdf_without_ocr_is_503_never_success(self):
+        # 텍스트 없는 PDF: OCR 이 없으면 설치 안내(503), OCR 이 있으면 인식 후 '결과 없음'(status=empty). 추출 성공으로 표시하지 않는다
+        no_ocr = {"available": False, "engine": "tesseract", "version": None, "cmd": None, "langs": [], "missing": ["tesseract 실행 파일"], "message": "OCR 준비가 안 됐어요. " + rx.ocr.INSTALL_HINT}
+        with mock.patch.object(rx.ocr, "availability", return_value=no_ocr):
+            with self.assertRaises(rx.ExtractError) as ctx:
+                rx.extract_upload("scan.pdf", _io.BytesIO(_pdf_blank_bytes()))
+        self.assertEqual(ctx.exception.kind, "ocr_unavailable")
+        self.assertEqual(ctx.exception.http_status, 503)
+        self.assertIn("winget", ctx.exception.message)
+        ready = dict(no_ocr, available=True, missing=[], version="5.4", message="")
+        with mock.patch.object(rx.ocr, "availability", return_value=ready),              mock.patch.object(rx.ocr, "render_pdf_page", return_value=object()),              mock.patch.object(rx.ocr, "ocr_lines", return_value=([""], 0)):
+            r = rx.extract_upload("scan.pdf", _io.BytesIO(_pdf_blank_bytes()))
+        self.assertEqual(r["status"], "empty")
+        self.assertEqual(r["items"], [])
         self.assertEqual(_temp_leftovers(), [])
 
     def test_encrypted_pdf_is_unreadable(self):
@@ -576,13 +584,21 @@ class ExtractRouteTest(unittest.TestCase):
         self.assertEqual(res.status_code, 400)
         self.assertEqual(res.get_json()["error"]["kind"], "validation")
 
-    def test_image_is_415_with_guidance(self):
-        res = self._post("photo.png", b"\x89PNG\r\n\x1a\n" + b"0" * 100)
+    def test_unsupported_format_is_415_with_guidance(self):
+        res = self._post("photo.gif", b"GIF89a" + b"0" * 100)
         self.assertEqual(res.status_code, 415)
         body = res.get_json()
         self.assertFalse(body["ok"])
         self.assertEqual(body["error"]["kind"], "unsupported")
-        self.assertIn("텍스트 PDF와 Excel", body["error"]["message"])
+        self.assertIn("PNG/JPG", body["error"]["message"])
+
+    def test_broken_png_is_422_not_success(self):
+        ready = {"available": True, "engine": "tesseract", "version": "5.4", "cmd": "x", "langs": ["eng", "kor"], "missing": [], "message": ""}
+        with mock.patch.object(rx.ocr, "availability", return_value=ready):
+            res = self._post("photo.png", b"\x89PNG\r\n\x1a\n" + b"0" * 100)   # 서명만 맞고 내용은 깨진 PNG
+        self.assertEqual(res.status_code, 422)
+        self.assertEqual(res.get_json()["error"]["kind"], "ocr_failed")
+        self.assertEqual(_temp_leftovers(), [])
 
     def test_pdf_route_ok_and_no_regulation_api_call(self):
         with open(SAMPLES / "EU-SER-041_development_brief.pdf", "rb") as f:
@@ -660,4 +676,163 @@ class LookupStatusDiagnosisTest(unittest.TestCase):
             res = client.get("/api/regulatory/regulations?code=5489&country=EU")
         self.assertEqual(res.status_code, 502)
         self.assertEqual(res.get_json()["error"]["kind"], "access")
+        self.assertNotIn("RAPIDAPI", res.get_data(as_text=True))
+
+
+# ---------------------------------------------------------------------------
+# 6단계: 스캔 PDF · 이미지 OCR (서버 로컬 Tesseract). 엔진이 없으면 실제 인식 테스트는 건너뛰고 '준비 안 됨' 경로만 검증한다.
+# ---------------------------------------------------------------------------
+
+ocrmod = rx.ocr
+OCR_READY = ocrmod.availability(refresh=True)["available"]
+
+
+def _unavailable_info():
+    return {"available": False, "engine": "tesseract", "version": None, "cmd": None, "langs": [], "missing": ["tesseract 실행 파일"], "message": "OCR 준비가 안 됐어요. 부족한 항목: tesseract 실행 파일. " + ocrmod.INSTALL_HINT}
+
+
+class OcrUnavailableTest(unittest.TestCase):
+    """OCR 도구가 없는 환경에서도 텍스트 PDF·Excel 은 그대로 동작하고, 이미지·스캔 PDF 는 설치 안내를 돌려준다."""
+
+    def test_image_without_ocr_is_503_with_install_hint(self):
+        with mock.patch.object(ocrmod, "availability", return_value=_unavailable_info()):
+            with self.assertRaises(rx.ExtractError) as ctx:
+                with open(SAMPLES / "sample_scan_table_kr.png", "rb") as f:
+                    rx.extract_upload("scan.png", f)
+        self.assertEqual(ctx.exception.kind, "ocr_unavailable")
+        self.assertEqual(ctx.exception.http_status, 503)
+        self.assertIn("winget", ctx.exception.message)
+        self.assertEqual(_temp_leftovers(), [])
+
+    def test_scan_only_pdf_without_ocr_is_503(self):
+        with mock.patch.object(ocrmod, "availability", return_value=_unavailable_info()):
+            with self.assertRaises(rx.ExtractError) as ctx:
+                with open(SAMPLES / "sample_scan_only.pdf", "rb") as f:
+                    rx.extract_upload("scan.pdf", f)
+        self.assertEqual(ctx.exception.kind, "ocr_unavailable")
+
+    def test_mixed_pdf_without_ocr_keeps_text_pages(self):
+        with mock.patch.object(ocrmod, "availability", return_value=_unavailable_info()):
+            with open(SAMPLES / "sample_mixed_text_scan.pdf", "rb") as f:
+                r = rx.extract_upload("mixed.pdf", f)
+        self.assertEqual(r["status"], "extracted")
+        self.assertEqual(len(r["items"]), 7)                                   # 텍스트 쪽(브리프)의 표는 그대로
+        self.assertEqual(r["ocr"]["skipped_pages"], [3])                        # 이미지 쪽은 읽지 않았다고 표시
+        self.assertTrue(any("OCR 이 준비되지 않아" in n for n in r["notes"]))
+
+    def test_text_pdf_and_xlsx_unaffected(self):
+        with mock.patch.object(ocrmod, "availability", return_value=_unavailable_info()):
+            with open(SAMPLES / "EU-SER-041_development_brief.pdf", "rb") as f:
+                r = rx.extract_upload("brief.pdf", f)
+            self.assertEqual(len(r["items"]), 7)
+            self.assertEqual(r["ocr"]["applied_pages"], [])
+            with open(SAMPLES / "sample_ingredients_kr.xlsx", "rb") as f:
+                r2 = rx.extract_upload("x.xlsx", f)
+            self.assertEqual(r2["status"], "extracted")
+
+    def test_image_signature_checked(self):
+        with self.assertRaises(rx.ExtractError) as ctx:
+            rx.extract_upload("fake.png", _io.BytesIO(b"not really a png file content"))
+        self.assertEqual(ctx.exception.kind, "unreadable")
+        with self.assertRaises(rx.ExtractError) as ctx2:
+            rx.extract_upload("photo.gif", _io.BytesIO(b"GIF89a" + b"0" * 50))
+        self.assertEqual(ctx2.exception.kind, "unsupported")
+
+
+class OcrPageSelectionTest(unittest.TestCase):
+    """텍스트가 있는 쪽은 OCR 하지 않고, 텍스트 없는 쪽만 OCR 한다 (중복 추출 방지). OCR 자체는 가짜로 대체."""
+
+    def test_only_image_pages_are_ocred(self):
+        fake_lines = ["성분명            함량(%)", "글리세린          5.0", "판테놀            0.5"]
+        calls = []
+        def fake_ocr_lines(img, timeout=25):
+            calls.append(timeout); return fake_lines, 40
+        ready = dict(_unavailable_info(), available=True, missing=[], version="5.4", message="")
+        with mock.patch.object(ocrmod, "availability", return_value=ready), \
+             mock.patch.object(ocrmod, "render_pdf_page", return_value=object()), \
+             mock.patch.object(ocrmod, "ocr_lines", side_effect=fake_ocr_lines):
+            with open(SAMPLES / "sample_mixed_text_scan.pdf", "rb") as f:
+                r = rx.extract_upload("mixed.pdf", f)
+        self.assertEqual(len(calls), 1)                                        # 3쪽(이미지)만 OCR
+        self.assertEqual(r["ocr"]["applied_pages"], [3])
+        self.assertEqual(r["scope"]["text_pages"], [1, 2])
+        names = [it["name_raw"] for it in r["items"]]
+        self.assertIn("Niacinamide", names)                                   # 텍스트 쪽 표
+        self.assertIn("글리세린", names)                                       # OCR 쪽 표
+        ocr_items = [it for it in r["items"] if it["source"] == "ocr"]
+        self.assertEqual(len(ocr_items), 2)
+        self.assertTrue(all(it["needs_review"] and any("OCR" in rsn for rsn in it["review_reasons"]) for it in ocr_items))
+        self.assertTrue(all(it["location"].endswith("(OCR)") for it in ocr_items))
+        text_items = [it for it in r["items"] if it["source"] == "text"]
+        self.assertTrue(all(not it["needs_review"] for it in text_items))       # 텍스트 쪽 행은 그대로
+
+    def test_ocr_timeout_is_reported(self):
+        ready = dict(_unavailable_info(), available=True, missing=[], version="5.4", message="")
+        with mock.patch.object(ocrmod, "availability", return_value=ready), \
+             mock.patch.object(ocrmod, "render_pdf_page", return_value=object()), \
+             mock.patch.object(ocrmod, "ocr_lines", side_effect=ocrmod.OcrError("ocr_timeout", "OCR 처리 시간이 25초를 넘어 중단했어요.")):
+            with self.assertRaises(rx.ExtractError) as ctx:
+                with open(SAMPLES / "sample_scan_only.pdf", "rb") as f:
+                    rx.extract_upload("scan.pdf", f)
+        self.assertEqual(ctx.exception.kind, "ocr_timeout")
+        self.assertEqual(ctx.exception.http_status, 422)
+        self.assertEqual(_temp_leftovers(), [])
+
+    def test_ocr_no_text_is_empty_not_error(self):
+        ready = dict(_unavailable_info(), available=True, missing=[], version="5.4", message="")
+        with mock.patch.object(ocrmod, "availability", return_value=ready), \
+             mock.patch.object(ocrmod, "render_pdf_page", return_value=object()), \
+             mock.patch.object(ocrmod, "ocr_lines", return_value=([""], 0)):
+            with open(SAMPLES / "sample_scan_only.pdf", "rb") as f:
+                r = rx.extract_upload("scan.pdf", f)
+        self.assertEqual(r["status"], "empty")
+        self.assertTrue(any("인식된 글자가 거의 없어요" in n for n in r["notes"]))
+        self.assertEqual(r["ocr"]["no_text_pages"], [1, 2])
+
+
+@unittest.skipUnless(OCR_READY, "Tesseract(kor+eng) 가 준비된 환경에서만 실행")
+class OcrRealTest(unittest.TestCase):
+    """실제 Tesseract 로 가상 스캔 문서를 인식한다. 인식 오차가 있어도 행이 '확인 필요'로 표시되는지를 본다."""
+
+    def test_korean_image(self):
+        with open(SAMPLES / "sample_scan_table_kr.png", "rb") as f:
+            r = rx.extract_upload("scan.png", f)
+        self.assertEqual(r["status"], "extracted")
+        self.assertGreaterEqual(len(r["items"]), 4)
+        self.assertTrue(all(it["source"] == "ocr" and it["needs_review"] for it in r["items"]))
+        names = [it["name_raw"] for it in r["items"]]
+        self.assertIn("나이아신아마이드", names)
+        self.assertIn("글리세린", names)
+        self.assertEqual(r["ocr"]["applied_pages"], [1])
+        self.assertEqual(_temp_leftovers(), [])
+
+    def test_english_jpg(self):
+        with open(SAMPLES / "sample_scan_table_en.jpg", "rb") as f:
+            r = rx.extract_upload("scan.jpg", f)
+        names = [it["name_raw"] for it in r["items"]]
+        for n in ("Niacinamide", "Glycerin", "Phenoxyethanol"):
+            self.assertIn(n, names)
+        self.assertEqual([it["amount_raw"] for it in r["items"]][:2], ["4.0%", "5.0%"])
+
+    def test_scan_only_pdf_and_mixed_pdf(self):
+        with open(SAMPLES / "sample_scan_only.pdf", "rb") as f:
+            r = rx.extract_upload("scan.pdf", f)
+        self.assertEqual(r["ocr"]["applied_pages"], [1, 2])
+        self.assertIn("Niacinamide", [it["name_raw"] for it in r["items"]])
+        with open(SAMPLES / "sample_mixed_text_scan.pdf", "rb") as f:
+            r2 = rx.extract_upload("mixed.pdf", f)
+        self.assertEqual(r2["ocr"]["applied_pages"], [3])                       # 텍스트 쪽 1·2 는 OCR 하지 않음
+        srcs = {it["source"] for it in r2["items"]}
+        self.assertEqual(srcs, {"text", "ocr"})
+
+    def test_route_image(self):
+        flask_app.app.config["TESTING"] = True
+        client = flask_app.app.test_client(); _login(client)
+        with open(SAMPLES / "sample_scan_table_en.jpg", "rb") as f:
+            data = f.read()
+        res = client.post("/api/regulatory/extract", data={"file": (_io.BytesIO(data), "scan.jpg")}, content_type="multipart/form-data")
+        self.assertEqual(res.status_code, 200)
+        body = res.get_json()
+        self.assertEqual(body["file"]["kind"], "image")
+        self.assertTrue(body["ocr"]["available"])
         self.assertNotIn("RAPIDAPI", res.get_data(as_text=True))

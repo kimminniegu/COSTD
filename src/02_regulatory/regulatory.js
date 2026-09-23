@@ -25,7 +25,9 @@
    - '확정 성분 규제 조회' → 확정 행만 /api/regulatory/regulations 를 (성분 코드, 시장)당 1회 순차 호출해 각 행에 연결.
      429(rate_limit) 는 즉시 중단, 실패 행만 '실패 항목 재시도'. 시장·목록·매칭이 바뀌면 '이전 조건의 결과' 안내, 늦은 응답은 순번으로 무시
    - 결과 표: 성분명·선택 시장·조회 상태·규제 유형·상세. 상세 Modal 에 규제 조건을 영문 위·한국어 아래로 표시. 함량은 문서 참고값만, 적합 판정 없음
-   미구현(후속): 중간 포함 검색, 스캔 PDF·이미지 OCR, 함량 기준 비교(검토 상태). */
+   OCR (이번 단계): PNG·JPG 와 텍스트 없는 PDF 쪽은 서버가 로컬 Tesseract 로 읽어 같은 표에 연결. OCR 행은 '확인 필요(OCR)' 로 표시,
+     OCR 미설치는 서버 503(ocr_unavailable) + 설치 안내를 그대로 보여 주고 텍스트 PDF·Excel 은 계속 동작.
+   미구현(후속): 중간 포함 검색, 함량 기준 비교(검토 상태). */
 (function () {
   "use strict";
 
@@ -750,11 +752,12 @@
   var fileSubmitLabel = fileSubmit ? fileSubmit.textContent : "";
   var reviewBody = $("regulatory-review-body");
 
-  var FILE_OK_EXT = /\.(pdf|xlsx)$/i;
-  var FILE_NOT_YET_EXT = /\.(jpe?g|png|gif|webp|tiff?|xls|csv|docx?|hwp|txt)$/i;
+  var FILE_OK_EXT = /\.(pdf|xlsx|png|jpe?g)$/i;
+  var FILE_NOT_YET_EXT = /\.(gif|webp|tiff?|bmp|heic|xls|csv|docx?|hwp|txt)$/i;
   var FILE_MAX_BYTES = 10 * 1024 * 1024;
-  var UNSUPPORTED_MESSAGE = "현재 텍스트 PDF와 Excel(.xlsx)만 지원합니다. 스캔 PDF·이미지 인식(OCR)은 준비 중이에요.";
-  var ERROR_KIND_LABEL = { validation: "입력 확인", limit: "제한 초과", unsupported: "형식 미지원", unreadable: "읽기 실패", network: "연결 실패", http: "서버 오류", invalid_response: "응답 오류" };
+  var UNSUPPORTED_MESSAGE = "현재 텍스트 PDF · 스캔 PDF · PNG/JPG 이미지 · Excel(.xlsx)만 지원합니다.";
+  var ERROR_KIND_LABEL = { validation: "입력 확인", limit: "제한 초과", unsupported: "형식 미지원", unreadable: "읽기 실패", network: "연결 실패", http: "서버 오류", invalid_response: "응답 오류",
+                           ocr_unavailable: "OCR 준비 안 됨 (서버 설치 필요)", ocr_timeout: "OCR 시간 초과", ocr_failed: "OCR 처리 실패" };
 
   // items: 서버 추출값(name_raw/amount_raw/location/needs_review/review_reasons) + 화면 편집값(name/amount/include/user_added)
   var fileState = { seq: 0, items: [], nextId: 1, sheets: [], selectedSheet: null, lastFile: null, emptyResult: false,
@@ -785,7 +788,8 @@
     var box = $("regulatory-file-result-error");
     if (!box) return;
     var kind = (err && err.kind) || "unknown";
-    setText($("regulatory-file-error-title"), kind === "unsupported" ? "아직 지원하지 않는 파일이에요" : "파일을 처리하지 못했어요");
+    setText($("regulatory-file-error-title"), kind === "unsupported" ? "아직 지원하지 않는 파일이에요"
+      : (kind === "ocr_unavailable" ? "이미지 인식(OCR)이 서버에 준비되지 않았어요" : (kind === "ocr_timeout" ? "이미지 인식(OCR) 시간이 초과됐어요" : "파일을 처리하지 못했어요")));
     setText($("regulatory-file-error-message"), (err && err.message) || "잠시 후 다시 시도해 주세요.");
     setText($("regulatory-file-error-kind"), "오류 종류: " + (ERROR_KIND_LABEL[kind] || kind) + " · 파일을 바꾸거나 수정한 뒤 다시 분석해 주세요.");
     show(box, true);
@@ -856,7 +860,9 @@
     if (sheet) fd.append("sheet", sheet);
     setFileBusy(true, sheet ? "시트 추출 중" : "파일 분석 중");
     setFileStep("loading");
-    setText($("regulatory-file-loading-label"), sheet ? "선택한 시트에서 성분을 추출하는 중이에요" : "파일을 확인하고 성분을 추출하는 중이에요");
+    var isImage = /\.(png|jpe?g)$/i.test(f.name);
+    setText($("regulatory-file-loading-label"), sheet ? "선택한 시트에서 성분을 추출하는 중이에요"
+      : (isImage ? "이미지를 인식(OCR)하는 중이에요 — 최대 25초 정도 걸릴 수 있어요" : "파일을 확인하고 성분을 추출하는 중이에요 (텍스트가 없는 쪽은 OCR 로 읽어요)"));
     apiPost("/api/regulatory/extract", fd).then(function (body) {
       if (seq !== fileState.seq) return;              // 그 사이 다른 파일·시트로 다시 보냈으면 무시
       setFileBusy(false);
@@ -908,7 +914,7 @@
     fileState.items = (result.items || []).map(function (it) {
       return {
         id: it.id, name_raw: it.name_raw || "", amount_raw: it.amount_raw, amount_unit_hint: it.amount_unit_hint || null,
-        role_raw: it.role_raw || null, location: it.location || "—",
+        role_raw: it.role_raw || null, location: it.location || "—", source: it.source || "text",
         needs_review: !!it.needs_review, review_reasons: it.review_reasons || [],
         name: it.name_raw || "", amount: it.amount_raw || "", include: true, user_added: false, edited: false,
         match: null, result: null,      // match: 성분 확인 결과 / result: 규제 조회 결과 (행별)
@@ -921,7 +927,8 @@
 
     var scopeText = "";
     var sc = result.scope || {};
-    if (result.file && result.file.kind === "pdf") scopeText = "처리 범위: " + (sc.processed || (sc.pages + "쪽"));
+    if (result.file && result.file.kind === "pdf") scopeText = "처리 범위: " + (sc.processed || (sc.pages + "쪽")) + (sc.ocr_pages && sc.ocr_pages.length ? " · OCR " + sc.ocr_pages.map(function (p) { return p + "쪽"; }).join(", ") : "");
+    else if (result.file && result.file.kind === "image") scopeText = "처리 범위: " + (sc.processed || "이미지") + " · OCR";
     else if (result.file && result.file.kind === "xlsx") scopeText = "처리 범위: 시트 ‘" + (sc.selected_sheet || "") + "’ (" + (sc.scanned_rows || 0) + "행 확인" + (sc.sheets > 1 ? ", 전체 " + sc.sheets + "개 시트 중" : "") + ")";
     setText($("regulatory-review-scope"), scopeText + (result.extracted_at ? " · 추출 시각 " + formatTime(result.extracted_at) : ""));
 
@@ -943,6 +950,7 @@
   function statusBadge(it) {
     if (it.user_added) return badge("직접 입력", "warning");
     if (it.edited) return badge("수정됨", "");
+    if (it.source === "ocr") return badge("확인 필요 (OCR)", "warning");
     if (it.needs_review) return badge("확인 필요", "warning");
     return badge("추출됨", "");
   }
@@ -1324,7 +1332,7 @@
   var addRowBtn = $("regulatory-review-add");
   if (addRowBtn) {
     addRowBtn.addEventListener("click", function () {
-      var it = { id: "u" + (fileState.nextId++), name_raw: "", amount_raw: null, amount_unit_hint: null, role_raw: null, location: "직접 입력",
+      var it = { id: "u" + (fileState.nextId++), name_raw: "", amount_raw: null, amount_unit_hint: null, role_raw: null, location: "직접 입력", source: "user",
                  needs_review: true, review_reasons: ["직접 입력한 행이에요. 성분명을 확인해 주세요."], name: "", amount: "", include: true, user_added: true, edited: false, match: null, result: null };
       fileState.items.push(it);
       if (reviewBody) { var tr = rowElement(it); reviewBody.appendChild(tr); var inp = tr.querySelector("input[type=text]"); if (inp) inp.focus(); }

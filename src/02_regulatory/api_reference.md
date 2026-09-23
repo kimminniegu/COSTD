@@ -98,12 +98,13 @@
 
 | 항목 | 내용 |
 |---|---|
-| 필드 | `file` 필수 (PDF 또는 .xlsx 1개), `sheet` 선택 (Excel 시트명) |
-| 제한 | 10 MB 이하 · PDF 20쪽 이하 · Excel 시트 20개 이하 · 시트당 앞 2,000행 · 성분 행 200개 |
+| 필드 | `file` 필수 (PDF · .xlsx · PNG · JPG 1개), `sheet` 선택 (Excel 시트명) |
+| 제한 | 10 MB 이하 · PDF 20쪽 이하 · Excel 시트 20개 이하 · 시트당 앞 2,000행 · 성분 행 200개 · OCR 파일당 10쪽/90초, 쪽당 25초, 이미지 3,000만 화소 |
 | 성공 200 | `status`: `extracted`(성분 있음) / `empty`(성분 표 없음) / `sheet_required`(시트 선택 필요) |
 | 검증 실패 400 | `error.kind = validation`(파일 없음·빈 파일·알 수 없는 확장자·없는 시트) / `limit`(용량·쪽수·시트 수 초과) |
-| 형식 미지원 415 | `error.kind = unsupported` — 이미지·스캔 PDF·.xls·.csv 등. 메시지: "현재 텍스트 PDF와 Excel(.xlsx)만 지원합니다…" |
-| 읽기 실패 422 | `error.kind = unreadable` — 손상·암호 PDF, 확장자와 내용 불일치 |
+| 형식 미지원 415 | `error.kind = unsupported` — .gif·.webp·.tif·.xls·.csv 등, 텍스트도 없고 OCR 도 없는 PDF |
+| 읽기 실패 422 | `error.kind = unreadable`(손상·암호 PDF, 확장자와 내용 불일치) / `ocr_timeout` / `ocr_failed` |
+| OCR 준비 안 됨 503 | `error.kind = ocr_unavailable` — 이미지 또는 스캔 전용 PDF 인데 Tesseract·언어 데이터·pip 패키지가 없음. 메시지에 부족한 항목과 설치 안내 포함 |
 
 ```json
 {
@@ -128,7 +129,8 @@
 - `amount_raw` 는 문서 원문 그대로(수치·범위·단위·`q.s.`). 없으면 `null`. Excel 에서 열 제목에만 단위가 있으면 `amount_unit_hint`(예: `"%"`)로 따로 준다.
 - `needs_review` 사유: 문장처럼 보이는 이름(7단어 이상·문장 부호), 80자 초과, 함량 형식 불일치(원문 유지), 빈 이름, 함량 열이 있는 표에서 함량 칸을 못 찾은 행.
 - `document_market` / `document_use` 는 `Distribution countries`·`대상 국가`·`Application`·`제품 유형` 같은 라벨 행의 **원문 텍스트**다. 시장 코드로 바꾸거나 자동 선택하지 않는다.
-- `location`: PDF 는 `N쪽`, Excel 은 `시트명!B7` 형식.
+- `location`: PDF 는 `N쪽`(OCR 쪽은 `N쪽 (OCR)`), Excel 은 `시트명!B7`, 이미지는 `이미지 (OCR)`. 각 항목의 `source` 는 `text` | `ocr`.
+- 응답의 `ocr` 객체: `{available, engine, applied_pages, skipped_pages, no_text_pages, message}`. PDF 는 텍스트가 20자 미만인 쪽만 OCR 하고(`scope.text_pages` / `scope.ocr_pages`), OCR 로 읽은 행은 모두 `needs_review = true` 에 사유 "OCR 인식 결과예요…" 가 붙는다. `file.kind` 는 `pdf` | `xlsx` | `image`.
 
 **`lookup_status` 판정 규칙** (응답의 `data`와 `result_status`만 사용)
 
