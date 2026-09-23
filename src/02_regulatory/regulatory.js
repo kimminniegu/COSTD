@@ -134,6 +134,8 @@
     acTimer: null,        // 300ms 디바운스 타이머
     composing: false,     // 한글 조합(IME) 중
     resultKey: null,      // 표시 중인 결과의 조건 키(성분 code|시장) — 현재 입력과 다르면 '이전 조건' 안내
+    candidatesQuery: "",  // 현재 후보 목록이 어떤 검색어(정규화)로 받은 것인지 — 다른 검색어로 제출하면 재검색
+    lastSingle: null,     // 마지막 직접 검색 결과 {res, ctx, err} — '규제 원문·출처 보기' 를 누를 때 Modal 을 다시 채운다
   };
 
   var AC_MIN_LENGTH = 2;    // 자동완성 최소 글자 수 (앞뒤 공백 제거 후)
@@ -270,6 +272,7 @@
       if (seq !== state.lookupSeq) return;
       setBusy(false);
       state.candidates = body.candidates || [];
+      state.candidatesQuery = normalize(query);
       if (!state.candidates.length) { setAutocomplete("empty"); return; }
 
       // 입력과 정확히 일치(공백·대소문자 무시)하는 후보가 정확히 하나 → 자동 확정 후 규제 조회. 그 외에는 사용자 선택
@@ -313,6 +316,7 @@
       if (seq !== state.acSeq) return;                       // 입력이 바뀌었거나 목록이 닫힘 → 무시
       if (!input || input.value.trim() !== query) return;    // 현재 검색어와 다른 응답 → 무시
       state.candidates = body.candidates || [];
+      state.candidatesQuery = normalize(query);
       if (!state.candidates.length) { setAutocomplete("empty"); return; }
       renderCandidates(state.candidates);
       setAutocomplete("list");
@@ -379,8 +383,8 @@
         return;
       }
       clearSelection();
-      // 자동완성 목록이 이미 현재 입력의 후보를 갖고 있으면 재요청 없이 그 안에서 정확 일치를 찾는다
-      if (state.listOpen && state.candidates.length) {
+      // 자동완성 목록이 이미 '현재 검색어의' 후보를 갖고 있으면 재요청 없이 그 안에서 정확 일치를 찾는다 (다른 검색어의 목록이면 재검색)
+      if (state.listOpen && state.candidates.length && state.candidatesQuery === normalize(query)) {
         var exactIndex = findExactMatch(state.candidates, query);
         if (exactIndex >= 0) { selectCandidate(exactIndex, "정확 일치 자동 확정"); runLookup(); return; }
         setActive(state.activeIndex >= 0 ? state.activeIndex : 0);
@@ -727,17 +731,29 @@
     renderConditions(res);
     setText($("regulatory-single-scope"), scopeText(res, ctx));
 
+    state.lastSingle = { res: res, ctx: ctx, err: null };
     fillModal(res, ctx, null);
     setResult("single");
+  }
+
+  /* 직접 검색 카드의 '규제 원문·출처 보기' — 상세 Modal 은 일괄 조회와 공유하므로 열기 직전에 마지막 직접 검색 결과로 다시 채운다 */
+  var singleDetailBtn = document.querySelector('#regulatory-result-single [data-modal-open="regulatory-detail-modal"]');
+  if (singleDetailBtn) {
+    singleDetailBtn.addEventListener("click", function () {
+      if (state.lastSingle) fillModal(state.lastSingle.res, state.lastSingle.ctx, state.lastSingle.err);
+    });
   }
 
   function renderError(err, ctx) {
     state.resultKey = conditionKey(ctx);
     setText($("regulatory-result-time"), "—");
     setText($("regulatory-result-error-reason"), (err && err.message) || "잠시 후 다시 시도해 주세요.");
+    var category = errorCategory(err) === "access" ? "접근 제한 (" + ACCESS_KINDS[err.kind] + ")"
+      : (err && err.kind === "validation" ? "입력 확인" : (err && err.kind === "network" ? "연결 실패" : "API 오류"));
     setText($("regulatory-result-error-kind"),
-      (errorCategory(err) === "access" ? "접근 제한 (" + ACCESS_KINDS[err.kind] + ")" : "API 오류") + " · 오류 종류: " + ((err && err.kind) || "unknown") +
+      category + " · 오류 종류: " + ((err && err.kind) || "unknown") +
       (err && err.http_status ? " · 외부 API HTTP " + err.http_status : "") + " · 입력한 조건은 그대로 남아 있어요.");
+    state.lastSingle = { res: null, ctx: ctx, err: err };
     fillModal(null, ctx, err);
     setResult("error");
   }
@@ -855,6 +871,12 @@
     if (!f) return;
     hideFileError();
     var seq = ++fileState.seq;
+    // 이전 파일의 성분 확인·규제 조회가 진행 중이면 중단하고(순번 증가) 플래그·버튼을 정리한다. 결과가 새 표와 섞이지 않게 한다
+    fileState.batchSeq++;
+    fileState.looking = false;
+    if (fileState.matching) setMatchBusy(false);
+    fileState.batchResultKey = null; fileState.batchMarket = null;
+    if ($("regulatory-result-batch") && !$("regulatory-result-batch").hidden) setResult("hidden");
     var fd = new FormData();
     fd.append("file", f, f.name);
     if (sheet) fd.append("sheet", sheet);
@@ -872,8 +894,10 @@
     }).catch(function (err) {
       if (seq !== fileState.seq) return;
       setFileBusy(false);
-      setFileStep("upload");
+      // 실패하면 이전 파일의 확인 표(수정 내용 포함)를 그대로 되살린다. 새 결과로 바꾸지 않았음을 오류 안내로 알린다
+      setFileStep(fileState.items.length ? "review" : "upload");
       showFileError(err);
+      updateLookupSummary();
     });
   }
 
@@ -924,6 +948,7 @@
     fileState.doc = { kind: result.file && result.file.kind, scope: result.scope || {}, market: result.document_market || null, use: result.document_use || null };
     fileState.batchResultKey = null; fileState.batchMarket = null;
     if (!$("regulatory-result-single") || $("regulatory-result-single").hidden) setResult("hidden");
+    setText($("regulatory-match-progress"), "조회 포함 행의 성분명으로 후보를 찾아요. 정확히 일치하는 후보가 하나일 때만 자동 확정하고, 여러 후보는 행에서 직접 골라요.");
 
     var scopeText = "";
     var sc = result.scope || {};
@@ -1152,6 +1177,10 @@
         setMatchBusy(true, "확인 중 " + done + "/" + rows.length);
         setText(progress, "성분 확인 중 " + done + "/" + rows.length + " — " + q);
         next(i + 1);
+      }).catch(function () {
+        if (seq !== fileState.seq) return;
+        setMatchBusy(false);
+        setText(progress, "성분 확인 중 오류가 나서 중단했어요. ‘성분 확인’을 다시 눌러 주세요.");
       });
     }
     next(0);
@@ -1190,6 +1219,7 @@
     rows.forEach(function (x) { var k = x.match.code + "|" + market; (groups[k] = groups[k] || { code: x.match.code, rows: [] }).rows.push(x); });
     var keys = Object.keys(groups);
     var seq = ++fileState.batchSeq;
+    var keyAtStart = batchKey();
     fileState.looking = true;
     fileState.batchMarket = market;
     updateLookupSummary();
@@ -1200,7 +1230,7 @@
     function finish() {
       if (seq !== fileState.batchSeq) return;
       fileState.looking = false;
-      fileState.batchResultKey = batchKey();
+      fileState.batchResultKey = keyAtStart;
       renderBatch(market);
       updateLookupSummary();
       setFileStep("result");
@@ -1409,7 +1439,7 @@
       show($("regulatory-partial-fail-notice"), false);
       show($("regulatory-retry-failed"), false);
     }
-    if (st === "hidden" || st === "loading") { state.resultKey = null; }
+    if (st === "hidden" || st === "loading" || st === "batch") { state.resultKey = null; }   // 일괄 결과 위에 직접 검색 안내가 뜨지 않게
     refreshStale();
     if (st !== "hidden" && section) section.scrollIntoView({ behavior: "smooth", block: "start" });
   }
