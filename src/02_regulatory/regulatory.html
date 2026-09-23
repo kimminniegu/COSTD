@@ -1,5 +1,8 @@
 {% extends "common/base.html" %}
-{# 담당자 B — 국가별 인허가 규제 / 기능 명세: src/02_regulatory/regulatory.md #}
+{# 담당자 B — 국가별 인허가 규제 / 기능 명세: src/02_regulatory/regulatory.md
+   직접 검색: 성분명 + 시장 → 후보 선택 → 검색 버튼으로 선택 시장 규제 조회 → 결과 카드(조회 상태·규제 유형·규제 조건 원문). 함량·제품 조건 입력 없음.
+   Route: /api/regulatory/ingredients, /api/regulatory/regulations (app.py [B] 영역 → regulatory_service.py)
+   미구현: 입력 중 자동완성·영문/부분 검색(4단계), 파일 업로드·추출(후속). 파일 탭 화면은 골격만 있습니다. #}
 
 {% block title %}국가별 인허가 규제{% endblock %}
 
@@ -11,22 +14,500 @@
 <div class="page-header">
   <div>
     <h1 class="page-title">국가별 인허가 규제</h1>
+    <p class="page-description">성분을 직접 검색하거나 개발요청서·성분표를 올려 대상 시장의 성분 규제 정보와 추가 확인 사항을 조회해요. 제품 전체의 적법성이나 수출 가능 여부를 확정하지는 않아요.</p>
   </div>
   <div class="page-actions">
     <a class="btn btn-surface" href="{{ url_for('home') }}">← 홈으로</a>
   </div>
 </div>
 
+{# 구현 상태 안내 — 기능 구현 후 제거 #}
+<div class="alert alert-info mb-6" id="regulatory-dev-notice">
+  <div>
+    <p class="alert-title">성분 직접 검색 사용 가능 · 입력 중 자동완성·영문 검색·파일 분석 준비 중</p>
+    <p id="regulatory-dev-notice-body" hidden></p>
+  </div>
+</div>
+
+{# ------------------------------------------------------------------
+   입력 영역: 직접 검색 / 파일로 일괄 조회
+   ------------------------------------------------------------------ #}
 <section class="section">
   <div class="card">
+    <div class="card-header">
+      <div>
+        <h3 class="card-title">조회 방법 선택</h3>
+        <p class="card-subtitle">개별 성분은 직접 검색, 개발요청서·성분표는 파일 업로드로 조회해요</p>
+      </div>
+    </div>
     <div class="card-body">
-      <div class="placeholder">
-        <p class="placeholder-title">국가별 인허가 규제</p>
-        <p>이 영역은 regulatory.md를 기준으로 담당자가 구현합니다.</p>
+      <div class="tabs" role="tablist" aria-label="조회 방법">
+        <button type="button" class="tab is-active" role="tab" data-tab-target="regulatory-panel-search" aria-selected="true">성분 직접 검색</button>
+        <button type="button" class="tab" role="tab" data-tab-target="regulatory-panel-file" aria-selected="false">파일로 일괄 조회</button>
+      </div>
+
+      {# ---------- 탭 1: 성분 직접 검색 ---------- #}
+      <div class="tab-panel is-active" id="regulatory-panel-search" role="tabpanel">
+        <form id="regulatory-search-form" novalidate>
+          <div class="grid grid-2-1">
+            <div class="form-group regulatory-autocomplete">
+              <label class="form-label" for="regulatory-search-ingredient">성분명 <span class="is-required">*</span></label>
+              <input class="form-control" type="text" id="regulatory-search-ingredient" name="ingredient"
+                     placeholder="한글 성분명 (예: 레티놀)" autocomplete="off"
+                     role="combobox" aria-autocomplete="list" aria-expanded="false"
+                     aria-controls="regulatory-autocomplete-list" aria-haspopup="listbox">
+              <p class="form-help" id="regulatory-search-ingredient-help">검색 버튼을 누르면 후보를 보여줘요. 후보를 고른 뒤 다시 검색 버튼을 누르면 규제를 조회해요.</p>
+              <p class="form-help regulatory-selected" id="regulatory-search-selected" hidden></p>
+              <p class="form-error" id="regulatory-search-ingredient-error" hidden>성분명을 입력해 주세요.</p>
+
+              {# 후보 목록 — 로딩 / 없음 / 실패 / 목록. 항목은 regulatory.js 가 서버 응답으로 채웁니다 #}
+              <div class="regulatory-autocomplete__list" id="regulatory-autocomplete-list" hidden>
+                <div class="regulatory-autocomplete__state" data-ac-state="loading" hidden>
+                  <span class="spinner spinner-sm"></span> 후보를 찾는 중이에요
+                </div>
+                <div class="regulatory-autocomplete__state" data-ac-state="empty" hidden>일치하는 성분이 없습니다</div>
+                <div class="regulatory-autocomplete__state regulatory-autocomplete__state--error" data-ac-state="error" hidden>
+                  <span id="regulatory-autocomplete-error-text">후보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.</span>
+                </div>
+                <div class="regulatory-autocomplete__state" data-ac-state="list" hidden id="regulatory-autocomplete-hint">
+                  후보를 선택해 주세요 (↑↓ 이동 · Enter 선택 · Esc 닫기)
+                </div>
+                <ul class="regulatory-autocomplete__options" role="listbox" id="regulatory-autocomplete-options" aria-label="성분 후보" data-ac-state="list" hidden></ul>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="regulatory-search-market">국가/시장 <span class="is-required">*</span></label>
+              <select class="form-control" id="regulatory-search-market" name="market">
+                <option value="">선택하세요</option>
+                <option value="KR">한국 (KR)</option>
+                <option value="EU">유럽연합 (EU)</option>
+                <option value="CN">중국 (CN)</option>
+                <option value="US">미국 (US)</option>
+                <option value="JP">일본 (JP)</option>
+                <option value="ASEAN">아세안 (ASEAN)</option>
+              </select>
+              <p class="form-help">시장마다 제공되는 규제 데이터 범위가 달라요.</p>
+              <p class="form-error" id="regulatory-search-market-error" hidden>국가/시장을 선택해 주세요.</p>
+            </div>
+          </div>
+
+          {# 직접 검색은 성분명 + 시장만 입력. 함량·제품 조건 입력은 파일 일괄 조회에서만 사용 (regulatory.md 5·6항) #}
+          <div class="row mt-2">
+            <button type="submit" class="btn btn-primary" id="regulatory-search-submit">규제 정보 검색</button>
+          </div>
+        </form>
+      </div>
+
+      {# ---------- 탭 2: 파일로 일괄 조회 ---------- #}
+      <div class="tab-panel" id="regulatory-panel-file" role="tabpanel">
+        {# 진행 단계 표시 — 실제 단계에 맞춰 is-active / is-done 을 토글할 예정 #}
+        <ol class="regulatory-steps" aria-label="파일 조회 진행 단계">
+          <li class="regulatory-steps__item is-active" data-step="upload">1. 업로드</li>
+          <li class="regulatory-steps__item" data-step="sheet">2. 시트 선택</li>
+          <li class="regulatory-steps__item" data-step="review">3. 추출값 확인</li>
+          <li class="regulatory-steps__item" data-step="lookup">4. 규제 조회</li>
+          <li class="regulatory-steps__item" data-step="result">5. 결과</li>
+        </ol>
+
+        <form id="regulatory-file-form" novalidate>
+          <div class="grid grid-2-1">
+            <div class="form-group">
+              <span class="form-label">개발요청서 / 성분표 <span class="is-required">*</span></span>
+              <label class="file-upload" id="regulatory-file-dropzone" for="regulatory-file-input">
+                <input type="file" id="regulatory-file-input" name="file" accept=".pdf,.xlsx,.jpg,.jpeg,.png">
+                <span class="file-upload__title">파일을 끌어다 놓거나 클릭하여 선택</span>
+                <span class="text-caption">허용 형식: PDF(텍스트·스캔) · XLSX · JPG · JPEG · PNG / 용량·페이지 제한: 확정 전</span>
+              </label>
+              <p class="form-help" id="regulatory-file-name" hidden></p>
+              <p class="form-error" id="regulatory-file-error" hidden>파일을 선택해 주세요.</p>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="regulatory-file-market">국가/시장 <span class="is-required">*</span></label>
+              <select class="form-control" id="regulatory-file-market" name="market">
+                <option value="">선택하세요</option>
+                <option value="KR">한국 (KR)</option>
+                <option value="EU">유럽연합 (EU)</option>
+                <option value="CN">중국 (CN)</option>
+                <option value="US">미국 (US)</option>
+                <option value="JP">일본 (JP)</option>
+                <option value="ASEAN">아세안 (ASEAN)</option>
+              </select>
+              <p class="form-help" id="regulatory-file-market-help">문서에 명시된 국가: <strong>미확인</strong> (파일 분석 후 자동 선택 예정, 직접 바꿀 수 있어요)</p>
+              <p class="form-error" id="regulatory-file-market-error" hidden>국가/시장을 선택해 주세요.</p>
+            </div>
+          </div>
+
+          <div class="row mt-2">
+            <button type="submit" class="btn btn-primary" id="regulatory-file-submit">파일 분석</button>
+            <span class="text-caption text-secondary">분석 후 추출값을 확인·수정한 뒤에 규제 조회를 실행해요.</span>
+          </div>
+        </form>
+
+        {# 파일 처리 상태 — 실제 단계명으로 표시 #}
+        <div class="loading" id="regulatory-file-loading" hidden>
+          <span class="spinner"></span>
+          <p data-loading-label>파일을 확인하는 중이에요</p>
+        </div>
+
+        {# Excel 시트 선택 #}
+        <div class="regulatory-block" id="regulatory-sheet-block" hidden>
+          <div class="alert alert-info">
+            <div>
+              <p class="alert-title">시트를 선택해 주세요</p>
+              <p>여러 시트가 있는 Excel 파일이에요. 분석할 시트를 고르면 선택한 범위를 추출 결과에 표시해요.</p>
+            </div>
+          </div>
+          <div class="grid grid-2-1 mt-4">
+            <div class="form-group">
+              <label class="form-label" for="regulatory-sheet-select">분석할 시트</label>
+              <select class="form-control" id="regulatory-sheet-select">
+                <option value="">선택하세요</option>
+                <option value="" disabled>(시트 목록은 파일 분석 후 표시)</option>
+              </select>
+            </div>
+            <div class="form-group regulatory-align-end">
+              <button type="button" class="btn btn-soft" id="regulatory-sheet-confirm">이 시트로 추출</button>
+            </div>
+          </div>
+        </div>
+
+        {# 추출값 확인·수정 #}
+        <div class="regulatory-block" id="regulatory-review-block" hidden>
+          <div class="regulatory-block__header">
+            <div>
+              <h3 class="card-title">추출값 확인·수정</h3>
+              <p class="card-subtitle">원문값은 그대로 두고 수정값만 바꿔요. 읽히지 않은 항목은 직접 입력하거나 다시 올릴 수 있어요.</p>
+            </div>
+            <span class="badge badge-warning">화면 구조 예시</span>
+          </div>
+
+          <div class="alert alert-warning mt-4" id="regulatory-review-partial" hidden>
+            <div>
+              <p class="alert-title">일부 범위를 읽지 못했어요</p>
+              <p>처리한 범위: — / 읽지 못한 범위: —. 해당 항목은 확인 필요로 표시했어요.</p>
+            </div>
+          </div>
+
+          <div class="table-wrap mt-4">
+            <table class="table regulatory-review-table">
+              <thead>
+                <tr>
+                  <th>조회</th>
+                  <th>성분명 (원문 → 수정)</th>
+                  <th>구분</th>
+                  <th>요청 함량</th>
+                  <th>함량 기준</th>
+                  <th>제품 유형·사용 조건</th>
+                  <th>원문 위치</th>
+                  <th>상태</th>
+                </tr>
+              </thead>
+              <tbody id="regulatory-review-body">
+                {# 행 구조 예시 — 실제 행은 추출 결과로 생성 #}
+                <tr>
+                  <td><label class="form-check"><input type="checkbox" checked aria-label="조회 포함"></label></td>
+                  <td>
+                    <p class="text-caption text-secondary">원문: —</p>
+                    <input class="form-control form-control-sm" type="text" value="" placeholder="수정값" aria-label="성분명 수정">
+                  </td>
+                  <td>
+                    <select class="form-control form-control-sm" aria-label="성분 구분">
+                      <option value="">확인 필요</option>
+                      <option value="required">요청 · 필수</option>
+                      <option value="optional">요청 · 선택</option>
+                      <option value="excluded">사용 제외</option>
+                    </select>
+                  </td>
+                  <td><input class="form-control form-control-sm" type="text" value="" placeholder="원문 유지" aria-label="요청 함량"></td>
+                  <td>
+                    <select class="form-control form-control-sm" aria-label="함량 기준">
+                      <option value="">불명확</option>
+                      <option value="raw">원료 투입량</option>
+                      <option value="active">활성 성분 함량</option>
+                    </select>
+                  </td>
+                  <td><input class="form-control form-control-sm" type="text" value="" placeholder="문서에 없으면 비움" aria-label="제품 유형·사용 조건"></td>
+                  <td class="text-caption text-secondary">—</td>
+                  <td><span class="badge badge-warning">확인 필요</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="regulatory-excluded mt-4" id="regulatory-excluded-block" hidden>
+            <p class="form-label">사용 제외 성분 <span class="text-caption text-secondary">(바이어 요청 기준 · 기본 조회 대상에서 제외)</span></p>
+            <p class="text-secondary">—</p>
+          </div>
+
+          <div class="row mt-6">
+            <button type="button" class="btn btn-primary" id="regulatory-review-submit">확인한 성분으로 규제 조회</button>
+            <button type="button" class="btn btn-secondary" id="regulatory-review-reupload">다시 업로드</button>
+            <span class="text-caption text-secondary">시장을 바꿔도 추출값은 유지돼요. 결과는 다시 조회해야 해요.</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </section>
+
+{# ------------------------------------------------------------------
+   결과 영역 — 조회 실행 전에는 숨김.
+   상태별로 한 블록만 보이도록 regulatory.js setResult() 가 hidden 을 토글합니다.
+   (공통 CSS에 [hidden] 규칙이 없어 regulatory.css 에서 이 영역의 [hidden] 을 강제합니다)
+   ------------------------------------------------------------------ #}
+<section class="section" id="regulatory-results" hidden>
+  <div class="section-header">
+    <h2 class="section-title">조회 결과</h2>
+    <span class="section-meta">서비스 조회 시각: <span id="regulatory-result-time">—</span></span>
+  </div>
+
+  <div class="stack">
+    {# 이전 조건 안내 — 표시 중인 결과의 조건과 현재 입력이 다를 때만 #}
+    <div class="alert alert-warning" id="regulatory-stale-notice" hidden>
+      <div>
+        <p class="alert-title">이전 조건의 결과예요</p>
+        <p>검색어·시장·조건이 바뀌었어요. 검색 버튼으로 다시 조회해야 현재 조건의 결과를 볼 수 있어요.</p>
+      </div>
+    </div>
+
+    {# 로딩 #}
+    <div class="card" id="regulatory-result-loading" hidden>
+      <div class="loading">
+        <span class="spinner"></span>
+        <p id="regulatory-result-loading-label">규제 정보를 조회하는 중이에요</p>
+      </div>
+    </div>
+
+    {# 전체 오류 — API 실패 원인을 그대로 표시 #}
+    <div class="card" id="regulatory-result-error" hidden>
+      <div class="state state-error">
+        <p class="state-title">규제 정보를 불러오지 못했어요</p>
+        <p id="regulatory-result-error-reason">잠시 후 다시 시도해 주세요.</p>
+        <p class="text-caption text-secondary" id="regulatory-result-error-kind"></p>
+        <button type="button" class="btn btn-secondary" id="regulatory-result-retry">다시 시도</button>
+      </div>
+    </div>
+
+    {# ---------- 직접 검색 결과 카드 (성분 1개) ---------- #}
+    <div class="card" id="regulatory-result-single" hidden>
+      <div class="card-header">
+        <div>
+          <h3 class="card-title" id="regulatory-single-name">—</h3>
+          <p class="card-subtitle" id="regulatory-single-inci">—</p>
+        </div>
+        <span class="badge badge-primary" id="regulatory-single-market">—</span>
+      </div>
+      <div class="card-body">
+        <div class="grid grid-2">
+          <div class="stat-tile">
+            <p class="stat-tile__label">조회 상태</p>
+            <div class="regulatory-single__badge" id="regulatory-single-status"></div>
+            <p class="text-caption text-secondary" id="regulatory-single-status-note"></p>
+          </div>
+          <div class="stat-tile">
+            <p class="stat-tile__label">규제 유형 (API 원문)</p>
+            <p class="stat-tile__value" id="regulatory-single-type">—</p>
+            <p class="text-caption text-secondary" id="regulatory-single-type-note"></p>
+          </div>
+        </div>
+
+        {# 규제 데이터 미확인 — 허용·안전이 아님을 명시 #}
+        <div class="alert alert-warning mt-4" id="regulatory-single-nodata" hidden>
+          <div>
+            <p class="alert-title">선택한 시장의 규제 데이터가 확인되지 않았어요</p>
+            <p>허용되거나 안전하다는 뜻은 아니에요. 다른 자료로 추가 확인이 필요해요.</p>
+            <p class="text-caption" id="regulatory-single-nodata-note" hidden></p>
+          </div>
+        </div>
+
+        {# 확인하지 않은 응답 상태값 — 임의 해석 없이 보류 #}
+        <div class="alert alert-warning mt-4" id="regulatory-single-hold" hidden>
+          <div>
+            <p class="alert-title">확인되지 않은 응답이라 판단을 보류했어요</p>
+            <p id="regulatory-single-hold-note">응답 상태값을 임의로 해석하지 않았어요. 상세에서 원문을 확인해 주세요.</p>
+          </div>
+        </div>
+
+        <div class="alert alert-info mt-4" id="regulatory-asean-notice" hidden>
+          <div>
+            <p class="alert-title">아세안 시장 조회 / 적용 규정 범위 확인 필요</p>
+            <p>개별 국가 규정 확인 여부: <strong>미확인</strong></p>
+          </div>
+        </div>
+
+        {# 규제 조건 — 응답 limit_condition 을 항목별로 나눌 수 있으면 나눠서, 아니면 원문 그대로 (regulatory.js renderConditions)
+           규제 항목(entries)마다 하나의 블록. 요약·해석·재계산은 하지 않는다. #}
+        <div class="regulatory-conditions mt-6" id="regulatory-single-conditions" hidden>
+          <div class="regulatory-conditions__header">
+            <p class="form-label">규제 조건</p>
+            <p class="text-caption text-secondary" id="regulatory-single-conditions-note"></p>
+          </div>
+          <div id="regulatory-single-conditions-body"></div>
+        </div>
+
+        <dl class="regulatory-meta mt-4">
+          <dt>실제 조회 범위</dt><dd id="regulatory-single-scope">—</dd>
+        </dl>
+
+        <div class="row mt-4">
+          <button type="button" class="btn btn-soft" data-modal-open="regulatory-detail-modal">규제 원문·출처 보기</button>
+          <span class="text-caption text-secondary">전체 원문·출처·고시 성분명·응답 상태값은 상세에서 그대로 볼 수 있어요.</span>
+        </div>
+      </div>
+    </div>
+
+    {# ---------- 파일 일괄 조회 결과 (여러 성분) — 파일 추출 구현 후 regulatory.js 가 채웁니다 ---------- #}
+    <div class="stack" id="regulatory-result-batch" hidden>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">조회 조건</h3>
+            <p class="card-subtitle">입력하지 않은 조건은 ‘미입력’으로 표시해요</p>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="grid grid-4">
+            <div class="stat-tile"><p class="stat-tile__label">선택 국가/시장</p><p class="stat-tile__value" id="regulatory-cond-market">—</p></div>
+            <div class="stat-tile"><p class="stat-tile__label">문서에 명시된 국가</p><p class="stat-tile__value" id="regulatory-cond-doc-country">—</p></div>
+            <div class="stat-tile"><p class="stat-tile__label">제품 유형·사용 조건</p><p class="stat-tile__value" id="regulatory-cond-product">미입력</p></div>
+            <div class="stat-tile"><p class="stat-tile__label">실제 조회 범위</p><p class="stat-tile__value" id="regulatory-cond-scope">—</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-3">
+        <div class="card kpi-card">
+          <p class="kpi-label">조회 대상 성분 수</p>
+          <p class="kpi-value" id="regulatory-kpi-total">—</p>
+          <p class="text-caption text-secondary">사용 제외·조회 미포함 항목 제외</p>
+        </div>
+        <div class="card kpi-card">
+          <p class="kpi-label">규제 정보가 조회된 성분 수</p>
+          <p class="kpi-value" id="regulatory-kpi-found">—</p>
+          <p class="text-caption text-secondary">규제 근거가 실제 반환된 항목</p>
+        </div>
+        <div class="card kpi-card">
+          <p class="kpi-label">추가 확인이 필요한 성분 수</p>
+          <p class="kpi-value" id="regulatory-kpi-review">—</p>
+          <p class="text-caption text-secondary">조회됨과 중복될 수 있어요</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">성분별 결과</h3>
+            <p class="card-subtitle">조회 상태와 검토 상태는 따로 표시해요. 규제 데이터 미확인은 허용·안전을 뜻하지 않아요.</p>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" id="regulatory-retry-failed" hidden>실패 항목 재시도</button>
+        </div>
+        <div class="card-body">
+          {# 일부 실패 — 실제로 실패 항목이 있을 때만 #}
+          <div class="alert alert-danger mb-4" id="regulatory-partial-fail-notice" hidden>
+            <div>
+              <p class="alert-title">일부 성분을 조회하지 못했어요</p>
+              <p>실패 <span id="regulatory-partial-fail-count">—</span>건. 성공한 결과는 그대로 두었고, 실패 항목만 다시 시도할 수 있어요.</p>
+            </div>
+          </div>
+
+          {# 전부 규제 데이터 미확인 #}
+          <div id="regulatory-result-empty" hidden>
+            <div class="state state-empty">
+              <p class="state-title">조회된 규제 데이터가 없어요</p>
+              <p>선택한 시장에서 규제 데이터가 확인되지 않았어요. 허용되거나 안전하다는 뜻은 아니에요.</p>
+            </div>
+            <div class="regulatory-review-list mt-4">
+              <p class="form-label">추가 확인이 필요한 성분</p>
+              <ul class="regulatory-review-list__items" id="regulatory-empty-review-list"></ul>
+            </div>
+          </div>
+
+          {# 간결한 표: 성분명 · 조회 상태 · 규제 유형 · 검토 상태 · 상세. 원문·오류 전문은 상세 Modal #}
+          <div class="table-wrap" id="regulatory-result-table-wrap" hidden>
+            <table class="table regulatory-result-table">
+              <thead>
+                <tr>
+                  <th>성분명</th>
+                  <th>조회 상태</th>
+                  <th>규제 유형</th>
+                  <th>검토 상태</th>
+                  <th class="regulatory-col-action"></th>
+                </tr>
+              </thead>
+              <tbody id="regulatory-result-body"></tbody>
+            </table>
+          </div>
+
+          <p class="text-caption text-secondary mt-4">
+            조회 상태: 규제 정보 조회됨 · 규제 데이터 미확인 · 성분 매칭 실패 · 성분 확인 필요 · API 오류 · 미조회 /
+            검토 상태: 해당 기준 충족 · 해당 기준 불충족 · 판단 보류. 이 결과는 성분 조합이나 제품 전체의 적합성을 확정하지 않아요.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+{# ------------------------------------------------------------------
+   상세 Modal
+   ------------------------------------------------------------------ #}
+<div class="modal-backdrop" id="regulatory-detail-modal">
+  <div class="modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="regulatory-detail-title">
+    <div class="modal-header">
+      <h2 class="modal-title" id="regulatory-detail-title">성분 상세</h2>
+      <button type="button" class="modal-close" data-modal-close aria-label="닫기">×</button>
+    </div>
+    <div class="modal-body">
+      {# 각 dd 는 regulatory.js 가 data-detail 키로 채웁니다 #}
+      <div class="stack">
+        <section>
+          <p class="form-label">입력 정보</p>
+          <dl class="regulatory-detail">
+            <dt>검색어</dt><dd data-detail="input-raw">—</dd>
+            <dt>조회 시장</dt><dd data-detail="input-market">—</dd>
+          </dl>
+        </section>
+        <section>
+          <p class="form-label">매칭 정보</p>
+          <dl class="regulatory-detail">
+            <dt>매칭 성분</dt><dd data-detail="match-name">—</dd>
+            <dt>매칭 방식</dt><dd data-detail="match-method">—</dd>
+            <dt>성분 레코드 갱신일</dt><dd data-detail="match-updated">미제공</dd>
+          </dl>
+        </section>
+        <section>
+          <p class="form-label">조회된 규제</p>
+          <dl class="regulatory-detail">
+            <dt>조회 상태</dt><dd data-detail="lookup-status"><span class="badge">미조회</span></dd>
+            <dt>응답 상태값</dt><dd data-detail="lookup-result-status">—</dd>
+            <dt>규제 구분</dt><dd data-detail="lookup-type">—</dd>
+            <dt>고시 성분명</dt><dd class="regulatory-detail__raw" data-detail="lookup-notice-name">—</dd>
+            <dt>규제 조건 원문</dt><dd class="regulatory-detail__raw" data-detail="lookup-raw">—</dd>
+            <dt>단서 조항</dt><dd class="regulatory-detail__raw" data-detail="lookup-proviso">—</dd>
+            <dt>실제 조회 범위</dt><dd data-detail="lookup-scope">—</dd>
+            <dt>API 안내 문구</dt><dd data-detail="lookup-note">—</dd>
+          </dl>
+        </section>
+        <section>
+          <p class="form-label">출처 · 날짜</p>
+          <dl class="regulatory-detail">
+            <dt>출처</dt><dd class="regulatory-detail__raw" data-detail="source">미제공</dd>
+            <dt>제공원 고지</dt><dd class="regulatory-detail__raw" data-detail="disclaimer">미제공</dd>
+            <dt>규제 자료 갱신일</dt><dd data-detail="source-updated">미제공</dd>
+            <dt>서비스 조회 시각</dt><dd data-detail="queried-at">—</dd>
+            <dt>자체 검증일</dt><dd data-detail="verified-at">미실시</dd>
+          </dl>
+        </section>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-modal-close>닫기</button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block page_js %}

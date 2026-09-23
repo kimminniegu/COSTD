@@ -19,7 +19,8 @@ from flask import Flask, abort, render_template, send_from_directory
 BASE_DIR = Path(__file__).resolve().parent
 SRC_DIR = BASE_DIR / "src"
 
-load_dotenv(BASE_DIR / ".env")
+# 개발 서버 재시작 때 이전 프로세스에서 상속된 키 대신 수정한 .env를 반영합니다.
+load_dotenv(BASE_DIR / ".env", override=True)
 
 # 일반적인 templates/ 대신 src/ 전체를 템플릿 폴더로 사용합니다.
 # 템플릿 이름은 src/ 기준 상대 경로입니다. 예: "02_regulatory/regulatory.html"
@@ -80,6 +81,53 @@ def dev_request():
 
 
 # [B] 국가별 인허가 규제 — 접두사: /api/regulatory/...
+#     처리 로직은 src/02_regulatory/regulatory_service.py 에 있고 여기에는 Route만 둡니다.
+#     계약: src/02_regulatory/api_reference.md
+import importlib.util as _regulatory_importlib
+from flask import jsonify as _regulatory_jsonify, request as _regulatory_request
+
+_regulatory_spec = _regulatory_importlib.spec_from_file_location(
+    "regulatory_service", SRC_DIR / "02_regulatory" / "regulatory_service.py"
+)
+regulatory_service = _regulatory_importlib.module_from_spec(_regulatory_spec)
+_regulatory_spec.loader.exec_module(regulatory_service)
+
+
+def _regulatory_error(exc):
+    """RegulatoryApiError → JSON 오류 응답. 설정 오류 503, 그 외 외부 API 오류 502."""
+    status = 503 if exc.kind == "config" else 502
+    return _regulatory_jsonify({"ok": False, "error": exc.to_dict()}), status
+
+
+@app.route("/api/regulatory/ingredients")
+def regulatory_ingredients():
+    """한글 성분명 후보 검색. ?q=성분명 → 후보 최대 10개 (규제 조회는 하지 않음)."""
+    q = (_regulatory_request.args.get("q") or "").strip()
+    if not q:
+        return _regulatory_jsonify({"ok": False, "error": {"kind": "validation", "message": "성분명을 입력해 주세요."}}), 400
+    try:
+        result = regulatory_service.search_ingredients_kr(q)
+    except regulatory_service.RegulatoryApiError as exc:
+        return _regulatory_error(exc)
+    result["ok"] = True
+    return _regulatory_jsonify(result)
+
+
+@app.route("/api/regulatory/regulations")
+def regulatory_regulations():
+    """성분 코드 + 시장 코드로 규제 조회. ?code=5489&country=EU"""
+    code = (_regulatory_request.args.get("code") or "").strip()
+    country = (_regulatory_request.args.get("country") or "").strip().upper()
+    if not code.isdigit():
+        return _regulatory_jsonify({"ok": False, "error": {"kind": "validation", "message": "성분을 먼저 선택해 주세요."}}), 400
+    if country not in regulatory_service.MARKET_CODES:
+        return _regulatory_jsonify({"ok": False, "error": {"kind": "validation", "message": "국가/시장을 선택해 주세요."}}), 400
+    try:
+        result = regulatory_service.get_regulations(code, country)
+    except regulatory_service.RegulatoryApiError as exc:
+        return _regulatory_error(exc)
+    result["ok"] = True
+    return _regulatory_jsonify(result)
 
 
 # [C] 원가 경쟁력 및 마진 시뮬레이션 — 접두사: /api/margin-calculator/...
@@ -96,4 +144,5 @@ if __name__ == "__main__":
         host="127.0.0.1",
         port=int(os.getenv("FLASK_PORT", "5000")),
         debug=os.getenv("FLASK_DEBUG", "1") == "1",
+        extra_files=[str(BASE_DIR / ".env")],
     )
