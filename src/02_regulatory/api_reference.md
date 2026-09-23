@@ -130,7 +130,8 @@
 - `needs_review` 사유: 문장처럼 보이는 이름(7단어 이상·문장 부호), 80자 초과, 함량 형식 불일치(원문 유지), 빈 이름, 함량 열이 있는 표에서 함량 칸을 못 찾은 행.
 - `document_market` / `document_use` 는 `Distribution countries`·`대상 국가`·`Application`·`제품 유형` 같은 라벨 행의 **원문 텍스트**다. 시장 코드로 바꾸거나 자동 선택하지 않는다.
 - `location`: PDF 는 `N쪽`(OCR 쪽은 `N쪽 (OCR)`), Excel 은 `시트명!B7`, 이미지는 `이미지 (OCR)`. 각 항목의 `source` 는 `text` | `ocr`.
-- 응답의 `ocr` 객체: `{available, engine, applied_pages, skipped_pages, no_text_pages, message}`. PDF 는 텍스트가 20자 미만인 쪽만 OCR 하고(`scope.text_pages` / `scope.ocr_pages`), OCR 로 읽은 행은 모두 `needs_review = true` 에 사유 "OCR 인식 결과예요…" 가 붙는다. `file.kind` 는 `pdf` | `xlsx` | `image`.
+- 항목에 `inci_raw`(같은 행의 영문/INCI 이름 열 원문, 없으면 null)가 추가되었다. 한글 열이 비어 있으면 영문명이 `name_raw` 가 된다.
+- 응답의 `ocr` 객체: `{available, engine, applied_pages, skipped_pages, no_text_pages, message, psm, retried, header_found, outcome}`. `outcome` 은 이미지에서 `extracted` / `no_rows`(제목은 찾았으나 행 없음) / `no_header`(글자는 읽었으나 표 제목 없음, notes 에 인식된 줄 예시) / `no_text`(글자 인식 실패). PDF 는 텍스트가 20자 미만인 쪽만 OCR 하고(`scope.text_pages` / `scope.ocr_pages`), OCR 로 읽은 행은 모두 `needs_review = true` 에 사유 "OCR 인식 결과예요…" 가 붙는다. `file.kind` 는 `pdf` | `xlsx` | `image`.
 
 **`lookup_status` 판정 규칙** (응답의 `data`와 `result_status`만 사용)
 

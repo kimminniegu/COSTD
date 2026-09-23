@@ -914,7 +914,7 @@
     fileState.items = (result.items || []).map(function (it) {
       return {
         id: it.id, name_raw: it.name_raw || "", amount_raw: it.amount_raw, amount_unit_hint: it.amount_unit_hint || null,
-        role_raw: it.role_raw || null, location: it.location || "—", source: it.source || "text",
+        role_raw: it.role_raw || null, location: it.location || "—", source: it.source || "text", inci_raw: it.inci_raw || null,
         needs_review: !!it.needs_review, review_reasons: it.review_reasons || [],
         name: it.name_raw || "", amount: it.amount_raw || "", include: true, user_added: false, edited: false,
         match: null, result: null,      // match: 성분 확인 결과 / result: 규제 조회 결과 (행별)
@@ -942,6 +942,20 @@
     show($("regulatory-review-partial"), notes.length > 0);
 
     fileState.emptyResult = result.status === "empty";
+    var emptyTitle = $("regulatory-file-empty-title"), emptyBody = $("regulatory-file-empty-body");
+    var outcome = result.ocr && result.ocr.outcome;
+    if (result.file && result.file.kind === "image") {
+      setText(emptyTitle, outcome === "no_text" ? "이미지에서 글자를 인식하지 못했어요" : "글자는 읽었지만 성분 표 구조를 찾지 못했어요");
+      setText(emptyBody, outcome === "no_text"
+        ? "글자가 선명하고 기울어지지 않은 이미지를 다시 올려 주세요. 스캔 해상도를 높이면 도움이 돼요."
+        : "‘한글 성분명 · INCI Name · 함량’ 같은 제목 줄이 있는 표가 필요해요. 제목 줄이 선명한 이미지를 올리거나 아래 ‘행 추가’로 직접 입력해 주세요.");
+    } else if (result.file && result.file.kind === "xlsx") {
+      setText(emptyTitle, "성분 표를 찾지 못했어요");
+      setText(emptyBody, "이 시트에는 ‘INCI name · 성분명 · 원료명’ 같은 제목이 있는 표가 없었어요. 다른 시트를 고르거나 아래 ‘행 추가’로 직접 입력해 주세요.");
+    } else {
+      setText(emptyTitle, "성분 표를 찾지 못했어요");
+      setText(emptyBody, "파일은 읽었지만 ‘INCI name · 성분명 · 원료명’ 같은 제목이 있는 표가 없었어요. 아래 ‘행 추가’로 직접 입력하거나 다른 파일을 올려 주세요.");
+    }
     if (reviewBody) { reviewBody.innerHTML = ""; fileState.items.forEach(function (it) { reviewBody.appendChild(rowElement(it)); }); }
     setFileStep("review");
     updateReviewCount();
@@ -966,7 +980,7 @@
     tr.appendChild(tdCheck);
 
     var tdName = el("td");
-    tdName.appendChild(el("p", "regulatory-review-origin", "원문: " + (it.user_added ? "(직접 입력)" : (it.name_raw || "(비어 있음)"))));
+    tdName.appendChild(el("p", "regulatory-review-origin", "원문: " + (it.user_added ? "(직접 입력)" : (it.name_raw || "(비어 있음)")) + (it.inci_raw ? " · " + it.inci_raw : "")));
     var nameInput = el("input", "form-control form-control-sm"); nameInput.type = "text"; nameInput.value = it.name;
     nameInput.placeholder = "성분명 (한글 또는 INCI)"; nameInput.setAttribute("aria-label", "성분명 수정");
     nameInput.addEventListener("input", function () {

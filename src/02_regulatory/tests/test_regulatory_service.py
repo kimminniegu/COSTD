@@ -461,7 +461,7 @@ class ExtractPdfTest(unittest.TestCase):
         self.assertEqual(ctx.exception.http_status, 503)
         self.assertIn("winget", ctx.exception.message)
         ready = dict(no_ocr, available=True, missing=[], version="5.4", message="")
-        with mock.patch.object(rx.ocr, "availability", return_value=ready),              mock.patch.object(rx.ocr, "render_pdf_page", return_value=object()),              mock.patch.object(rx.ocr, "ocr_lines", return_value=([""], 0)):
+        with mock.patch.object(rx.ocr, "availability", return_value=ready),              mock.patch.object(rx.ocr, "render_pdf_page", return_value=object()),              mock.patch.object(rx.ocr, "ocr_table", return_value=([], 0, {"psm": 6})):
             r = rx.extract_upload("scan.pdf", _io.BytesIO(_pdf_blank_bytes()))
         self.assertEqual(r["status"], "empty")
         self.assertEqual(r["items"], [])
@@ -691,6 +691,15 @@ def _unavailable_info():
     return {"available": False, "engine": "tesseract", "version": None, "cmd": None, "langs": [], "missing": ["tesseract 실행 파일"], "message": "OCR 준비가 안 됐어요. 부족한 항목: tesseract 실행 파일. " + ocrmod.INSTALL_HINT}
 
 
+def _fake_table_lines(rows):
+    """[[셀 텍스트, ...], ...] → ocr_table() 형식의 줄 목록. 열마다 x 를 400px 간격으로 둔다."""
+    out = []
+    for i, cells in enumerate(rows):
+        cs = [{"text": c, "x0": 100 + j * 400, "x1": 100 + j * 400 + 12 * max(1, len(c)), "conf": 90.0} for j, c in enumerate(cells)]
+        out.append({"top": 100 + i * 50, "height": 30, "cells": cs, "text": "   ".join(cells)})
+    return out
+
+
 class OcrUnavailableTest(unittest.TestCase):
     """OCR 도구가 없는 환경에서도 텍스트 PDF·Excel 은 그대로 동작하고, 이미지·스캔 PDF 는 설치 안내를 돌려준다."""
 
@@ -743,14 +752,14 @@ class OcrPageSelectionTest(unittest.TestCase):
     """텍스트가 있는 쪽은 OCR 하지 않고, 텍스트 없는 쪽만 OCR 한다 (중복 추출 방지). OCR 자체는 가짜로 대체."""
 
     def test_only_image_pages_are_ocred(self):
-        fake_lines = ["성분명            함량(%)", "글리세린          5.0", "판테놀            0.5"]
+        fake_lines = _fake_table_lines([["성분명", "함량(%)"], ["글리세린", "5.0"], ["판테놀", "0.5"]])
         calls = []
-        def fake_ocr_lines(img, timeout=25):
-            calls.append(timeout); return fake_lines, 40
+        def fake_ocr_table(img, timeout=25, psm=6):
+            calls.append(timeout); return fake_lines, 40, {"psm": psm}
         ready = dict(_unavailable_info(), available=True, missing=[], version="5.4", message="")
         with mock.patch.object(ocrmod, "availability", return_value=ready), \
              mock.patch.object(ocrmod, "render_pdf_page", return_value=object()), \
-             mock.patch.object(ocrmod, "ocr_lines", side_effect=fake_ocr_lines):
+             mock.patch.object(ocrmod, "ocr_table", side_effect=fake_ocr_table):
             with open(SAMPLES / "sample_mixed_text_scan.pdf", "rb") as f:
                 r = rx.extract_upload("mixed.pdf", f)
         self.assertEqual(len(calls), 1)                                        # 3쪽(이미지)만 OCR
@@ -770,7 +779,7 @@ class OcrPageSelectionTest(unittest.TestCase):
         ready = dict(_unavailable_info(), available=True, missing=[], version="5.4", message="")
         with mock.patch.object(ocrmod, "availability", return_value=ready), \
              mock.patch.object(ocrmod, "render_pdf_page", return_value=object()), \
-             mock.patch.object(ocrmod, "ocr_lines", side_effect=ocrmod.OcrError("ocr_timeout", "OCR 처리 시간이 25초를 넘어 중단했어요.")):
+             mock.patch.object(ocrmod, "ocr_table", side_effect=ocrmod.OcrError("ocr_timeout", "OCR 처리 시간이 25초를 넘어 중단했어요.")):
             with self.assertRaises(rx.ExtractError) as ctx:
                 with open(SAMPLES / "sample_scan_only.pdf", "rb") as f:
                     rx.extract_upload("scan.pdf", f)
@@ -782,7 +791,7 @@ class OcrPageSelectionTest(unittest.TestCase):
         ready = dict(_unavailable_info(), available=True, missing=[], version="5.4", message="")
         with mock.patch.object(ocrmod, "availability", return_value=ready), \
              mock.patch.object(ocrmod, "render_pdf_page", return_value=object()), \
-             mock.patch.object(ocrmod, "ocr_lines", return_value=([""], 0)):
+             mock.patch.object(ocrmod, "ocr_table", return_value=([], 0, {"psm": 6})):
             with open(SAMPLES / "sample_scan_only.pdf", "rb") as f:
                 r = rx.extract_upload("scan.pdf", f)
         self.assertEqual(r["status"], "empty")
@@ -836,3 +845,106 @@ class OcrRealTest(unittest.TestCase):
         self.assertEqual(body["file"]["kind"], "image")
         self.assertTrue(body["ocr"]["available"])
         self.assertNotIn("RAPIDAPI", res.get_data(as_text=True))
+
+
+# ---------------------------------------------------------------------------
+# OCR 표 복원 보완 (2026-09-23 진단: 괘선 표 이미지에서 제목·행이 깨지던 문제)
+# ---------------------------------------------------------------------------
+
+class OcrTableParserTest(unittest.TestCase):
+    """위치 기반 표 파서 — OCR 엔진 없이 가짜 줄 목록으로 검증"""
+
+    @staticmethod
+    def _line(top, cells, height=30):
+        out = []
+        for text, x0, x1, conf in cells:
+            out.append({"text": text, "x0": x0, "x1": x1, "conf": conf})
+        return {"top": top, "height": height, "cells": out, "text": "   ".join(c["text"] for c in out)}
+
+    def test_header_variants_and_two_name_columns(self):
+        L = self._line
+        lines = [
+            L(10, [("DERMAON COSMETICS", 50, 400, 95), ("문서번호 DOC-RD-2026-0923", 900, 1300, 90)]),
+            L(60, [("제품명", 60, 120, 95), ("데일리 모이스처 로션", 200, 420, 90)]),
+            L(120, [("No.", 100, 140, 95), ("한글 성분명", 300, 420, 90), ("INCI Name", 700, 820, 95), ("함량 (%)", 1000, 1080, 90)]),
+            L(170, [("1", 110, 120, 96), ("정제수", 210, 280, 93), ("Water", 620, 700, 96), ("77.00", 1040, 1100, 95)]),
+            L(220, [("2", 110, 120, 96), ("카프릴릭 / 카프릭트라이", 210, 480, 93), ("Caprylic/Capric", 620, 800, 92), ("5.00", 1040, 1100, 75)]),
+            L(255, [("글리세라이드", 210, 360, 89), ("Triglyceride", 620, 760, 96)]),
+            L(310, [("3", 110, 120, 96), ("ease] Ale", 210, 400, 39), ("Ethylhexylglycerin", 620, 850, 91), ("0.20", 1040, 1100, 96)]),
+            L(360, [("합계 TOTAL", 400, 600, 89), ("100.00", 1030, 1100, 88)]),
+            L(700, [("작성", 200, 260, 95), ("검토", 600, 660, 95), ("승인", 1000, 1060, 95)]),
+        ]
+        items, dm, du, info = rx.parse_table_ocr(lines, "이미지 (OCR)")
+        self.assertTrue(info["header_found"])
+        self.assertEqual(len(items), 3)                                         # 합계·결재란·문서 정보는 제외
+        self.assertEqual(items[0]["name_raw"], "정제수")
+        self.assertEqual(items[0]["inci_raw"], "Water")                         # 같은 행의 영문명은 한 성분으로
+        self.assertEqual(items[0]["amount_raw"], "77.00")
+        self.assertEqual(items[1]["name_raw"], "카프릴릭/카프릭트라이 글리세라이드")   # 두 줄 셀 병합, '/' 공백 정리
+        self.assertEqual(items[1]["inci_raw"], "Caprylic/Capric Triglyceride")
+        self.assertEqual(items[1]["amount_raw"], "5.00")
+        self.assertTrue(any("두 줄로 나뉜 셀" in r for r in items[1]["review_reasons"]))
+        self.assertTrue(items[2]["needs_review"])                               # 신뢰도 39 → 확인 필요
+        self.assertTrue(any("신뢰도" in r for r in items[2]["review_reasons"]))
+        self.assertEqual(items[2]["inci_raw"], "Ethylhexylglycerin")
+        self.assertEqual(items[2]["amount_raw"], "0.20")
+
+    def test_korean_header_misread_still_maps_by_prefix(self):
+        # OCR 이 '한글 성분명' 을 '한글 429' 로 읽어도 '한글' 접두사로 이름 열로 인정한다
+        L = self._line
+        lines = [L(120, [("No.", 100, 140, 95), ("한글 429", 300, 420, 60), ("INCI Name", 700, 820, 95), ("함량 (%)", 1000, 1080, 90)]),
+                 L(170, [("1", 110, 120, 96), ("글리세린", 210, 300, 93), ("Glycerin", 620, 700, 96), ("5.00", 1040, 1100, 95)])]
+        items, _, _, info = rx.parse_table_ocr(lines, "이미지 (OCR)")
+        self.assertTrue(info["header_found"])
+        self.assertEqual(items[0]["name_raw"], "글리세린")
+        self.assertEqual(items[0]["inci_raw"], "Glycerin")
+
+    def test_no_header_registers_nothing(self):
+        L = self._line
+        lines = [L(10, [("본 문서는 개발 검토용 성분 구성 자료임.", 50, 700, 90)]),
+                 L(60, [("글리세린", 210, 300, 93), ("5.00", 1040, 1100, 95)]),
+                 L(110, [("정제수", 210, 280, 93), ("77.00", 1040, 1100, 95)])]
+        items, _, _, info = rx.parse_table_ocr(lines, "이미지 (OCR)")
+        self.assertFalse(info["header_found"])
+        self.assertEqual(items, [])                                             # 제목 없으면 문장·행을 성분으로 등록하지 않음
+        self.assertTrue(info["recognized_samples"])
+
+    def test_amount_spill_split_and_outside_cells_ignored(self):
+        L = self._line
+        lines = [L(100, [("INCI name", 100, 240, 95), ("Requested level Role", 500, 900, 90)]),
+                 L(150, [("Niacinamide", 100, 260, 95), ("4.0%", 500, 560, 95), ("Required", 1000, 1120, 90)]),
+                 L(200, [("Aqua", 100, 170, 95), ("q.s. to 100%", 500, 660, 94), ("Balance", 1000, 1100, 90)])]
+        items, _, _, info = rx.parse_table_ocr(lines, "이미지 (OCR)")
+        self.assertEqual([it["amount_raw"] for it in items], ["4.0%", "q.s. to 100%"])
+        self.assertEqual(rx._split_amount("4.0% Required"), ("4.0%", "Required"))
+        self.assertEqual(rx._split_amount("q.s. to 100% Balance"), ("q.s. to 100%", "Balance"))
+        self.assertEqual(rx._split_amount("미정"), ("미정", None))
+
+    def test_header_text_normalization(self):
+        self.assertEqual(rx._norm_header_text("한 글  성 분 명:"), "한글성분명")
+        self.assertEqual(rx._norm_header_text("INCI\nName."), "INCI Name")
+        self.assertIsNotNone(rx.find_header(["No.", "한 글 성 분 명", "INCI Name", "함 량 (%)"]))
+        self.assertIsNone(rx.find_header(["본 문서는 성분 구성 자료임.", "x"]))
+
+
+@unittest.skipUnless(OCR_READY, "Tesseract(kor+eng) 가 준비된 환경에서만 실행")
+class OcrGridImageRealTest(unittest.TestCase):
+    """괘선·번호 열·두 줄 셀·합계·결재란이 있는 가상 성분표 이미지 (samples/sample_scan_grid_kr_en.png)"""
+
+    def test_grid_table_image(self):
+        with open(SAMPLES / "sample_scan_grid_kr_en.png", "rb") as f:
+            r = rx.extract_upload("grid.png", f)
+        self.assertEqual(r["status"], "extracted")
+        self.assertTrue(r["ocr"]["header_found"])
+        names = [it["name_raw"] for it in r["items"]]
+        self.assertGreaterEqual(len(names), 6)
+        self.assertNotIn("합계 TOTAL", " ".join(names))
+        self.assertTrue(all(n not in " ".join(names) for n in ("작성", "검토", "승인", "제품명", "문서번호")))
+        first = r["items"][0]
+        self.assertEqual(first["name_raw"], "정제수")
+        self.assertEqual(first["inci_raw"], "Water")
+        self.assertEqual(first["amount_raw"], "72.50")
+        merged = [it for it in r["items"] if "글리세라이드" in it["name_raw"] or "Triglyceride" in (it.get("inci_raw") or "")]
+        self.assertEqual(len(merged), 1)                                        # 두 줄 셀이 중복 행이 되지 않음
+        self.assertEqual(merged[0]["amount_raw"], "5.00")
+        self.assertTrue(all(it["needs_review"] for it in r["items"]))

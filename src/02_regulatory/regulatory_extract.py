@@ -45,7 +45,11 @@ UNSUPPORTED_MESSAGE = "현재 텍스트 PDF · 스캔 PDF · PNG/JPG 이미지 �
 MIN_PAGE_TEXT_CHARS = 20       # 쪽에서 읽힌 글자(공백 제외)가 이보다 적으면 텍스트 없는 쪽으로 보고 OCR 대상
 
 # 성분 표 헤더 인식 (한글·영문). 셀 하나가 이 패턴에 맞고 짧을 때만 헤더로 본다.
-NAME_HEADER = re.compile(r"(inci|ingredient|raw\s*material|성분\s*명?|원료\s*명?|물질\s*명?)", re.I)
+# 제목 변형: 성분명 / 한글 성분명 / 영문 성분명 / INCI Name / INCI / Ingredient (name) / 원료명 / 물질명 / 성분 (INCI)
+NAME_HEADER = re.compile(r"(inci|ingredient|raw\s*material|성분\s*명?|원료\s*명?|물질\s*명?|^(한글|국문|영문|영어|korean|english)\b)", re.I)
+INDEX_HEADER = re.compile(r"^(no\.?|num\.?|#|번호|순번|연번|순서)$", re.I)          # 행 번호 열
+TOTAL_ROW = re.compile(r"^(합\s*계|총\s*계|소\s*계|total|sum|subtotal)\b", re.I)   # 합계 행 — 성분 아님
+META_ROW = re.compile(r"^(제품\s*명|제품\s*코드|문서\s*번호|문서\s*구분|작성\s*일|작성\s*부서|작성자|개정\s*번호|결재|승인|검토|작성|비고|document\s*no|product\s*(name|code)|department|approved|reviewed|prepared)\b", re.I)
 AMOUNT_HEADER = re.compile(r"(%|％|percent|level|content|concentration|amount|dosage|dose|w/w|wt|함량|배합|비율|농도|투입)", re.I)
 ROLE_HEADER = re.compile(r"(role|status|function|purpose|remark|note|comment|역할|용도|구분|비고|기능)", re.I)
 HEADER_MAX_LEN = 40
@@ -190,27 +194,47 @@ def find_header(cells):
     - 비어 있지 않은 셀이 2개 이상이고 모두 짧다(HEADER_MAX_LEN 이하)
     - 성분명 열이 있고, 함량 열이나 역할 열이 함께 있거나 성분명 열 제목이 STRICT_NAME_HEADER 와 정확히 맞는다
     """
-    texts = [_cell_text(c) for c in cells]
+    texts = [_norm_header_text(_cell_text(c)) for c in cells]
     nonempty = [t for t in texts if t]
     if len(nonempty) < 2 or any(len(t) > HEADER_MAX_LEN for t in nonempty):
         return None
     if any(SENTENCE_HINT.search(t) for t in nonempty):
         return None
-    name_idx = amount_idx = role_idx = None
+    name_idx = name2_idx = amount_idx = role_idx = index_idx = None
     for i, t in enumerate(texts):
         if not t:
             continue
-        if name_idx is None and NAME_HEADER.search(t) and not AMOUNT_HEADER.search(t.replace("INCI", "")):
-            name_idx = i
+        if index_idx is None and INDEX_HEADER.match(t):
+            index_idx = i
+        elif NAME_HEADER.search(t) and not AMOUNT_HEADER.search(t.replace("INCI", "").replace("inci", "")):
+            if name_idx is None:
+                name_idx = i
+            elif name2_idx is None:
+                name2_idx = i                      # 두 번째 이름 열 (예: 한글 성분명 + INCI Name) — 같은 행 = 같은 성분
         elif amount_idx is None and AMOUNT_HEADER.search(t):
             amount_idx = i
         elif role_idx is None and ROLE_HEADER.search(t):
             role_idx = i
     if name_idx is None:
         return None
-    if amount_idx is None and role_idx is None and not STRICT_NAME_HEADER.match(texts[name_idx]):
+    if amount_idx is None and role_idx is None and name2_idx is None and not STRICT_NAME_HEADER.match(texts[name_idx]):
         return None
-    return {"name": name_idx, "amount": amount_idx, "role": role_idx}
+    # 한글 열과 영문 열이 둘 다 있으면 한글 열을 대표 이름으로 (후보 검색은 한글 엔드포인트가 넓다)
+    if name2_idx is not None and _has_hangul(texts[name2_idx]) and not _has_hangul(texts[name_idx]):
+        name_idx, name2_idx = name2_idx, name_idx
+    return {"name": name_idx, "name2": name2_idx, "amount": amount_idx, "role": role_idx, "index": index_idx}
+
+
+def _norm_header_text(t):
+    """제목 비교용 정규화: 앞뒤·중복 공백 정리, 줄바꿈 제거, 한글 음절 사이 공백 제거(OCR), 끝의 구두점 제거. 대소문자는 re.I 로 무시."""
+    t = re.sub(r"\s+", " ", (t or "").replace("\n", " ")).strip()
+    t = re.sub(r"(?<=[\uac00-\ud7a3]) (?=[\uac00-\ud7a3])", "", t)
+    t = re.sub(r"[:：.。,;·]+$", "", t).strip()
+    return t
+
+
+def _has_hangul(t):
+    return any("\uac00" <= ch <= "\ud7a3" for ch in (t or ""))
 
 
 def _review_name(name):
@@ -227,8 +251,37 @@ def _review_name(name):
     return reasons
 
 
-def make_item(index, name, amount, role, location, unit_hint=None):
-    name = (name or "").strip()
+def _tidy_name(t):
+    t = re.sub(r"\s*/\s*", "/", (t or "").strip())     # 성분명의 '/' 주변 공백 제거 (INCI 표기에는 공백이 없다)
+    return re.sub(r"\s+", " ", t)
+
+
+AMOUNT_FULL = re.compile(
+    r"^\s*(?:q\.?\s?s\.?|qs)(?:\s*(?:to|ad)\s*\d+(?:[.,]\d+)?\s*[%％]?)?\s*$"
+    r"|^\s*[<≤>≥~≈]?\s*\d+(?:[.,]\d+)?\s*(?:[-~–]\s*\d+(?:[.,]\d+)?)?\s*(?:%|％|ppm|mg/g|g/kg|mg/kg|wt%|w/w|w/v)?\s*$",
+    re.I,
+)
+
+
+def _split_amount(text):
+    """OCR 셀에 함량 뒤로 다른 열 글이 붙은 경우('4.0% Required', 'q.s. to 100% Balance') 함량 형식에 온전히 맞는
+    앞부분만 함량으로, 나머지는 비고로 돌려준다. 형식에 맞는 부분이 없으면 원문 그대로."""
+    t = (text or "").strip()
+    if not t or AMOUNT_FULL.match(t):
+        return t, None
+    tokens = t.split()
+    for n in range(len(tokens) - 1, 0, -1):
+        head = " ".join(tokens[:n])
+        if AMOUNT_FULL.match(head):
+            return head, " ".join(tokens[n:])
+    return t, None
+
+
+def make_item(index, name, amount, role, location, unit_hint=None, inci=None):
+    name = _tidy_name(name)
+    inci = _tidy_name(inci) or None
+    if not name and inci:
+        name, inci = inci, None                  # 한글 이름 칸이 비면 영문 이름을 대표 이름으로
     amount = (amount or "").strip() or None
     reasons = _review_name(name)
     if amount is not None and not AMOUNT_VALUE.match(amount):
@@ -236,6 +289,7 @@ def make_item(index, name, amount, role, location, unit_hint=None):
     return {
         "id": "r%d" % index,
         "name_raw": name,
+        "inci_raw": inci,                          # 같은 행의 영문(INCI) 이름 열 원문. 없으면 None
         "amount_raw": amount,                      # 문서 원문 그대로. 없으면 None (0 아님)
         "amount_unit_hint": unit_hint,             # 열 제목에 단위가 있을 때만 (예: "%")
         "role_raw": (role or "").strip() or None,
@@ -337,10 +391,153 @@ def parse_table_lines(lines, location_of):
                 header = None
             continue
         name = cells[header["name"]] if header["name"] < len(cells) else cells[0]
+        name2 = cells[header["name2"]] if header.get("name2") is not None and header["name2"] < len(cells) else None
         amount = cells[header["amount"]] if header["amount"] is not None and header["amount"] < len(cells) else None
         role = cells[header["role"]] if header["role"] is not None and header["role"] < len(cells) else None
-        items.append(make_item(len(items) + 1, name, amount, role, location_of(idx), _unit_hint(header_text)))
+        if TOTAL_ROW.match(name or ""):
+            header = None                          # 합계 행 = 표 끝
+            continue
+        items.append(make_item(len(items) + 1, name, amount, role, location_of(idx), _unit_hint(header_text), inci=name2))
     return items, doc_market, doc_use
+
+
+# ---------------------------------------------------------------------------
+# OCR 위치 기반 표 복원 (이미지 · 스캔 PDF 쪽)
+#   ocr.ocr_table() 이 돌려준 줄(셀마다 x 범위·신뢰도)에서 제목 줄을 찾고, 제목 셀의 x 범위로 열 구간을 만들어
+#   각 줄의 셀을 열에 배정한다. 행 번호 열이 있는데 번호가 없는 줄은 앞 행의 이어지는 줄(두 줄 셀)로 합친다.
+# ---------------------------------------------------------------------------
+
+def _column_bands(header_cells, line_height):
+    """제목 셀 x 범위 → 열 구간 목록 [{"core": (x0, x1), "band": (l, r)}]. 제목 셀 순서(왼쪽부터)가 열 index 다.
+    band: 이웃 제목과의 중간선 사이. 바깥쪽(첫·끝 열)은 제목 셀에서 줄 높이 3배까지만 — 그 밖의 셀은 표 밖으로 본다."""
+    xs = sorted((c["x0"], c["x1"]) for c in header_cells)
+    margin = max(30, int(line_height * 3))
+    bands = []
+    for i, (x0, x1) in enumerate(xs):
+        left = (xs[i - 1][1] + x0) // 2 if i > 0 else x0 - margin
+        right = (x1 + xs[i + 1][0]) // 2 if i + 1 < len(xs) else x1 + margin
+        bands.append({"core": (x0, x1), "band": (left, right)})
+    return bands
+
+
+def _assign_cells(line, bands):
+    """줄의 셀들을 열에 배정: 제목 셀과 x 범위가 겹치면 그 열, 아니면 중간선 구간, 둘 다 아니면 표 밖(무시).
+    한 열에 여러 셀이 오면 공백으로 잇는다. 반환: [열별 {"text","conf"} 또는 None]"""
+    cols = [None] * len(bands)
+    m = max(8, int(line["height"] * 0.8))
+    for c in line["cells"]:
+        mid = (c["x0"] + c["x1"]) // 2
+        best = None
+        for j, b in enumerate(bands):
+            if c["x1"] >= b["core"][0] - m and c["x0"] <= b["core"][1] + m:
+                best = j
+                break
+        if best is None:
+            for j, b in enumerate(bands):
+                if b["band"][0] <= mid < b["band"][1]:
+                    best = j
+                    break
+        if best is None:
+            continue                               # 표 열 바깥의 글 (여백 메모 등)
+        if cols[best] is None:
+            cols[best] = {"text": c["text"], "conf": c["conf"]}
+        else:
+            cols[best]["text"] += " " + c["text"]
+            cols[best]["conf"] = min(cols[best]["conf"], c["conf"])
+    return cols
+
+
+def _looks_garbled(text):
+    """글자·숫자가 절반 미만이면 인식이 깨진 셀로 본다."""
+    t = (text or "").replace(" ", "")
+    if not t:
+        return False
+    good = sum(1 for ch in t if ch.isalnum() or "\uac00" <= ch <= "\ud7a3" or ch in "/-().%,")
+    return good / len(t) < 0.5
+
+
+def parse_table_ocr(lines, location):
+    """ocr_table() 줄 목록 → (items, doc_market, doc_use, info). info: {"header_found", "header_text", "recognized_samples"}"""
+    items, header, bands, header_text = [], None, None, ""
+    doc_market = doc_use = None
+    prev_top = None
+    info = {"header_found": False, "header_text": None, "recognized_samples": []}
+    for ln in lines:
+        cells = [c["text"] for c in ln["cells"]]
+        if not cells:
+            continue
+        if header is None:
+            if len(info["recognized_samples"]) < 3 and len(ln["text"]) >= 4:
+                info["recognized_samples"].append(ln["text"][:60])
+            if len(cells) >= 2 and len(cells[0]) <= HEADER_MAX_LEN:
+                if doc_market is None and MARKET_LABEL.search(cells[0]):
+                    doc_market = {"text": " ".join(cells[1:]), "location": location}
+                if doc_use is None and USE_LABEL.search(cells[0]):
+                    doc_use = {"text": " ".join(cells[1:]), "location": location}
+            h = find_header(cells)
+            if h:
+                header, bands = h, _column_bands(ln["cells"], ln["height"])
+                header_text = cells[h["amount"]] if h["amount"] is not None else ""
+                info["header_found"], info["header_text"] = True, ln["text"]
+                prev_top = ln["top"]
+            continue
+        # ---- 표 본문 ----
+        if prev_top is not None and ln["top"] - prev_top > max(60, ln["height"] * 4):
+            header = None                          # 세로로 크게 떨어진 줄 = 표 밖 (비고·결재란 등)
+            continue
+        prev_top = ln["top"]
+        cols = _assign_cells(ln, bands)
+        get = lambda key: (cols[header[key]]["text"].strip() if header.get(key) is not None and cols[header[key]] else "")
+        conf_of = lambda key: (cols[header[key]]["conf"] if header.get(key) is not None and cols[header[key]] else 100.0)
+        name, name2, amount, role, index = get("name"), get("name2"), get("amount"), get("role"), get("index")
+        amount, spill = _split_amount(amount)
+        if spill and not role:
+            role = spill
+        joined = " ".join(cells)
+        if TOTAL_ROW.match(name) or TOTAL_ROW.match(joined) or TOTAL_ROW.match(name2):
+            header = None                          # 합계 행 = 표 끝
+            continue
+        if META_ROW.match(name) or META_ROW.match(joined):
+            header = None
+            continue
+        if not name and not name2 and not amount:
+            continue
+        # 행 번호 열이 있는데 번호가 없는 줄 → 앞 행의 두 번째 줄 (두 줄로 표시된 셀)
+        continuation = header.get("index") is not None and items and not re.match(r"^\d{1,3}$", index or "")
+        if continuation and (name or name2) and not re.match(r"^\d{1,3}$", (name or "")[:3]):
+            prev = items[-1]
+            if name:
+                prev["name_raw"] = (prev["name_raw"] + " " + name).strip()
+            if name2:
+                prev["inci_raw"] = ((prev.get("inci_raw") or "") + " " + name2).strip()
+            if amount and not prev["amount_raw"]:
+                prev["amount_raw"] = amount
+                if not AMOUNT_VALUE.match(amount):
+                    prev["review_reasons"].append("함량 형식을 확인해 주세요. (원문 그대로 두었어요)")
+            if "두 줄로 나뉜 셀을 합쳤어요" not in " ".join(prev["review_reasons"]):
+                prev["review_reasons"].append("두 줄로 나뉜 셀을 합쳤어요. 성분명·함량 연결을 확인해 주세요.")
+            prev["needs_review"] = True
+            continue
+        item = make_item(len(items) + 1, name, amount, role, location, _unit_hint(header_text), inci=name2)
+        low = [k for k in ("name", "name2", "amount") if header.get(k) is not None and cols[header[k]] and conf_of(k) < ocr.LOW_CONF]
+        if low or _looks_garbled(name) or _looks_garbled(name2) or (amount and _looks_garbled(amount)):
+            item["review_reasons"].append("인식 신뢰도가 낮아요. 원문과 대조해 주세요.")
+            item["needs_review"] = True
+        if header.get("amount") is not None and not amount:
+            item["review_reasons"].append("함량 칸을 읽지 못했어요. 원문을 확인해 주세요.")
+            item["needs_review"] = True
+        items.append(item)
+    return items, doc_market, doc_use, info
+
+
+def _ocr_with_retry(img, timeout):
+    """psm 6(균일 블록)으로 인식하고 제목 줄을 못 찾으면 psm 4(가변 크기 단일 열)로 한 번 더 시도한다."""
+    lines, chars, meta = ocr.ocr_table(img, timeout=timeout, psm=6)
+    if chars >= ocr.MIN_OCR_CHARS and not any(find_header([c["text"] for c in ln["cells"]]) for ln in lines):
+        lines2, chars2, meta2 = ocr.ocr_table(img, timeout=timeout, psm=4)
+        if any(find_header([c["text"] for c in ln["cells"]]) for ln in lines2):
+            return lines2, chars2, meta2, True
+    return lines, chars, meta, False
 
 
 def _mark_ocr_items(items):
@@ -377,7 +574,7 @@ def extract_pdf(path):
                     ocr_info["skipped_pages"].append(pno)
                     continue
                 img = ocr.render_pdf_page(path, pno - 1)
-                lines, chars = ocr.ocr_lines(img, timeout=budget.page_timeout())
+                lines, chars, _meta, _retried = _ocr_with_retry(img, budget.page_timeout())
                 ocr_info["applied_pages"].append(pno)
                 if chars < ocr.MIN_OCR_CHARS:
                     ocr_info["no_text_pages"].append(pno)
@@ -393,15 +590,24 @@ def extract_pdf(path):
             return result
         raise ExtractError("unsupported", "텍스트를 읽을 수 없는 PDF 예요. " + UNSUPPORTED_MESSAGE)
 
-    lines, line_loc = [], []
+    # 텍스트 쪽: 레이아웃 파서 / OCR 쪽: 위치 기반 표 파서. 쪽 순서대로 합친다
+    items, doc_market, doc_use = [], None, None
+    ocr_header_missing = []
     for pno in range(1, len(pages) + 1):
         if pno in text_pages:
-            for ln in pages[pno - 1].splitlines():
-                lines.append(ln); line_loc.append("%d쪽" % pno)
+            page_lines = pages[pno - 1].splitlines()
+            its, dm, du = parse_table_lines(page_lines, lambda i, _p=pno: "%d쪽" % _p)
         elif pno in ocr_lines_by_page:
-            for ln in ocr_lines_by_page[pno]:
-                lines.append(ln); line_loc.append("%d쪽 (OCR)" % pno)
-    items, doc_market, doc_use = parse_table_lines(lines, lambda i: line_loc[i])
+            its, dm, du, pinfo = parse_table_ocr(ocr_lines_by_page[pno], "%d쪽 (OCR)" % pno)
+            if not pinfo["header_found"]:
+                ocr_header_missing.append(pno)
+        else:
+            continue
+        for it in its:
+            it["id"] = "r%d" % (len(items) + 1)
+            items.append(it)
+        doc_market = doc_market or dm
+        doc_use = doc_use or du
     _mark_ocr_items(items)
 
     notes = []
@@ -409,6 +615,8 @@ def extract_pdf(path):
         notes.append("OCR 적용: %s. 인식 결과는 원문과 대조가 필요해 모두 ‘확인 필요’로 표시했어요." % ", ".join("%d쪽" % p for p in ocr_info["applied_pages"]))
     if ocr_info["no_text_pages"]:
         notes.append("OCR 로 글자를 거의 읽지 못한 쪽: %s" % ", ".join("%d쪽" % p for p in ocr_info["no_text_pages"]))
+    if ocr_header_missing:
+        notes.append("글자는 읽었지만 성분 표 제목(한글 성분명·INCI Name·함량 등)을 찾지 못한 쪽: %s" % ", ".join("%d쪽" % p for p in ocr_header_missing))
     if ocr_info["skipped_pages"]:
         notes.append("읽지 않은 쪽: %s (%s)" % (", ".join("%d쪽" % p for p in ocr_info["skipped_pages"]),
                                             ocr_info["message"] or "OCR 은 파일당 %d쪽·%d초까지만 처리해요" % (ocr.OCR_MAX_PAGES, ocr.OCR_TOTAL_BUDGET)))
@@ -429,19 +637,37 @@ def extract_image(path):
         raise ExtractError("ocr_unavailable", "이미지 인식(OCR)이 준비되지 않았어요. " + info["message"])
     img = ocr.open_image_file(path)
     width, height = img.size
-    lines, chars = ocr.ocr_lines(img)
+    lines, chars, meta, retried = _ocr_with_retry(img, ocr.OCR_PAGE_TIMEOUT)
     ocr_info = {"available": True, "applied_pages": [1], "skipped_pages": [], "no_text_pages": [] if chars >= ocr.MIN_OCR_CHARS else [1],
-                "engine": ("tesseract " + str(info["version"])) if info["version"] else "tesseract", "message": None}
+                "engine": ("tesseract " + str(info["version"])) if info["version"] else "tesseract", "message": None,
+                "psm": meta.get("psm"), "retried": retried, "header_found": False}
     scope = {"pages": 1, "processed": "이미지 1장 (%d x %d px)" % (width, height), "ocr_pages": [1]}
     if chars < ocr.MIN_OCR_CHARS:
-        result = _finish("image", [], ["OCR 로 읽었지만 인식된 글자가 거의 없어요. 표가 선명하게 보이는 이미지를 올려 주세요."], scope, None, None)
+        # 글자 인식 실패 (표 구조 실패와 구분)
+        result = _finish("image", [], ["OCR 로 읽었지만 인식된 글자가 거의 없어요. 글자가 선명하고 기울어지지 않은 이미지를 다시 올려 주세요."], scope, None, None)
         result["ocr"] = ocr_info
+        result["ocr"]["outcome"] = "no_text"
         return result
-    items, doc_market, doc_use = parse_table_lines(lines, lambda i: "이미지 (OCR)")
+    items, doc_market, doc_use, pinfo = parse_table_ocr(lines, "이미지 (OCR)")
     _mark_ocr_items(items)
+    ocr_info["header_found"] = pinfo["header_found"]
+    if not pinfo["header_found"]:
+        # 표 구조 인식 실패 (글자는 읽음)
+        notes = ["글자는 읽었지만 성분 표 제목(예: 한글 성분명 · INCI Name · 함량)을 찾지 못했어요. 표 제목 줄이 선명한 이미지를 올리거나 ‘행 추가’로 직접 입력해 주세요."]
+        if pinfo["recognized_samples"]:
+            notes.append("인식된 줄 예시: " + " / ".join(pinfo["recognized_samples"]))
+        result = _finish("image", [], notes, scope, doc_market, doc_use)
+        result["ocr"] = ocr_info
+        result["ocr"]["outcome"] = "no_header"
+        return result
     notes = ["OCR 적용: 이미지 전체. 인식 결과는 원문과 대조가 필요해 모두 ‘확인 필요’로 표시했어요."]
+    if retried:
+        notes.append("첫 인식에서 표 제목을 찾지 못해 다른 인식 방식(psm 4)으로 다시 읽었어요.")
     result = _finish("image", items, notes, scope, doc_market, doc_use)
     result["ocr"] = ocr_info
+    result["ocr"]["outcome"] = "extracted" if items else "no_rows"
+    if not items:
+        result["notes"].append("표 제목은 찾았지만 성분 행을 읽지 못했어요. 표가 잘리지 않았는지 확인해 주세요.")
     return result
 
 
@@ -539,7 +765,7 @@ def _finish(kind, items, notes, scope, doc_market, doc_use):
         notes.append("성분 행이 %d개를 넘어 앞 %d개만 표시했어요." % (MAX_ITEMS, MAX_ITEMS))
         items = items[:MAX_ITEMS]
     status = "extracted" if items else "empty"
-    if not items and not any("인식된 글자가 거의 없어요" in n for n in notes):
+    if not items and not any(("인식된 글자가 거의 없어요" in n) or ("성분 표 제목" in n) for n in notes):
         notes.append("성분 표(INCI name · 성분명 · 원료명 등 제목이 있는 표)를 찾지 못했어요. 표 형식을 확인하거나 직접 입력해 주세요.")
     return {
         "status": status,
