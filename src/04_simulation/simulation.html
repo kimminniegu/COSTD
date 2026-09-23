@@ -1,32 +1,248 @@
 {% extends "common/base.html" %}
 {# 담당자 D — AI 제형/샘플 시뮬레이션 / 기능 명세: src/04_simulation/simulation.md #}
 
-{% block title %}AI 제형/샘플 시뮬레이션{% endblock %}
+{% block title %}AI 제형/샘플 시뮬레이터 | COSMOA{% endblock %}
 
 {% block page_css %}
 <link rel="stylesheet" href="{{ url_for('asset', filename='04_simulation/simulation.css') }}">
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <div>
-    <h1 class="page-title">AI 제형/샘플 시뮬레이션</h1>
-  </div>
-  <div class="page-actions">
-    <a class="btn btn-surface" href="{{ url_for('home') }}">← 홈으로</a>
-  </div>
-</div>
-
-<section class="section">
-  <div class="card">
-    <div class="card-body">
-      <div class="placeholder">
-        <p class="placeholder-title">AI 제형/샘플 시뮬레이션</p>
-        <p>이 영역은 simulation.md를 기준으로 담당자가 구현합니다.</p>
-      </div>
+<div class="simulation-container">
+  <!-- 상단 페이지 헤더 -->
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">[SAMPLE FORMULATION LAB] 제형 및 패키징 시뮬레이터</h1>
+      <p class="simulation-subtitle">비뉴턴 점탄성 유변학 해석 & 기술 영업(ASP) 수주 최적화 엔진</p>
+    </div>
+    <div class="page-actions">
+      <button type="button" class="btn btn-surface" id="simulation-btn-reset">↺ 초기화</button>
+      <button type="button" class="btn btn-secondary" id="simulation-btn-pause">시연 일시정지</button>
+      <a class="btn btn-surface" href="{{ url_for('home') }}">← 홈으로</a>
     </div>
   </div>
-</section>
+
+  <!-- 상단 툴바 & 정제수 자동 연동 뱃지 -->
+  <section class="simulation-toolbar card">
+    <div class="simulation-toolbar-left">
+      <label for="simulation-preset-select" class="simulation-label-bold">바이어 타깃 처방 프리셋:</label>
+      <select id="simulation-preset-select" class="simulation-select form-control">
+        <option value="serum">세럼 (Serum)</option>
+        <option value="ampoule" selected>고농축 앰플 (Ampoule)</option>
+        <option value="lotion">에멀전 / 로션 (Lotion)</option>
+        <option value="cream">고보습 크림 (Cream)</option>
+      </select>
+    </div>
+    <div class="simulation-toolbar-right">
+      <div class="simulation-water-badge">
+        정제수(Purified Water) 자동 역산: <strong id="simulation-water-val">78.65</strong>% (100.0% 실시간 동기화)
+      </div>
+    </div>
+  </section>
+
+  <!-- 메인 2-Column 대시보드 레이아웃 -->
+  <div class="simulation-grid">
+    <!-- Left Column: 시뮬레이션 캔버스 및 배합 컨트롤러 -->
+    <div class="simulation-col-left">
+      <!-- 1. 2D 물리 엔진 캔버스 뷰포트 -->
+      <section class="card simulation-viewport-card">
+        <div class="card-header">
+          <h2 class="card-title">비뉴턴 점탄성 액주 & 유변학 시각화</h2>
+        </div>
+        <div class="card-body">
+          <div class="simulation-canvas-wrapper">
+            <canvas id="simulation-pipette-canvas" width="480" height="380"></canvas>
+            
+            <div class="simulation-canvas-overlay-top">
+              <span class="simulation-viscosity-badge">
+                예측 점도: <strong id="simulation-visc-val">2,450</strong> cPs
+              </span>
+            </div>
+            
+            <div id="simulation-phase-warning" class="simulation-phase-warning hidden">
+              ⚠️ 유수분 층분리 발생 (HLB 밸런스 붕괴)
+            </div>
+          </div>
+          
+          <!-- 하단 실시간 텔레메트리 HUD -->
+          <div class="simulation-hud">
+            <div class="simulation-hud-item">
+              <span class="simulation-hud-label">예상 텍스처</span>
+              <span class="simulation-hud-val" id="simulation-hud-texture">탄력 앰플</span>
+            </div>
+            <div class="simulation-hud-item">
+              <span class="simulation-hud-label">상대 유동성 지수</span>
+              <span class="simulation-hud-val" id="simulation-hud-flow">73 / 100</span>
+            </div>
+            <div class="simulation-hud-item">
+              <span class="simulation-hud-label">유효 활성 농도</span>
+              <span class="simulation-hud-val highlight" id="simulation-hud-ppm">30,000 ppm</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. 배합 물성 조절 슬라이더 -->
+      <section class="card">
+        <div class="card-header">
+          <h2 class="card-title">배합 물성 파라미터 조절 (% w/w)</h2>
+        </div>
+        <div class="card-body">
+          <div class="simulation-control-group">
+            <div class="simulation-control-header">
+              <label for="simulation-slider-active">유효 활성 성분 (Active)</label>
+              <span class="simulation-control-val">
+                <span id="simulation-active-val">3.00</span>% 
+                (<span id="simulation-active-ppm-sub">30,000</span> ppm)
+              </span>
+            </div>
+            <input type="range" class="form-range" id="simulation-slider-active" min="0" max="15" step="0.1" value="3.0">
+          </div>
+
+          <div class="simulation-control-group">
+            <div class="simulation-control-header">
+              <label for="simulation-slider-carbomer">점증 폴리머 (Carbomer)</label>
+              <span class="simulation-control-val"><span id="simulation-carbomer-val">0.35</span>%</span>
+            </div>
+            <input type="range" class="form-range" id="simulation-slider-carbomer" min="0.05" max="1.50" step="0.01" value="0.35">
+          </div>
+
+          <div class="simulation-control-group">
+            <div class="simulation-control-header">
+              <label for="simulation-slider-oil">유상 오일 성분 (Oil)</label>
+              <span class="simulation-control-val"><span id="simulation-oil-val">8.00</span>%</span>
+            </div>
+            <input type="range" class="form-range" id="simulation-slider-oil" min="0" max="30" step="0.5" value="8.0">
+          </div>
+
+          <div class="simulation-control-group">
+            <div class="simulation-control-header">
+              <label for="simulation-slider-humectant">수분 유지 보습제 (Humectant)</label>
+              <span class="simulation-control-val"><span id="simulation-humectant-val">10.00</span>%</span>
+            </div>
+            <input type="range" class="form-range" id="simulation-slider-humectant" min="0" max="40" step="0.5" value="10.0">
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. R&D 상성 스트레스 & 안정화 토글 -->
+      <section class="card">
+        <div class="card-header">
+          <h2 class="card-title">R&D 화학적 상성 스트레스 & 안정화 솔루션</h2>
+        </div>
+        <div class="card-body">
+          <div class="simulation-toggles">
+            <label class="simulation-checkbox-label">
+              <input type="checkbox" id="simulation-check-vitaminc">
+              <span class="simulation-toggle-text">
+                <strong>순수 비타민 C 15% 첨가</strong>
+                <small>강산(pH 3.1) 환경 투입으로 카보머 음이온 정전기 반발력 상실 및 겔 네트워크 붕괴</small>
+              </span>
+            </label>
+
+            <label class="simulation-checkbox-label">
+              <input type="checkbox" id="simulation-check-oilphase">
+              <span class="simulation-toggle-text">
+                <strong>고농도 유상/지용성 비타민 E 첨가</strong>
+                <small>계면 밸런스(HLB) 초과로 인한 수상-유상 층분리 발생</small>
+              </span>
+            </label>
+
+            <label class="simulation-checkbox-label highlight-solution">
+              <input type="checkbox" id="simulation-check-capsule">
+              <span class="simulation-toggle-text">
+                <strong>특허 마이크로 캡슐화 기술 적용 (Capsule Tech)</strong>
+                <small>유효 성분 원료 완전 격리 차단 & 유변학적 안정성 및 심미성 동시 복원 (수주 단가 증대)</small>
+              </span>
+            </label>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Right Column: 패키징 엔지니어링 & 피칭 가이드 -->
+    <div class="simulation-col-right">
+      <!-- 1. 패키징 적합성 검토 -->
+      <section class="card">
+        <div class="card-header simulation-package-header">
+          <h2 class="card-title">용기 패키징 적합성 검토</h2>
+          <select id="simulation-package-select" class="simulation-select form-control">
+            <option value="dropper" selected>스포이드 (Dropper)</option>
+            <option value="pump">디스펜서 펌프 (Dispenser Pump)</option>
+            <option value="airless">에어리스 펌프 (Airless Pump)</option>
+            <option value="jar">크림 자 (Jar)</option>
+          </select>
+        </div>
+        <div class="card-body">
+          <div id="simulation-status-card" class="simulation-status-card status-optimal">
+            <div class="simulation-status-top">
+              <span class="simulation-status-badge" id="simulation-status-badge">적합 (Optimal)</span>
+              <span class="simulation-status-score">호환도 점수: <strong id="simulation-status-score-val">96</strong> / 100</span>
+            </div>
+            <p class="simulation-status-desc" id="simulation-status-desc">
+              현재 제형 점도와 물성이 선택하신 용기 노즐 및 진공 흡입 압력에 부합합니다.
+            </p>
+          </div>
+
+          <div class="simulation-recommendation-box">
+            <span class="simulation-sub-caption">추천 대체 용기 규격 (클릭 시 원클릭 전환):</span>
+            <div class="simulation-rec-pills" id="simulation-rec-container">
+              <!-- JS 동적 주입 -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. 현장 기술 영업 피칭 가이드 -->
+      <section class="card simulation-pitch-card">
+        <div class="card-header simulation-pitch-header">
+          <h2 class="card-title">현장 기술 영업 피칭 가이드 (ASP 승격)</h2>
+          <button type="button" class="btn btn-secondary btn-sm" id="simulation-btn-copy-pitch">📋 스크립트 복사</button>
+        </div>
+        <div class="card-body">
+          <div class="simulation-pitch-content">
+            <p class="simulation-pitch-script" id="simulation-pitch-script-text">
+              "바이어사에서 요청하신 제형을 안정적으로 충진할 수 있는 최적의 규격입니다."
+            </p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Bottom Full-Width Section: 배합 전후 비교 & 공학 진단 테이블 -->
+  <section class="card simulation-bottom-section">
+    <div class="card-header simulation-bottom-header">
+      <div>
+        <h2 class="card-title">배합 전후 비교 & 공학 진단 테이블</h2>
+        <p class="simulation-subtitle">기준 처방 대비 증감 지표 및 양산 충진 리스크 엔지니어링 분석</p>
+      </div>
+      <div class="simulation-baseline-actions">
+        <button type="button" class="btn btn-primary btn-sm" id="simulation-btn-save-baseline">현재 배합을 비교 기준으로 저장</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="simulation-btn-load-baseline">저장 배합 불러오기</button>
+        <button type="button" class="btn btn-surface btn-sm" id="simulation-btn-clear-baseline">기준 삭제</button>
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table simulation-table">
+          <thead>
+            <tr>
+              <th>분석 항목</th>
+              <th>저장 기준 (Baseline)</th>
+              <th>현재 배합 (Current)</th>
+              <th>변화 증감율 (Delta)</th>
+              <th>공학 조치 가이드</th>
+            </tr>
+          </thead>
+          <tbody id="simulation-diff-table-body">
+            <!-- JS 동적 렌더링 -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
 {% endblock %}
 
 {% block page_js %}
