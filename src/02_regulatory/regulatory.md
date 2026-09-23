@@ -23,6 +23,7 @@
 | `src/02_regulatory/regulatory_service.py` | 외부 API 호출·오류 분류·응답 정규화 모듈 | 작성됨 |
 | `src/02_regulatory/regulatory_extract.py` | 업로드 문서(텍스트 PDF·스캔 PDF·이미지·.xlsx) 검증·임시 저장·성분명/함량 추출 모듈. 규제 API 호출 없음 | 작성됨 |
 | `src/02_regulatory/regulatory_ocr.py` | 서버 로컬 OCR 래퍼(Tesseract + pypdfium2 + Pillow + numpy). 엔진·언어 데이터 확인, 괘선 제거·확대 전처리, 단어 위치 기반 줄·셀 복원, PDF 쪽 렌더링, 시간·크기 제한. 외부 전송 없음 | 작성됨 |
+| `src/02_regulatory/mfds_use_restriction.py` | 식약처 ‘화장품 사용제한 원료정보’ 공공데이터 API 수집·분석 **독립 스크립트**(app.py 와 무관, 자동 실행 없음). SQLite 저장·재개·검증·분석 CLI | 작성됨 (2026-09-23, 조사 단계 — 서비스 연결 전) |
 | `src/02_regulatory/api_reference.md` | 이 기능의 `/api/regulatory/` Route 계약과 외부 API 호출 방식 설명 | 작성됨 |
 | `src/02_regulatory/test_data/` | API 응답 예시(정상·데이터 없음·한글/영문 부분 검색. 오류 응답 예시는 미확보) | 실제 호출 기록 7건 |
 | `src/02_regulatory/samples/` | 파일 추출 테스트용 공개 가능한 가상 샘플 문서. 실제 업로드 처리는 이 폴더에 의존하지 않는다 | 텍스트 PDF 1건, .xlsx 2건, OCR 용 이미지 3건(한글 PNG·영문 JPG·괘선 표 PNG), 스캔 PDF 1건, 텍스트+스캔 혼합 PDF 1건 |
@@ -339,6 +340,17 @@
 - **배포 서버(Linux)**: `apt install tesseract-ocr tesseract-ocr-kor tesseract-ocr-eng` 후 `pip install -r requirements.txt`. 기본 경로에 설치되면 환경변수 없이 동작한다. OCR 은 CPU 를 쓰므로 워커 수·요청 시간 제한(최소 90초 이상)을 서버 설정에 반영한다.
 - 준비 여부는 `regulatory_ocr.availability()` 가 확인하며 부족한 항목(실행 파일·언어 데이터·pip 패키지)을 오류 메시지에 그대로 적는다. OCR 이 없어도 텍스트 PDF·Excel 은 동작한다.
 - 렌더링·축소 이미지는 메모리에서만 다루고, 인식 텍스트·파일명은 로그에 남기지 않는다.
+
+**식약처 ‘화장품 사용제한 원료정보’ 수집 스크립트 (2026-09-23, 조사 단계)**
+
+- 목적: 기존 RapidAPI 교체 전에 식약처 공공데이터의 국가별 범위·활용 가능성을 확인한다. 기존 화면·조회 연결은 바꾸지 않았고, 서버 시작이나 사용자 검색 때 실행되지 않는다.
+- 출처: 공식 안내 https://www.data.go.kr/data/15111772/openapi.do, 호출 `GET https://apis.data.go.kr/1471000/CsmtcsUseRstrcInfoService/getCsmtcsUseRstrcInfoService` (serviceKey · pageNo · numOfRows · type=json). 응답 `body.items` 는 배열, 단서조항 필드는 `PROVIS_ATRCL`. 공식 페이지의 요청 변수 표(numOfRows 최대)·호출 제한은 스크립트 렌더라 확인하지 못했고(‘개발계정 트래픽 10,000’만 확인) 페이지 크기·간격은 환경변수로 조정한다.
+- 설치: 추가 패키지 없음(requests·python-dotenv·sqlite3). `.env` 의 `MFDS_API_KEY` 에 Decoding 인증키 (이름은 `.env.example` 에 있음). 키·키 포함 URL 은 저장·로그·보고에 남기지 않는다. 기존 RapidAPI 변수는 그대로 둔다.
+- 저장: `instance/regulatory/mfds_use_restriction.sqlite` (Git 제외 `instance/`, `/assets` 공개 경로 아님, 기존 서비스 DB `instance/cosmoa.db` 와 별개). 테이블 `runs`(실행 조건·시각·상태·건수·호출 수) / `pages`(쪽별 요청·응답 건수·totalCount·resultCode·HTTP·내용 해시) / `records`(원본 9개 필드 그대로 + raw_json + run·page·row). 페이지 하나가 트랜잭션이며 이미 저장된 쪽은 다시 저장하지 않는다.
+- 실행 (프로젝트 루트, `conda activate tdenv`): `python src/02_regulatory/mfds_use_restriction.py probe`(5건 1회 호출로 연결·구조 확인) → `... collect`(순차 수집, 진행 중 실행이 있으면 자동 재개; `--max-pages N`, `--new-run`, `--allow-count-change`) → `... status` → `... analyze`(API 호출 없음) → `... find Retinol 레티놀`(API 호출 없음). 환경변수 `MFDS_PAGE_SIZE`(기본 100) `MFDS_REQUEST_INTERVAL`(초, 기본 0.3) `MFDS_TIMEOUT` `MFDS_MAX_RETRIES` `MFDS_DB_PATH`.
+- 안전장치: 첫 쪽에서 요청 페이지 크기가 실제 적용됐는지 확인(아니면 중단), 본 수집 중 페이지 크기 고정, 재개 시 페이지 크기·totalCount 변화 확인, 인증(401/403·resultCode 20/30~33)·한도(429·22) 오류는 재시도 없이 중단, 일시 오류는 제한 재시도, `resultCode≠00`·XML 오류·예상 밖 구조는 빈 데이터로 취급하지 않고 중단, 반복 페이지·조기 빈 페이지 감지, 완료 건수와 totalCount 대조. 미완료 실행은 `status` 로 구분되고 이전 완료 데이터는 유지된다.
+- 해석 원칙: 같은 성분의 국가별·조건별 레코드를 합치거나 지우지 않는다. `LIMIT_COND` 가 null 인 ‘금지’ 를 ‘제한 없음’으로 보지 않는다. 미조회 성분을 허용·안전·규제 없음으로 판단하지 않는다. 수집 시각은 원천 갱신일·법령 개정일이 아니다. 복수 물질·CAS·이명은 원문 그대로 두고 분석 집계에서만 정규식으로 CAS 토큰을 센다.
+- 검증: `python -m unittest discover -s src/02_regulatory/tests -p "test_mfds*.py"` (모의 응답 16개 — 파싱·null 보존·오류 중단·재개 중복 방지·건수 변화·페이지 크기 불일치·반복/빈 페이지·중복 집계).
 
 **업로드·임시 파일 위치**
 
