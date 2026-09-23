@@ -4,7 +4,7 @@
 - app.py 의 Route 는 입력 추출 → 이 모듈 호출 → 응답 반환만 합니다.
 - 금액 계산은 모두 Decimal 로 하고, 응답 직전에만 float 로 변환합니다. (margin.md §4.0)
 - 현재 구현 범위: Master Data·GET master (§8.2 0~1단계), Tab 1 수량별 단가·마진 (2단계),
-  Tab 2 물류·인코텀즈·환율·스트레스·역제안 (3~5단계), Tab 3 PI 미리보기·PDF (10~11단계)
+  Tab 2 물류·인코텀즈·환율·스트레스·역제안 (3~5단계), Tab 3 PI 미리보기·PDF (10~11단계), 협상 히스토리 (12단계)
 """
 
 import io
@@ -489,6 +489,7 @@ def get_master_data():
             for code, i in INSURANCE_RATES.items()
         ],
         "categories": [{"code": c, "label": label} for c, label in PRODUCT_CATEGORIES],
+        "history_statuses": [{"code": c, "label": label} for c, label in HISTORY_STATUSES.items()],
         "is_mock_rates": True,
     }
     return data, []
@@ -1916,3 +1917,317 @@ def handle_pi(payload, render, *, as_pdf=False):
     filename = f"PI_{_safe_filename(context['pi_no'])}_v{_safe_filename(context['version'])}.pdf"
     return Response(pdf, mimetype="application/pdf",
                     headers={**headers, "Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+# ---------------------------------------------------------------------------
+# 협상 히스토리 (margin.md §3.4, §6.4.9~6.4.11, §7.6)
+# instance/margin/history.json — src/ 아래에 두면 /assets/ 로 공개되므로 금지
+# ---------------------------------------------------------------------------
+
+HISTORY_PATH = FX_CACHE_DIR / "history.json"
+HISTORY_SCHEMA_VERSION = 1
+HISTORY_MAX_VERSIONS = 100
+HISTORY_STATUSES = {
+    "draft": "작성 중",
+    "sent": "발송",
+    "countered": "역제안 받음",
+    "accepted": "수주",
+    "rejected": "실주",
+}
+DEAL_ID_PATTERN = re.compile(r"^D\d{8}-\d{3,}$")
+VERSION_PATTERN = re.compile(r"^(\d{1,3})\.(\d{1,3})$")
+SUMMARY_CHECK_TOLERANCE = Decimal("0.005")
+
+# 비교 대상 15개 필드 — kind: num(수치) | rate(%p 차이) | text(같음/다름)
+COMPARE_FIELDS = [
+    ("qty", "수량", "num"),
+    ("unit_price", "단가", "num"),
+    ("currency", "통화", "text"),
+    ("total_amount", "총액", "num"),
+    ("unit_price_krw", "원화 환산 단가", "num"),
+    ("unit_cost_krw", "총 제조원가", "num"),
+    ("margin_rate_exw", "영업 마진율(EXW)", "rate"),
+    ("margin_rate_export", "영업 마진율(수출)", "rate"),
+    ("incoterm", "인코텀즈", "text"),
+    ("named_place", "지정 장소", "text"),
+    ("fx_rate", "적용 환율", "num"),
+    ("payment_terms", "결제 조건", "text"),
+    ("validity_date", "유효기간", "text"),
+    ("counter_applied", "역제안 단가 적용", "text"),
+    ("status", "상태", "text"),
+]
+
+_history_lock = threading.Lock()
+
+
+def _empty_history():
+    return {"schema_version": HISTORY_SCHEMA_VERSION, "deals": {}}
+
+
+def _read_history():
+    """history.json 읽기. 손상 시 .bak-{timestamp} 로 보존하고 빈 구조로 복구. 반환: (data, recovered)"""
+    if not HISTORY_PATH.exists():
+        return _empty_history(), False
+    try:
+        data = json.loads(HISTORY_PATH.read_text(encoding="utf-8"))
+        if not isinstance(data, dict) or not isinstance(data.get("deals"), dict):
+            raise ValueError("invalid history structure")
+        data.setdefault("schema_version", HISTORY_SCHEMA_VERSION)  # 이후 버전 마이그레이션 자리
+        return data, False
+    except (OSError, ValueError) as exc:
+        backup = HISTORY_PATH.with_name(f"history.json.bak-{now_kst().strftime('%Y%m%d%H%M%S')}")
+        try:
+            os.replace(HISTORY_PATH, backup)
+        except OSError:
+            pass
+        _log("error", "margin history corrupted (%s) → backup %s", exc, backup.name)
+        return _empty_history(), True
+
+
+def _write_history(data):
+    """임시 파일에 쓴 뒤 os.replace 로 원자적으로 교체."""
+    HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = HISTORY_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    os.replace(tmp, HISTORY_PATH)
+
+
+def _version_key(version):
+    match = VERSION_PATTERN.match(str(version))
+    return (int(match.group(1)), int(match.group(2))) if match else (0, 0)
+
+
+def next_version(versions, version_type):
+    """다음 버전 번호. major: 마지막 major+1 ("1.1"→"2.0") / minor: 마지막 major 안에서 minor+1 ("1.0"→"1.1") (§3.4.2)"""
+    keys = [_version_key(v["version"] if isinstance(v, dict) else v) for v in versions]
+    if not keys:
+        return "1.0"
+    major = max(k[0] for k in keys)
+    if version_type == "minor":
+        minor = max(k[1] for k in keys if k[0] == major)
+        return f"{major}.{minor + 1}"
+    return f"{major + 1}.0"
+
+
+def _new_deal_id(deals):
+    prefix = f"D{now_kst().strftime('%Y%m%d')}-"
+    seqs = [int(d[len(prefix):]) for d in deals if d.startswith(prefix) and d[len(prefix):].isdigit()]
+    return f"{prefix}{(max(seqs) if seqs else 0) + 1:03d}"
+
+
+def _mask_account(value):
+    """계좌번호는 뒤 4자리만 남깁니다. 예: 123-456-7890 → ****7890"""
+    digits = str(value or "").strip()
+    return f"****{digits[-4:]}" if len(digits) > 4 else ("****" if digits else "")
+
+
+def _recalculate_summary(snapshot, status):
+    """snapshot(요청 원본)으로 핵심 수치를 서버에서 다시 계산 (§6.4.10). 클라이언트 값은 믿지 않습니다."""
+    tier_req = snapshot.get("tier_request")
+    logistics_req = snapshot.get("logistics_request")
+    fx_req = snapshot.get("fx_request")
+    if not all(isinstance(x, dict) for x in (tier_req, logistics_req, fx_req)):
+        raise MarginValidationError("REQUIRED_FIELD", "저장할 시뮬레이션 값이 없어요. 수출 조건까지 계산한 뒤 저장해 주세요",
+                                    {"snapshot": "tier_request · logistics_request · fx_request 필요"})
+
+    tier_data, _ = calculate_tiers(tier_req)
+    qty = to_quantity(logistics_req.get("qty"))
+    row = next((r for r in tier_data["rows"] if r["qty"] == qty), None)
+    if row is None:
+        raise MarginValidationError("OUT_OF_RANGE", "선택한 수량이 수량 구간에 없어요", {"snapshot.logistics_request.qty": "수량 불일치"})
+
+    logistics, _ = calculate_logistics({**logistics_req, "unit_cost": row["unit_cost"], "supply_price": row["supply_price"]})
+    fx_rate_used = to_decimal(fx_req.get("fx_rate_used"), "snapshot.fx_request.fx_rate_used", _Errors(), label="환율",
+                              min_value=Decimal("0.0001"), max_value=MAX_FX_RATE, required=False)
+    # 저장 당시 환율로 고정해 다시 계산 (이후 실시간 환율이 바뀌어도 버전 값이 흔들리지 않게)
+    quote, _ = calculate_fx_quote({
+        "qty": qty, "unit_cost": row["unit_cost"],
+        "logistics": {k: logistics["totals"][k] for k in ("krw_costs", "fx_costs_krw", "insurance")},
+        "incoterm_unit_price_krw": logistics["incoterm_unit_price_krw"],
+        "currency": fx_req.get("currency"),
+        "fx_basis": "manual" if fx_rate_used else fx_req.get("fx_basis"),
+        "fx_manual_rate": fx_rate_used if fx_rate_used else fx_req.get("fx_manual_rate"),
+        "target_margin": tier_data["target_margin"], "min_margin": tier_data["min_margin"],
+    })
+    currency = quote["currency"]
+    fx_rate = Decimal(str(quote["fx_rate"]))
+    applied = snapshot.get("counter_applied") if isinstance(snapshot.get("counter_applied"), dict) else None
+    if applied and applied.get("currency") not in (None, currency):
+        applied = None  # 통화가 바뀐 역제안은 적용하지 않음 (화면 규칙과 동일)
+
+    if applied:
+        counter, _ = reverse_counter_offer({
+            "counter_price": applied.get("price"), "currency": currency, "fx_rate": fx_rate,
+            "qty": applied.get("qty"), "tier_request": tier_req, "logistics_request": logistics_req,
+        })
+        qty = counter["qty"]
+        unit_price = Decimal(str(counter["counter_price"]))
+        unit_cost = counter["unit_cost"]
+        margin_exw = counter["margin_rate_exw"]
+        received = Decimal(str(counter["received_krw_per_unit"]))
+        margin_export = out(Decimal(str(counter["unit_margin"])) / received * 100) if received > 0 else None
+    else:
+        unit_price = Decimal(str(quote["unit_price_fx"]))
+        unit_cost = row["unit_cost"]
+        margin_exw = quote["margin_rate_exw"]
+        margin_export = quote["margin_rate_export"]
+
+    pi = snapshot.get("pi") if isinstance(snapshot.get("pi"), dict) else {}
+    info = CURRENCIES[currency]
+    return {
+        "qty": qty,
+        "currency": currency,
+        "unit_price": out(unit_price, info["price_decimals"] if not applied else 4),
+        "unit_price_krw": out(unit_price * fx_rate),
+        "total_amount": out(round_to(unit_price * qty, info["amount_decimals"]), info["amount_decimals"]),
+        "incoterm": logistics["effective_incoterm"],
+        "named_place": logistics["named_place"],
+        "fx_rate": out(fx_rate, 4),
+        "fx_source": str(fx_req.get("fx_source") or quote["fx_source"])[:20],
+        "unit_cost_krw": unit_cost,
+        "margin_rate_exw": margin_exw,
+        "margin_rate_export": margin_export,
+        "payment_terms": pi.get("payment_terms") if pi.get("payment_terms") in PAYMENT_TERMS else DEFAULT_PAYMENT_TERMS,
+        "validity_date": str(pi.get("validity_date") or "")[:10],
+        "counter_applied": bool(applied),
+        "status": status,
+    }
+
+
+def save_history_version(payload):
+    """POST /api/margin-calculator/history — 협상 버전 저장 (§6.4.10)"""
+    errors = _Errors()
+    deal_id = payload.get("deal_id") or None
+    if deal_id is not None and (not isinstance(deal_id, str) or not DEAL_ID_PATTERN.match(deal_id)):
+        errors.add("OUT_OF_RANGE", "deal_id", "협상 건 ID 형식이 올바르지 않아요")
+    version_type = payload.get("version_type") or "major"
+    if version_type not in ("major", "minor"):
+        errors.add("OUT_OF_RANGE", "version_type", "버전 구분은 major 또는 minor 예요")
+    status = payload.get("status") or "draft"
+    if status not in HISTORY_STATUSES:
+        errors.add("OUT_OF_RANGE", "status", "상태 값이 올바르지 않아요")
+    memo = str(payload.get("memo") or "").strip()
+    if len(memo) > 1000:
+        errors.add("OUT_OF_RANGE", "memo", "메모는 1,000자 이내로 입력해 주세요")
+    title = str(payload.get("title") or "").strip()
+    if len(title) > 120:
+        errors.add("OUT_OF_RANGE", "title", "협상 건 이름은 120자 이내로 입력해 주세요")
+    snapshot = payload.get("snapshot")
+    if not isinstance(snapshot, dict):
+        errors.add("REQUIRED_FIELD", "snapshot", "저장할 시뮬레이션 값이 없어요")
+    errors.raise_if_any()
+
+    summary = _recalculate_summary(snapshot, status)
+    warnings = []
+    client = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    for key in ("unit_price", "total_amount", "margin_rate_exw"):
+        given = _parse_decimal(client.get(key))
+        mine = summary.get(key)
+        if given is not None and mine is not None and abs(given - Decimal(str(mine))) > SUMMARY_CHECK_TOLERANCE:
+            warnings.append({"code": "SUMMARY_RECALCULATED",
+                             "message": "화면 값과 서버 재계산 값이 달라 서버 값으로 저장했어요"})
+            break
+
+    # 계좌번호는 뒤 4자리만 저장 (§6.4.10)
+    snapshot = json.loads(json.dumps(snapshot))
+    bank = (snapshot.get("pi") or {}).get("bank")
+    if isinstance(bank, dict) and bank.get("account"):
+        bank["account"] = _mask_account(bank["account"])
+
+    pi = snapshot.get("pi") if isinstance(snapshot.get("pi"), dict) else {}
+    buyer = str(((pi.get("buyer") or {}).get("company")) or "").strip()[:120]
+    product = str(((snapshot.get("tier_request") or {}).get("product") or {}).get("name") or "").strip()[:80]
+    saved_at = now_kst().isoformat(timespec="seconds")
+
+    with _history_lock:
+        data, recovered = _read_history()
+        deals = data["deals"]
+        if deal_id is None:
+            deal_id = _new_deal_id(deals)
+            deals[deal_id] = {
+                "deal_id": deal_id,
+                "title": title or " / ".join(x for x in (buyer, product) if x) or deal_id,
+                "buyer_company": buyer, "product_name": product,
+                "created_at": saved_at, "updated_at": saved_at, "versions": [],
+            }
+        elif deal_id not in deals:
+            raise MarginNotFoundError("DEAL_NOT_FOUND", "협상 건을 찾지 못했어요. 목록을 새로고침해 주세요")
+        deal = deals[deal_id]
+        if len(deal["versions"]) >= HISTORY_MAX_VERSIONS:
+            raise MarginValidationError("TOO_MANY_VERSIONS", f"한 협상 건에는 버전을 {HISTORY_MAX_VERSIONS}개까지 저장할 수 있어요")
+        version = next_version(deal["versions"], version_type)
+        deal["versions"].append({"version": version, "saved_at": saved_at, "status": status, "memo": memo,
+                                 "summary": summary, "snapshot": snapshot})
+        deal["updated_at"] = saved_at
+        if buyer:
+            deal["buyer_company"] = buyer
+        if product:
+            deal["product_name"] = product
+        _write_history(data)
+
+    if recovered:
+        warnings.append({"code": "HISTORY_RECOVERED", "message": "손상된 히스토리 파일을 백업하고 새로 시작했어요"})
+    return {"deal_id": deal_id, "version": version, "saved_at": saved_at, "summary": summary}, warnings
+
+
+def _deal_meta(deal):
+    versions = sorted(deal["versions"], key=lambda v: _version_key(v["version"]))
+    return {
+        "deal_id": deal["deal_id"], "title": deal.get("title"), "buyer_company": deal.get("buyer_company"),
+        "product_name": deal.get("product_name"), "created_at": deal.get("created_at"),
+        "updated_at": deal.get("updated_at"), "version_count": len(versions),
+        "latest_version": versions[-1]["version"] if versions else None,
+    }
+
+
+def list_history(deal_id=None):
+    """GET /api/margin-calculator/history — 협상 건 목록 또는 한 건의 버전 목록 (§6.4.9)"""
+    with _history_lock:
+        data, recovered = _read_history()
+        if recovered:
+            _write_history(data)
+    warnings = [{"code": "HISTORY_RECOVERED", "message": "손상된 히스토리 파일을 백업하고 새로 시작했어요"}] if recovered else []
+    deals = data["deals"]
+    if not deal_id:
+        items = sorted((_deal_meta(d) for d in deals.values()), key=lambda d: d["updated_at"] or "", reverse=True)
+        return {"deals": items}, warnings
+    if deal_id not in deals:
+        raise MarginNotFoundError("DEAL_NOT_FOUND", "협상 건을 찾지 못했어요")
+    deal = deals[deal_id]
+    versions = sorted(deal["versions"], key=lambda v: _version_key(v["version"]), reverse=True)
+    return {"deal": _deal_meta(deal), "versions": versions}, warnings
+
+
+def compare_versions(deal_id, a, b):
+    """GET /api/margin-calculator/history/compare — 버전 간 변경 비교 (§6.4.11)"""
+    if not a or not b or a == b:
+        raise MarginValidationError("SAME_VERSION", "서로 다른 두 버전을 골라 주세요", {"from": "버전 선택", "to": "버전 선택"})
+    data, _ = list_history(deal_id)
+    by_version = {v["version"]: v for v in data["versions"]}
+    for key, value in (("from", a), ("to", b)):
+        if value not in by_version:
+            raise MarginNotFoundError("VERSION_NOT_FOUND", f"v{value} 버전을 찾지 못했어요")
+    src, dst = by_version[a]["summary"], by_version[b]["summary"]
+
+    changes = []
+    for field, label, kind in COMPARE_FIELDS:
+        before, after = src.get(field), dst.get(field)
+        item = {"field": field, "label": label, "kind": kind, "from": before, "to": after}
+        if kind in ("num", "rate") and before is not None and after is not None:
+            diff = Decimal(str(after)) - Decimal(str(before))
+            item["diff"] = out(diff, 4)
+            item["diff_pct"] = None if kind == "rate" or Decimal(str(before)) == 0 else out(diff / Decimal(str(before)) * 100)
+            item["direction"] = "up" if diff > 0 else "down" if diff < 0 else None
+            item["changed"] = diff != 0
+            if kind == "rate":
+                item["unit"] = "%p"
+        else:
+            item.update(diff=None, diff_pct=None, direction=None, changed=before != after)
+        changes.append(item)
+
+    if src.get("currency") != dst.get("currency"):
+        for item in changes:
+            if item["field"] == "unit_price":
+                item["note"] = "통화가 달라 원화 단가로 비교해요"
+    meta = lambda v: {"version": v["version"], "saved_at": v["saved_at"], "status": v["status"]}  # noqa: E731
+    return {"deal_id": deal_id, "from": meta(by_version[a]), "to": meta(by_version[b]), "changes": changes}, []

@@ -12,6 +12,7 @@
 | 1.3 | 2026-09-23 | Tab 1 원/ea 금액 소수 2자리 표시(§4.0), chart 응답에 `unit_margin` 추가(§6.4.3), 목표 마진·방어선 범위 오류 코드 `INVALID_MARGIN`으로 통일 | C |
 | 1.4 | 2026-09-23 | Tab 2 구현 반영: 매수인 부담 보험료는 금액 `null`(§6.4.4), 스트레스 표는 EXW·수출 마진율 병기, 화면 보조 요소(`#margin-export-wait`, `#margin-logistics-status`, `#margin-logistics-alert`, `#margin-fx-alert`) 및 CSS 허용 목록 추가(§2.4, §2.7) | C |
 | 1.5 | 2026-09-23 | Tab 3 구현 반영: render-pi `mode`(preview/final), `bound.carton`·`transport_mode`로 서버가 포장 내역 재계산, 총액 응답 헤더 `X-Margin-PI-Total`, PDF·인쇄 필수값 오류 유지 규칙, CSS 허용 목록 추가(§6.4.7, §2.7) | C |
+| 1.6 | 2026-09-23 | 협상 히스토리 구현 반영: snapshot 에 `selected_qty`·`fx_request.fx_rate_used`·`counter`·`export_ui` 추가, 저장 당시 환율로 요약 재계산·불러오기 시 환율 고정, master `history_statuses`, 저장 Modal "새 협상 건으로 저장", 반응형·CSS 허용 목록 추가 (§2.6, §2.7, §3.4.2, §5.5, §6.4.10) | C |
 
 **문서 표기 규칙**
 
@@ -341,6 +342,9 @@ Modal × 4 (§2.6)
 | `.margin-incoterm-tabs` | 인코텀즈 8종 필터 탭 줄바꿈(공통 `.tabs`의 가로 스크롤 대신 `flex-wrap`) |
 | `.margin-fx-kpi` | Card 안 대표 외화 단가 영역(`--color-primary-soft` 배경 패널, `.kpi-card` 중첩 금지 대안) |
 | `.margin-counter-submit` | 역제안 입력 줄의 [역산하기] 버튼 아래 정렬 |
+| `.margin-diff-same` / `.margin-history-memo` | 비교 Modal 의 변동 없음(`—`), 히스토리 메모 칸 말줄임 |
+| `.margin-card-header-wrap` / `.margin-history-actions` | 히스토리 카드 헤더(협상 건 select + 비교 버튼) 줄바꿈 |
+| `.margin-panel-grid` | Tab 2 의 2열 카드 묶음 — 본문 폭 ≤ 880px 에서 1열 (Container Query) |
 | `[id^="margin-"][hidden]` 등 | 공통 CSS에 `[hidden]` 규칙이 없어 `.alert`·`.state`·`.badge`에서 `hidden`이 무시되므로, **이 페이지 요소에 한해** `display: none !important` 보장 |
 
 ---
@@ -651,6 +655,10 @@ INCOTERMS = {
 ```
 
 - `snapshot`은 각 API **요청 body 원본**(재계산 가능한 입력)을 그대로 저장합니다. 불러오기 시 이 값으로 화면을 복원하고 API를 다시 호출합니다.
+- 구현된 `snapshot` 키: `tier_request`, `selected_qty`, `logistics_request`, `fx_request`(`currency`·`fx_basis`·`fx_manual_rate`·**`fx_rate_used`**·`fx_source`), `export_ui`, `counter`(역제안 입력), `counter_applied`, `pi`(계좌번호는 `****1234`로 마스킹).
+- 서버는 `summary`를 **저장 당시 환율(`fx_rate_used`)로 고정해** 다시 계산합니다. 화면 값과 0.005 넘게 다르면 `SUMMARY_RECALCULATED` 경고를 주고 서버 값으로 저장합니다.
+- 버전 불러오기는 매매기준율·TTB로 저장한 버전도 **직접 입력 환율 = 저장 당시 환율**로 복원해 같은 단가를 재현하고, 안내 문구로 알립니다.
+- 저장 Modal: 협상 건이 없으면 새 협상 건(v1.0)으로만 저장, 있으면 "새 협상 건으로 저장" 체크로 다른 바이어 건을 새로 만들 수 있습니다. 새 협상 건 저장 시 PI 번호를 수정하지 않았다면 `COSMOA-PI-{협상 건 번호}`로 맞춥니다.
 - `summary`는 목록·비교용 결과값입니다(저장 시점 값 고정, 재계산하지 않음).
 - `version` 규칙: 새 차수(`major`) → 마지막 major + 1 → `"2.0"`, 수정본(`minor`) → 같은 major의 마지막 minor + 1 → `"1.1"`.
 

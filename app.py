@@ -273,6 +273,28 @@ def margin_export_pi_pdf():
     return margin_service.handle_pi(request.get_json(silent=True), _margin_render_pi_document, as_pdf=True)
 
 
+@app.route("/api/margin-calculator/history", methods=["GET"])
+@login_required
+def margin_get_history():
+    deal_id = request.args.get("deal_id") or None
+    return margin_service.handle(lambda: margin_service.list_history(deal_id), needs_payload=False)
+
+
+@app.route("/api/margin-calculator/history", methods=["POST"])
+@login_required
+def margin_save_history():
+    return margin_service.handle(margin_service.save_history_version, request.get_json(silent=True))
+
+
+@app.route("/api/margin-calculator/history/compare", methods=["GET"])
+@login_required
+def margin_compare_history():
+    args = request.args
+    return margin_service.handle(
+        lambda: margin_service.compare_versions(args.get("deal_id"), args.get("from"), args.get("to")),
+        needs_payload=False)
+
+
 # [D] AI 제형/샘플 시뮬레이션 — 접두사: /api/ai-formulation/...
 
 

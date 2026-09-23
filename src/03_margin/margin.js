@@ -1,7 +1,7 @@
 /* 원가 경쟁력 및 마진 시뮬레이션 전용 JavaScript (담당자 C)
    이 페이지에서만 필요한 로직만 작성합니다.
    다른 페이지의 JS를 수정하거나 의존하지 않습니다. 공통 동작은 src/common/common.js 참고.
-   기능 명세: src/03_margin/margin.md — 현재 구현 범위: Tab 1 (§2.3, §4.2), Tab 2 (§2.4, §4.3~4.5, §6.3), Tab 3 PI (§2.5, §6.4.7~6.4.8), §5, §7, §8.3 */
+   기능 명세: src/03_margin/margin.md — 현재 구현 범위: Tab 1 (§2.3, §4.2), Tab 2 (§2.4, §4.3~4.5, §6.3), Tab 3 PI (§2.5, §6.4.7~6.4.8), 협상 히스토리 (§2.6, §6.4.9~6.4.11), 초안 (§5.5), §7, §8.3 */
 (function () {
   "use strict";
 
@@ -57,6 +57,8 @@
       bound: null, signature: "", margin: null,  // bound: PI 에 들어가는 Tab 1·2 확정값 (§5.4 stale 비교는 signature)
       dirty: {}, extras: [], previewSeq: 0, previewController: null, strictErrors: false,
     },
+    history: { deals: [], dealId: null, versions: [], selected: [], highlight: null, versionType: "major" },
+    restore: null,  // 버전 불러오기·초안 복원 중: { qty, bindPi, message }
   };
 
   function $(id) { return document.getElementById(id); }
@@ -72,10 +74,12 @@
 
   function debounce(fn, ms) {
     var timer = null;
-    return function () {
+    var debounced = function () {
       clearTimeout(timer);
       timer = setTimeout(fn, ms);
     };
+    debounced.cancel = function () { clearTimeout(timer); };
+    return debounced;
   }
 
   /* API 래퍼 — 오류를 { code, message, fields } 로 정규화 (§7.7) ------------ */
@@ -361,6 +365,7 @@
     if (state.controller) state.controller.abort();
     if (!payload) {
       state.tier.status = "idle";
+      state.restore = null; // 입력이 불완전하면 이어서 복원할 수 없음
       setStatusBadge(state.tier.result ? "stale" : null);
       return;
     }
@@ -383,6 +388,7 @@
         if (err && err.name === "AbortError") return;
         if (seq !== state.requestSeq) return;
         state.tier.status = "error";
+        state.restore = null;
         applyServerError(err);
         setStatusBadge(state.tier.result ? "stale" : "error");
       });
@@ -430,6 +436,7 @@
   function renderTierResult(data, warnings) {
     var rows = data.rows;
     var quantities = rows.map(function (r) { return r.qty; });
+    if (state.restore && quantities.indexOf(state.restore.qty) !== -1) state.selection.qty = state.restore.qty;
     if (quantities.indexOf(state.selection.qty) === -1) {
       // 기본 선택: 첫 사용자 구간, 없으면 MOQ (§3.1.3)
       state.selection.qty = rows.length > 1 ? rows[1].qty : rows[0].qty;
@@ -754,6 +761,7 @@
   function bindEvents() {
     bindExportEvents();
     bindPiEvents();
+    bindHistoryEvents();
     var tierInput = $("margin-tier-input");
     tierInput.addEventListener("keydown", function (e) {
       if (e.key === "Enter" && !e.isComposing) {
@@ -806,14 +814,6 @@
     });
 
     $("margin-go-export-btn").addEventListener("click", function () { $("margin-tab-btn-export").click(); });
-
-    $("margin-reset-btn").addEventListener("click", function () {
-      if (state.master) window.Common.openModal("margin-confirm-modal");
-    });
-    $("margin-confirm-ok-btn").addEventListener("click", function () {
-      window.Common.closeModal("margin-confirm-modal");
-      resetAll();
-    });
 
     if ("ResizeObserver" in window) {
       var frame = null;
@@ -1128,7 +1128,7 @@
       return;
     }
     var inputs = readExportInputs();
-    if (!inputs) return;
+    if (!inputs) { state.restore = null; return; }
     var usdRate = currentUsdRate();
     if (!usdRate) {
       if (state.export.basis === "manual") setFieldError("margin-fx-manual-rate", "환율을 입력해 주세요");
@@ -1156,6 +1156,7 @@
       .catch(function (err) {
         if ((err && err.name === "AbortError") || seq !== state.export.seq) return;
         setBadge("margin-logistics-status", { cls: state.export.logistics ? "badge-warning" : "badge-danger", text: state.export.logistics ? "이전 결과" : "계산 오류" });
+        state.restore = null;
         applyExportError(err, "margin-logistics-alert", "margin-logistics-alert-list");
       });
   }
@@ -1238,9 +1239,11 @@
         renderQuote(json.data, json.warnings || []);
         enablePiTab();
         checkPiStale();
+        if (state.restore) finishRestore();
       })
       .catch(function (err) {
         if ((err && err.name === "AbortError") || seq !== state.export.quoteSeq) return;
+        state.restore = null;
         applyExportError(err, "margin-fx-alert", "margin-fx-alert-list");
       });
   }
@@ -1360,7 +1363,7 @@
       setFieldError("margin-counter-price", "먼저 수출 조건과 외화 단가를 계산해 주세요");
       ok = false;
     }
-    if (!ok) return;
+    if (!ok) return Promise.resolve();
 
     var tierReq = state.tier.lastRequest;
     var payload = {
@@ -1372,7 +1375,7 @@
       logistics_request: Object.assign({}, state.export.logisticsRequest, { qty: qty }),
     };
     setCounterLoading(true);
-    api("POST", "/reverse-counter-offer", payload)
+    return api("POST", "/reverse-counter-offer", payload)
       .then(function (json) {
         state.counter.result = json.data;
         renderCounter(json.data);
@@ -1706,6 +1709,9 @@
     if (!state.pi.dirty["margin-port-loading"] && mode) $("margin-port-loading").value = mode.port_loading;
     if (!state.pi.dirty["margin-port-discharge"]) $("margin-port-discharge").value = bound.named_place;
     $("margin-pi-stale-alert").hidden = true;
+    var saveBtn = $("margin-history-save-open-btn");
+    saveBtn.disabled = false;
+    saveBtn.removeAttribute("title");
     renderBound();
     renderPreview();
     return true;
@@ -1928,6 +1934,8 @@
     $("margin-pi-stale-alert").hidden = true;
     $("margin-pi-counter-badge").hidden = true;
     $("margin-pi-preview-meta").textContent = "입력하면 잠시 후 자동으로 갱신돼요";
+    $("margin-history-save-open-btn").disabled = true;
+    $("margin-history-save-open-btn").title = "먼저 견적서 조건을 불러와 주세요";
     setPiDefaults();
     setPreviewHtml(PI_EMPTY_PREVIEW);
   }
@@ -1988,6 +1996,559 @@
     $("margin-pi-pdf-btn").addEventListener("click", downloadPdf);
   }
 
+  /* ==========================================================================
+     협상 히스토리 · 버전 불러오기 · 초안 자동 저장 (§2.5~2.6, §3.4, §5.3, §5.5, §6.4.9~6.4.11)
+     ========================================================================== */
+  var DRAFT_STORAGE_KEY = "cosmoa.margin.draft";
+  var DRAFT_DEBOUNCE_MS = 1000;
+  var HISTORY_STATUS_BADGE = {
+    draft: "badge", sent: "badge-info", countered: "badge-warning", accepted: "badge-success", rejected: "badge-danger",
+  };
+  var pendingConfirm = null;
+
+  /* 확인 Modal (window.confirm 대신) */
+  function openConfirm(opts) {
+    $("margin-confirm-title").textContent = opts.title;
+    $("margin-confirm-message").textContent = opts.message;
+    $("margin-confirm-ok-btn").textContent = opts.okLabel || "확인";
+    pendingConfirm = opts.onConfirm;
+    window.Common.openModal("margin-confirm-modal");
+  }
+
+  function formatDateTime(iso) { return String(iso || "").replace("T", " ").slice(0, 16); }
+
+  function statusLabel(code) {
+    var list = state.master ? state.master.history_statuses : [];
+    for (var i = 0; i < list.length; i += 1) if (list[i].code === code) return list[i].label;
+    return code;
+  }
+
+  function paymentLabel(code) {
+    var list = state.master ? state.master.payment_terms : [];
+    for (var i = 0; i < list.length; i += 1) if (list[i].code === code) return list[i].label;
+    return code;
+  }
+
+  function statusBadge(code) {
+    var badge = document.createElement("span");
+    badge.className = "badge " + (HISTORY_STATUS_BADGE[code] || "");
+    badge.textContent = statusLabel(code);
+    return badge;
+  }
+
+  function showHistoryAlert(kind, message) {
+    var alert = $("margin-history-alert");
+    alert.className = "alert alert-" + kind + " mb-6";
+    $("margin-history-alert-text").textContent = message;
+    alert.hidden = !message;
+  }
+
+  /* 화면 표시용 다음 버전 번호 (서버 next_version 과 같은 규칙, 실제 번호는 서버가 정함) */
+  function previewNextVersion(versions, type) {
+    if (!versions.length) return "1.0";
+    var keys = versions.map(function (v) { return v.version.split(".").map(Number); });
+    var major = Math.max.apply(null, keys.map(function (k) { return k[0]; }));
+    if (type === "minor") {
+      var minor = Math.max.apply(null, keys.filter(function (k) { return k[0] === major; }).map(function (k) { return k[1]; }));
+      return major + "." + (minor + 1);
+    }
+    return (major + 1) + ".0";
+  }
+
+  /* 목록 ------------------------------------------------------------------- */
+  function loadHistory(preferredDealId) {
+    return api("GET", "/history")
+      .then(function (json) {
+        var deals = json.data.deals;
+        state.history.deals = deals;
+        var ids = deals.map(function (d) { return d.deal_id; });
+        var wanted = [preferredDealId, state.history.dealId].filter(function (id) { return id && ids.indexOf(id) !== -1; })[0];
+        state.history.dealId = wanted || (deals[0] ? deals[0].deal_id : null);
+        renderDealSelect();
+        if (!state.history.dealId) { state.history.versions = []; renderHistoryTable(); return null; }
+        return loadVersions();
+      })
+      .catch(function (err) { showHistoryAlert("danger", (err && err.message) || "히스토리를 불러오지 못했어요"); });
+  }
+
+  function loadVersions() {
+    var dealId = state.history.dealId;
+    return api("GET", "/history?deal_id=" + encodeURIComponent(dealId)).then(function (json) {
+      if (dealId !== state.history.dealId) return;
+      state.history.versions = json.data.versions;
+      state.history.selected = [];
+      renderHistoryTable();
+    });
+  }
+
+  function renderDealSelect() {
+    var select = $("margin-history-deal-select");
+    select.textContent = "";
+    if (!state.history.deals.length) {
+      var empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "협상 건 없음";
+      select.appendChild(empty);
+    }
+    state.history.deals.forEach(function (d) {
+      var option = document.createElement("option");
+      option.value = d.deal_id;
+      option.textContent = d.title + " · v" + d.latest_version + " (" + d.version_count + ")";
+      select.appendChild(option);
+    });
+    select.value = state.history.dealId || "";
+    select.disabled = state.history.deals.length === 0;
+  }
+
+  function renderHistoryTable() {
+    var versions = state.history.versions;
+    var tbody = $("margin-history-tbody");
+    tbody.textContent = "";
+    versions.forEach(function (v) {
+      var s = v.summary;
+      var tr = document.createElement("tr");
+      if (v.version === state.history.highlight) tr.className = "is-active";
+
+      var checkCell = cell();
+      var label = document.createElement("label");
+      label.className = "form-check";
+      var check = document.createElement("input");
+      check.type = "checkbox";
+      check.value = v.version;
+      check.checked = state.history.selected.indexOf(v.version) !== -1;
+      check.setAttribute("aria-label", "v" + v.version + " 비교 선택");
+      label.appendChild(check);
+      checkCell.appendChild(label);
+      tr.appendChild(checkCell);
+
+      var versionCell = cell("v" + v.version);
+      versionCell.classList.add("text-number");
+      tr.appendChild(versionCell);
+      tr.appendChild(cell(formatDateTime(v.saved_at)));
+      tr.appendChild(cell(fmt.qty(s.qty), true));
+      tr.appendChild(cell(fmtFx(s.unit_price, s.currency, "price"), true));
+      tr.appendChild(cell(s.incoterm + " " + s.named_place));
+      tr.appendChild(cell(s.margin_rate_exw === null ? "—" : fmt.pct(s.margin_rate_exw), true));
+      var statusCell = cell();
+      statusCell.appendChild(statusBadge(v.status));
+      tr.appendChild(statusCell);
+      var memo = cell(v.memo || "—");
+      memo.classList.add("margin-history-memo");
+      memo.title = v.memo || "";
+      tr.appendChild(memo);
+      var actionCell = cell();
+      var load = document.createElement("button");
+      load.type = "button";
+      load.className = "btn btn-ghost btn-sm";
+      load.dataset.loadVersion = v.version;
+      load.textContent = "불러오기";
+      actionCell.appendChild(load);
+      tr.appendChild(actionCell);
+      tbody.appendChild(tr);
+    });
+    $("margin-history-empty").hidden = versions.length > 0;
+    $("margin-history-table-wrap").hidden = versions.length === 0;
+    $("margin-history-compare-btn").disabled = state.history.selected.length !== 2;
+  }
+
+  /* 저장 Modal --------------------------------------------------------------- */
+  function openSaveModal() {
+    if (!state.pi.bound) return;
+    var hasDeal = Boolean(state.history.dealId);
+    $("margin-history-new-deal").checked = !hasDeal;
+    $("margin-history-new-deal").disabled = !hasDeal;
+    var buyer = $("margin-buyer-company").value.trim();
+    $("margin-history-title").value = [buyer, state.pi.bound.product_name].filter(Boolean).join(" / ");
+    state.history.versionType = "major";
+    fillSelect("margin-history-status", state.master.history_statuses, function (s) { return s.label; });
+    $("margin-history-status").value = hasDeal ? "sent" : "draft";
+    $("margin-history-memo").value = "";
+    $("margin-history-save-error").hidden = true;
+    updateSaveModal();
+    window.Common.openModal("margin-history-save-modal");
+  }
+
+  function updateSaveModal() {
+    var newDeal = $("margin-history-new-deal").checked || !state.history.dealId;
+    var deal = state.history.deals.filter(function (d) { return d.deal_id === state.history.dealId; })[0];
+    $("margin-history-title-group").hidden = !newDeal;
+    $("margin-history-type-group").hidden = newDeal;
+    document.querySelectorAll("[data-margin-version-type]").forEach(function (btn) {
+      var type = btn.dataset.marginVersionType;
+      var active = type === state.history.versionType;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-checked", String(active));
+      btn.textContent = (type === "major" ? "새 차수" : "수정본") + " (v" + previewNextVersion(state.history.versions, type) + ")";
+    });
+    var next = newDeal ? "1.0" : previewNextVersion(state.history.versions, state.history.versionType);
+    $("margin-history-save-target").textContent = newDeal
+      ? "새 협상 건을 만들고 v1.0으로 저장해요"
+      : "협상 건 " + (deal ? deal.title : state.history.dealId) + "에 v" + next + "(으)로 저장해요";
+    $("margin-history-type-help").textContent = state.history.versionType === "major"
+      ? "바이어에게 새로 보내는 견적이면 새 차수를 골라 주세요"
+      : "같은 차수 안에서 오타·조건을 고친 경우 수정본을 골라 주세요";
+  }
+
+  function buildSnapshot() {
+    var quote = state.export.quote;
+    var pi = collectPi();
+    return {
+      tier_request: state.tier.lastRequest,
+      selected_qty: state.selection.qty,
+      logistics_request: state.export.logisticsRequest,
+      fx_request: {
+        currency: quote.currency, fx_basis: state.export.basis,
+        fx_manual_rate: state.export.basis === "manual" ? readNumber("margin-fx-manual-rate") : null,
+        fx_rate_used: quote.fx_rate, fx_source: quote.fx_source,
+      },
+      export_ui: { named_place_dirty: state.export.namedPlaceDirty },
+      counter: { price: readNumber("margin-counter-price"), qty: readNumber("margin-counter-qty") },
+      counter_applied: state.counter.applied,
+      pi: pi,
+    };
+  }
+
+  function saveHistory() {
+    var newDeal = $("margin-history-new-deal").checked || !state.history.dealId;
+    var payload = {
+      deal_id: newDeal ? null : state.history.dealId,
+      title: newDeal ? $("margin-history-title").value.trim() : "",
+      version_type: state.history.versionType,
+      status: $("margin-history-status").value,
+      memo: $("margin-history-memo").value.trim(),
+      summary: { unit_price: state.pi.bound.unit_price, margin_rate_exw: state.pi.margin ? state.pi.margin.rate : null },
+      snapshot: buildSnapshot(),
+    };
+    setButtonLoading("margin-history-save-btn", true, "저장 중");
+    return api("POST", "/history", payload)
+      .then(function (json) {
+        var d = json.data;
+        window.Common.closeModal("margin-history-save-modal");
+        if (newDeal && !state.pi.dirty["margin-pi-no"]) {  // PI 번호를 협상 건 번호에 맞춤 (§3.1.7)
+          $("margin-pi-no").value = "COSMOA-PI-" + d.deal_id.slice(1);
+          schedulePreview();
+        }
+        state.history.highlight = d.version;
+        var messages = ["v" + d.version + "을(를) 저장했어요"].concat((json.warnings || []).map(function (w) { return w.message; }));
+        showHistoryAlert("success", messages.join(" · "));
+        scheduleDraft();
+        return loadHistory(d.deal_id);
+      })
+      .catch(function (err) {
+        var el = $("margin-history-save-error");
+        el.textContent = (err && err.message) || "저장하지 못했어요. 잠시 후 다시 시도해 주세요";
+        el.hidden = false;
+      })
+      .then(function () { setButtonLoading("margin-history-save-btn", false, "저장"); });
+  }
+
+  /* 비교 Modal --------------------------------------------------------------- */
+  function formatCompareValue(item, value, summary) {
+    if (value === null || value === undefined || value === "") return "—";
+    switch (item.field) {
+      case "qty": return fmt.qty(value);
+      case "unit_price": return fmtFx(value, summary.currency, "price");
+      case "total_amount": return fmtFx(value, summary.currency, "amount");
+      case "unit_price_krw":
+      case "unit_cost_krw": return fmt.won2(value) + "원";
+      case "fx_rate": return fmt.rate(value);
+      case "payment_terms": return paymentLabel(value);
+      case "counter_applied": return value ? "적용" : "미적용";
+      case "status": return statusLabel(value);
+      default: return item.kind === "rate" ? fmt.pct(value) : String(value);
+    }
+  }
+
+  function formatDiff(item) {
+    var span = document.createElement("span");
+    if (!item.changed) { span.className = "margin-diff-same"; span.textContent = "—"; return span; }
+    if (item.direction) {
+      var sign = item.direction === "up" ? "▲ +" : "▼ −";
+      var abs = Math.abs(item.diff);
+      var text = item.kind === "rate"
+        ? sign + fmt.num(abs, 2) + "%p"
+        : sign + (item.field === "qty" ? fmt.int(abs) : fmt.num(abs, abs < 10 ? 3 : 2));
+      if (item.diff_pct !== null) text += " (" + (item.direction === "up" ? "+" : "−") + fmt.num(Math.abs(item.diff_pct), 2) + "%)";
+      span.className = item.direction === "up" ? "margin-diff-up" : "margin-diff-down";
+      span.textContent = text;
+    } else {
+      span.textContent = "변경";
+      span.className = "badge badge-primary";
+    }
+    return span;
+  }
+
+  function openCompare() {
+    var sel = state.history.selected.slice().sort(function (a, b) {
+      var x = a.split(".").map(Number), y = b.split(".").map(Number);
+      return x[0] - y[0] || x[1] - y[1];
+    });
+    if (sel.length !== 2) return;
+    var byVersion = {};
+    state.history.versions.forEach(function (v) { byVersion[v.version] = v; });
+    var query = "?deal_id=" + encodeURIComponent(state.history.dealId) + "&from=" + sel[0] + "&to=" + sel[1];
+    api("GET", "/history/compare" + query)
+      .then(function (json) {
+        var d = json.data;
+        var from = byVersion[d.from.version].summary;
+        var to = byVersion[d.to.version].summary;
+        $("margin-history-compare-title").textContent = "버전 비교 · v" + d.from.version + " → v" + d.to.version;
+        $("margin-history-diff-from").textContent = "v" + d.from.version;
+        $("margin-history-diff-to").textContent = "v" + d.to.version;
+        var tbody = $("margin-history-diff-tbody");
+        tbody.textContent = "";
+        d.changes.forEach(function (item) {
+          var tr = document.createElement("tr");
+          tr.dataset.changed = String(item.changed);
+          var labelCell = cell(item.label);
+          if (item.note) {
+            var note = document.createElement("span");
+            note.className = "text-caption";
+            note.textContent = " (" + item.note + ")";
+            labelCell.appendChild(note);
+          }
+          tr.appendChild(labelCell);
+          tr.appendChild(cell(formatCompareValue(item, item.from, from), true));
+          tr.appendChild(cell(formatCompareValue(item, item.to, to), true));
+          var diffCell = cell(undefined, true);
+          diffCell.appendChild(formatDiff(item));
+          tr.appendChild(diffCell);
+          tbody.appendChild(tr);
+        });
+        applyDiffFilter();
+        window.Common.openModal("margin-history-compare-modal");
+      })
+      .catch(function (err) { showHistoryAlert("danger", (err && err.message) || "비교하지 못했어요"); });
+  }
+
+  function applyDiffFilter() {
+    var onlyChanged = $("margin-history-diff-only").checked;
+    document.querySelectorAll("#margin-history-diff-tbody tr").forEach(function (tr) {
+      tr.hidden = onlyChanged && tr.dataset.changed !== "true";
+    });
+  }
+
+  /* 입력 복원 — 버전 불러오기·초안 공통 ------------------------------------------ */
+  function setValue(id, value) { $(id).value = value === null || value === undefined ? "" : value; }
+
+  /* snapshot 형식의 입력값을 화면에 채우고 Tab 1 → 2 → 3 을 다시 계산합니다.
+     opts.freezeFx: 저장 당시 환율을 직접 입력 환율로 고정 / opts.bindPi: 계산 후 PI 다시 바인딩 */
+  function applyInputs(snap, opts) {
+    var d = state.master.defaults;
+    var tr = snap.tier_request || {};
+    var product = tr.product || {};
+    setValue("margin-product-name", product.name);
+    setValue("margin-product-volume", product.volume_ml);
+    if (product.category) $("margin-product-category").value = product.category;
+    var cost = tr.cost || {};
+    COST_FIELDS.forEach(function (f) { setValue(f.id, cost[f.key]); });
+    setValue("margin-fixed-cost", cost.fixed_per_order === undefined ? d.fixed_cost : cost.fixed_per_order);
+    setValue("margin-loss-rate", cost.loss_rate === undefined ? d.loss_rate : cost.loss_rate);
+    setValue("margin-target-margin", tr.target_margin === undefined ? d.target_margin : tr.target_margin);
+    setValue("margin-min-margin", tr.min_margin === undefined ? d.min_margin : tr.min_margin);
+    var tiers = (tr.tiers || []).map(Number).filter(function (q, i, all) {
+      return Number.isInteger(q) && q > d.moq && q <= d.max_qty && all.indexOf(q) === i;
+    }).sort(function (a, b) { return a - b; }).slice(0, d.max_tiers - 1);
+    state.tier.tiers = tiers;
+    state.tier.priceOverrides = Object.assign({}, tr.price_overrides || {});
+    renderChips();
+
+    var lr = snap.logistics_request || {};
+    var carton = lr.carton || {};
+    setValue("margin-carton-length", carton.length_cm);
+    setValue("margin-carton-width", carton.width_cm);
+    setValue("margin-carton-height", carton.height_cm);
+    setValue("margin-carton-units", carton.units_per_carton);
+    setValue("margin-carton-gw", carton.gross_weight_kg);
+    setValue("margin-carton-allowance", carton.allowance_rate === undefined ? d.carton_allowance : carton.allowance_rate);
+    if (lr.transport_mode) $("margin-transport-mode").value = lr.transport_mode;
+    if (lr.dest_region) $("margin-dest-region").value = lr.dest_region;
+    if (lr.named_place) $("margin-named-place").value = lr.named_place;
+    state.export.namedPlaceDirty = Boolean((snap.export_ui || {}).named_place_dirty || lr.named_place);
+    if (lr.incoterm && incotermInfo(lr.incoterm)) state.export.incoterm = lr.incoterm;
+    updateIncotermUI(true);
+    if (lr.insurance_clause) $("margin-insurance-clause").value = lr.insurance_clause;
+
+    var fx = snap.fx_request || {};
+    if (fx.currency) $("margin-currency").value = fx.currency;
+    var frozen = opts.freezeFx && fx.fx_rate_used && fx.fx_basis !== "manual";
+    state.export.basis = frozen ? "manual" : (fx.fx_basis || "base");
+    setValue("margin-fx-manual-rate", frozen ? fx.fx_rate_used : fx.fx_manual_rate);
+    updateBasisUI();
+    updateCurrencyUI();
+
+    var counter = snap.counter || {};
+    setValue("margin-counter-price", counter.price);
+    setValue("margin-counter-qty", counter.qty);
+    state.counter.qtyDirty = Boolean(counter.qty);
+    state.counter.applied = snap.counter_applied || null;
+    hideCounterResult();
+
+    var pi = snap.pi || {};
+    var piFields = {
+      "margin-pi-no": pi.pi_no, "margin-pi-date": pi.issue_date, "margin-pi-validity": pi.validity_date,
+      "margin-payment-terms": pi.payment_terms, "margin-port-loading": pi.port_loading,
+      "margin-port-discharge": pi.port_discharge, "margin-lead-time": pi.lead_time_days,
+      "margin-shipment-date": pi.shipment_date, "margin-hs-code": pi.hs_code, "margin-pi-remarks": pi.remarks,
+    };
+    ["company", "country", "address", "contact", "email"].forEach(function (k) { piFields["margin-buyer-" + k] = (pi.buyer || {})[k]; });
+    ["company", "address", "contact"].forEach(function (k) { piFields["margin-seller-" + k] = (pi.seller || {})[k]; });
+    var bank = pi.bank || {};
+    piFields["margin-bank-name"] = bank.name;
+    piFields["margin-bank-swift"] = bank.swift;
+    piFields["margin-bank-beneficiary"] = bank.beneficiary;
+    if (bank.account && bank.account.indexOf("****") !== 0) piFields["margin-bank-account"] = bank.account; // 마스킹 값은 복원하지 않음
+    Object.keys(piFields).forEach(function (id) {
+      if (piFields[id] === undefined || piFields[id] === null || piFields[id] === "") return;
+      $(id).value = piFields[id];
+      state.pi.dirty[id] = true;
+    });
+    state.pi.extras = (pi.extra_items || []).slice(0, PI_MAX_EXTRA_ITEMS).map(function (x) {
+      return { description: x.description || "", qty: x.qty === undefined ? 1 : x.qty, unit_price: x.unit_price === undefined ? 0 : x.unit_price };
+    });
+    renderExtras();
+    clearPiErrors();
+
+    // Tab 1 → 2 → 3 재계산: runCalc → (선택 수량 복원) → 물류 → 외화 → finishRestore
+    state.pi.bound = null;
+    state.pi.signature = "";
+    $("margin-pi-stale-alert").hidden = true;
+    state.restore = { qty: Number(snap.selected_qty) || null, bindPi: Boolean(opts.bindPi), message: opts.message || "" };
+    renderCostPreview();
+    runCalc();
+  }
+
+  function finishRestore() {
+    var r = state.restore;
+    state.restore = null;
+    var counterStep = state.counter.applied && readNumber("margin-counter-price") > 0 ? runCounter() : Promise.resolve();
+    return Promise.resolve(counterStep).then(function () {
+      if (r.bindPi) bindPi();
+      if (r.message) showHistoryAlert("info", r.message);
+    });
+  }
+
+  function loadVersion(version) {
+    var v = state.history.versions.filter(function (x) { return x.version === version; })[0];
+    if (!v) return;
+    openConfirm({
+      title: "v" + version + " 불러오기",
+      message: "현재 입력값이 사라져요. 계속할까요?",
+      okLabel: "불러오기",
+      onConfirm: function () {
+        var fx = v.snapshot.fx_request || {};
+        var note = fx.fx_basis !== "manual" && fx.fx_rate_used
+          ? " 저장 당시 환율(" + fmt.rate(fx.fx_rate_used) + ")로 고정했어요. 현재 환율로 보려면 환율 기준을 바꿔 주세요." : "";
+        applyInputs(v.snapshot, { freezeFx: true, bindPi: true, message: "v" + version + "을(를) 불러왔어요." + note });
+      },
+    });
+  }
+
+  /* 초안 자동 저장 (§5.5) — 은행 정보는 저장하지 않음 ---------------------------- */
+  function collectDraft() {
+    var pi = collectPi();
+    delete pi.bank;
+    var product = { name: $("margin-product-name").value, volume_ml: $("margin-product-volume").value, category: $("margin-product-category").value };
+    var cost = { fixed_per_order: $("margin-fixed-cost").value, loss_rate: $("margin-loss-rate").value };
+    COST_FIELDS.forEach(function (f) { cost[f.key] = $(f.id).value; });
+    return {
+      v: 1,
+      tier_request: {
+        product: product, cost: cost,
+        target_margin: $("margin-target-margin").value, min_margin: $("margin-min-margin").value,
+        tiers: state.tier.tiers.slice(), price_overrides: state.tier.priceOverrides,
+      },
+      selected_qty: state.selection.qty,
+      logistics_request: {
+        carton: {
+          length_cm: $("margin-carton-length").value, width_cm: $("margin-carton-width").value,
+          height_cm: $("margin-carton-height").value, units_per_carton: $("margin-carton-units").value,
+          gross_weight_kg: $("margin-carton-gw").value, allowance_rate: $("margin-carton-allowance").value,
+        },
+        transport_mode: $("margin-transport-mode").value, dest_region: $("margin-dest-region").value,
+        named_place: $("margin-named-place").value, incoterm: state.export.incoterm,
+        insurance_clause: $("margin-insurance-clause").value,
+      },
+      export_ui: { named_place_dirty: state.export.namedPlaceDirty },
+      fx_request: { currency: $("margin-currency").value, fx_basis: state.export.basis, fx_manual_rate: $("margin-fx-manual-rate").value },
+      counter: { price: $("margin-counter-price").value, qty: state.counter.qtyDirty ? $("margin-counter-qty").value : "" },
+      counter_applied: state.counter.applied,
+      pi: pi,
+      history_deal_id: state.history.dealId,
+    };
+  }
+
+  var scheduleDraft = debounce(function () {
+    if (state.master) storageSet(DRAFT_STORAGE_KEY, collectDraft());
+  }, DRAFT_DEBOUNCE_MS);
+
+  function restoreDraft() {
+    var draft = storageGet(DRAFT_STORAGE_KEY);
+    if (!draft || draft.v !== 1) return false;
+    try {
+      state.history.dealId = draft.history_deal_id || null;
+      applyInputs(draft, { freezeFx: false, bindPi: false });
+      return true;
+    } catch (e) {
+      storageSet(DRAFT_STORAGE_KEY, null); // 형식이 맞지 않는 초안은 버림
+      return false;
+    }
+  }
+
+  function bindHistoryEvents() {
+    $("margin-reset-btn").addEventListener("click", function () {
+      if (!state.master) return;
+      openConfirm({ title: "입력값 초기화", message: "현재 입력값이 사라져요. 계속할까요?", okLabel: "초기화", onConfirm: resetAll });
+    });
+    $("margin-confirm-ok-btn").addEventListener("click", function () {
+      var action = pendingConfirm;
+      pendingConfirm = null;
+      window.Common.closeModal("margin-confirm-modal");
+      if (action) action();
+    });
+
+    $("margin-history-save-open-btn").addEventListener("click", openSaveModal);
+    $("margin-history-new-deal").addEventListener("change", updateSaveModal);
+    $("margin-history-type-tabs").addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-margin-version-type]");
+      if (!btn) return;
+      state.history.versionType = btn.dataset.marginVersionType;
+      updateSaveModal();
+    });
+    $("margin-history-save-btn").addEventListener("click", saveHistory);
+
+    $("margin-history-deal-select").addEventListener("change", function (e) {
+      state.history.dealId = e.target.value || null;
+      state.history.highlight = null;
+      loadVersions();
+    });
+    $("margin-history-tbody").addEventListener("change", function (e) {
+      if (e.target.type !== "checkbox") return;
+      var selected = state.history.selected.filter(function (v) { return v !== e.target.value; });
+      if (e.target.checked) selected.push(e.target.value);
+      if (selected.length > 2) selected.shift(); // 3개째를 고르면 가장 먼저 고른 것을 해제
+      state.history.selected = selected;
+      document.querySelectorAll("#margin-history-tbody input[type='checkbox']").forEach(function (c) {
+        c.checked = selected.indexOf(c.value) !== -1;
+      });
+      $("margin-history-compare-btn").disabled = selected.length !== 2;
+    });
+    $("margin-history-tbody").addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-load-version]");
+      if (btn) loadVersion(btn.dataset.loadVersion);
+    });
+    $("margin-history-compare-btn").addEventListener("click", openCompare);
+    $("margin-history-diff-only").addEventListener("change", applyDiffFilter);
+
+    // 초안 자동 저장 — 페이지 본문의 입력·클릭마다 1초 Debounce (Modal 안 조작은 제외)
+    ["input", "change", "click"].forEach(function (type) {
+      document.addEventListener(type, function (e) {
+        if (!e.target.closest || !e.target.closest("#margin-context-section, .tab-panel")) return;
+        scheduleDraft();
+      });
+    });
+  }
+
   /* 입력값 초기화 (§5.3) — 확인 Modal 에서 [확인] 시 실행 */
   function resetAll() {
     if (state.controller) state.controller.abort();
@@ -2032,6 +2593,11 @@
     renderChart();
     resetExport();
     resetPi();
+    state.restore = null;
+    state.history.highlight = null;
+    showHistoryAlert("success", "");
+    storageSet(DRAFT_STORAGE_KEY, null); // §5.3 초기화 시 초안 삭제
+    scheduleDraft.cancel();               // 초기화 중 탭 전환 클릭으로 예약된 저장 취소
   }
 
   /* 초기화 --------------------------------------------------------------------- */
@@ -2066,7 +2632,8 @@
       .then(function (json) {
         applyMaster(json.data);
         loadFxRates(false);
-        runCalc();
+        if (!restoreDraft()) runCalc();
+        loadHistory(state.history.dealId);
       })
       .catch(function (err) {
         if (window.console) console.error("[margin] init failed", err);
