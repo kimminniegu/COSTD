@@ -1,81 +1,65 @@
-/* 공통 Card / Button / Form / Table은 common/style.css를 사용합니다. */
-.simulation-page { min-width: 0; }
-.simulation-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-6); }
-.simulation-preset-field { display: flex; align-items: center; gap: var(--space-4); margin: 0; }
-.simulation-preset-field select { width: auto; max-width: 100%; }
-.simulation-toolbar > div { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
-.simulation-layout { display: grid; grid-template-columns: minmax(0, 1fr) clamp(272px, 27%, 320px); align-items: start; gap: var(--space-6); margin-top: var(--space-6); }
-.simulation-workspace { display: grid; min-width: 0; gap: var(--space-6); }
-.simulation-preview { min-width: 0; }
-.simulation-preview .page-eyebrow { margin-bottom: var(--space-2); }
-.simulation-sim-value { flex-shrink: 0; text-align: right; }
-.simulation-sim-value strong { color: var(--color-primary); font-size: var(--font-size-kpi); font-weight: var(--font-weight-extrabold); font-variant-numeric: tabular-nums; }
-.simulation-sim-value small { color: var(--color-text-secondary); font-size: var(--font-size-label); }
-.simulation-stage { position: relative; height: 520px; overflow: hidden; border-radius: var(--radius-lg); background: var(--color-surface-muted); }
-.simulation-stage canvas { width: 100%; height: 100%; display: block; }
-.simulation-sim-foot { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); color: var(--color-text-secondary); font-size: var(--font-size-caption); }
-.simulation-controls > .card-header { flex-direction: column; }
-.simulation-sliders { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-6); }
-.simulation-slider label { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); color: var(--color-text-body); font-size: var(--font-size-label); font-weight: var(--font-weight-bold); }
-.simulation-slider output { color: var(--color-primary); font-variant-numeric: tabular-nums; }
-.simulation-slider input[type="range"] { width: 100%; height: var(--space-8); margin: var(--space-2) 0 0; accent-color: var(--color-primary-bright); cursor: pointer; }
-.simulation-range-ends { display: flex; justify-content: space-between; gap: var(--space-2); color: var(--color-text-secondary); font-size: var(--font-size-caption); }
-.simulation-stress-box { margin-top: var(--space-8); padding: var(--space-5); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
-.simulation-stress-title { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-4); font-weight: var(--font-weight-bold); }
-.simulation-stress-title .text-caption { font-weight: var(--font-weight-regular); }
-.simulation-stress-options { display: grid; gap: var(--space-4); }
-.simulation-stress-options .form-check { align-items: flex-start; }
-.simulation-stress-options input { flex-shrink: 0; margin-top: var(--space-1); }
-.simulation-hud { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
-.simulation-hud .stat-tile > span { font-size: var(--font-size-label); color: var(--color-text-secondary); }
-.simulation-hud .stat-tile > strong { font-size: var(--font-size-card-title); font-variant-numeric: tabular-nums; }
-.simulation-recipe { padding: 0 var(--space-2); }
-.simulation-packaging { min-width: 0; }
-.simulation-legend { display: flex; flex-wrap: wrap; gap: var(--space-3); color: var(--color-text-secondary); font-size: var(--font-size-caption); }
-.simulation-legend span { display: inline-flex; align-items: center; gap: var(--space-1); }
-.simulation-dot { display: inline-block; flex-shrink: 0; width: var(--space-2); height: var(--space-2); border-radius: var(--radius-pill); background: currentColor; }
-.simulation-blue { color: var(--color-primary); }
-.simulation-yellow { color: var(--color-warning); }
-.simulation-red { color: var(--color-danger); }
-.simulation-pack-label { margin-top: var(--space-6); }
-.simulation-status-card { display: block; margin-top: var(--space-6); }
-.simulation-status-card-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); font-size: var(--font-size-caption); }
-.simulation-status-card-header small { font-size: inherit; }
-.simulation-status-score { font-weight: var(--font-weight-bold); font-variant-numeric: tabular-nums; }
-.simulation-status-card h3 { margin: var(--space-3) 0; font-size: var(--font-size-card-title); color: var(--color-text-primary); }
-.simulation-status-label { display: flex; align-items: center; gap: var(--space-2); font-weight: var(--font-weight-bold); }
-.simulation-status-card p { margin-top: var(--space-3); color: var(--color-text-body); font-size: var(--font-size-sub); }
-.simulation-recommendation, .simulation-pitch-card { margin-top: var(--space-8); }
-.simulation-recommendation .text-caption, .simulation-pitch-card .text-caption { margin-top: var(--space-2); }
-.simulation-recommendations { display: grid; gap: var(--space-3); margin-top: var(--space-4); }
-.simulation-pack-option { width: 100%; height: auto; min-height: var(--space-14); padding: var(--space-4); white-space: normal; text-align: left; flex-direction: column; align-items: flex-start; gap: var(--space-3); }
-.simulation-pack-option > span:first-child { min-width: 0; }
-.simulation-pack-option > span:last-child { flex-shrink: 0; font-size: var(--font-size-caption); }
-.simulation-pack-option small { display: block; margin-top: var(--space-1); color: var(--color-text-secondary); font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); line-height: var(--line-height-base); }
-.simulation-pitch-box { margin-top: var(--space-4); }
-.simulation-pitch-text { padding: var(--space-5); margin-bottom: var(--space-4); background: var(--color-surface-muted); border-radius: var(--radius-lg); color: var(--color-text-body); font-size: var(--font-size-sub); }
-.simulation-comparison > .card-header { flex-wrap: wrap; align-items: center; gap: var(--space-4); }
-.simulation-compare-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.simulation-compare-summary { color: var(--color-text-body); margin-bottom: var(--space-4); }
-.simulation-compare-help { color: var(--color-text-secondary); font-size: var(--font-size-caption); margin-top: var(--space-4); }
-.simulation-compare-table { min-width: 720px; }
-.simulation-compare-table td { font-variant-numeric: tabular-nums; }
-.simulation-footer { margin-top: var(--space-6); }
-.simulation-packaging { --layout-card-padding: var(--space-6); }
-.simulation-packaging .form-control { font-size: var(--font-size-sub); }
-.simulation-packaging .simulation-status-card { padding: var(--space-4); }
-.simulation-stage-label { position: absolute; top: var(--space-5); left: var(--space-5); display: flex; align-items: center; gap: var(--space-2); color: var(--color-text-secondary); font-size: var(--font-size-caption); pointer-events: none; }
-.simulation-stage-label svg { color: var(--color-primary); }
-
-@container page (max-width: 880px) {
-  .simulation-layout { grid-template-columns: minmax(0, 1fr); }
-}
-@container page (max-width: 560px) {
-  .simulation-toolbar, .simulation-preset-field { align-items: stretch; flex-direction: column; width: 100%; }
-  .simulation-preset-field select { width: 100%; }
-  .simulation-preview > .card-header { flex-direction: column; }
-  .simulation-sim-value { text-align: left; }
-  .simulation-sliders, .simulation-hud { grid-template-columns: minmax(0, 1fr); }
-  .simulation-stage { height: 360px; }
-  .simulation-compare-actions, .simulation-compare-actions .btn { width: 100%; }
-}
+/* 이 페이지에 한정한 밀도/배치. 공통 파일은 수정하지 않습니다. */
+.simulation-shell { --layout-page-padding-y: var(--space-4); --layout-page-padding-x: var(--space-6); --layout-footer-height: var(--space-4); }
+.simulation-page { --layout-card-padding: var(--space-3); --layout-section-gap: var(--space-3); min-width: 0; }
+.simulation-page .page-header { align-items: center; }
+.simulation-page .page-title { font-size: var(--font-size-section-title); }
+.simulation-page .card-header { align-items: center; gap: var(--space-2); }
+.simulation-page .card-header + .card-body { padding-top: var(--space-3); }
+.simulation-top-grid, .simulation-bottom-grid { display: grid; gap: var(--space-3); grid-template-columns: minmax(0, 1.15fr) minmax(340px, 1fr); }
+.simulation-bottom-grid { margin-top: var(--space-3); }
+.simulation-top-grid > *, .simulation-bottom-grid > * { min-width: 0; }
+.simulation-preview .card-body { display: flex; flex-direction: column; justify-content: center; }
+.simulation-sim-value { display: flex; align-items: baseline; gap: var(--space-1); font-variant-numeric: tabular-nums; }
+.simulation-sim-value strong { color: var(--color-primary); font-size: var(--font-size-kpi); font-weight: var(--font-weight-extrabold); }
+.simulation-sim-value small { font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+.simulation-stage { width: min(100%, 380px); aspect-ratio: 4 / 3; margin-inline: auto; position: relative; overflow: hidden; border-radius: var(--radius-lg); background: var(--color-surface-muted); }
+.simulation-stage canvas { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
+.simulation-sim-foot { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-1); margin-block: var(--space-2); font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+.simulation-hud { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); }
+.simulation-hud .stat-tile { padding: var(--space-2); gap: var(--space-1); }
+.simulation-hud .stat-tile > span { display: flex; align-items: center; gap: var(--space-1); font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+.simulation-hud strong { font-size: var(--font-size-label); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.simulation-preset-row { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
+.simulation-preset-row .form-label { flex-shrink: 0; margin: 0; }
+.simulation-preset-row select { flex: 1; min-width: 0; }
+.simulation-sliders { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3) var(--space-4); }
+.simulation-slider-heading, .simulation-slider-heading > div { display: flex; align-items: center; gap: var(--space-1); }
+.simulation-slider-heading { justify-content: space-between; flex-wrap: wrap; font-size: var(--font-size-label); }
+.simulation-slider-heading label { font-weight: var(--font-weight-bold); color: var(--color-text-body); }
+.simulation-slider output { color: var(--color-primary); font-weight: var(--font-weight-bold); font-variant-numeric: tabular-nums; }
+.simulation-slider input[type=range] { display: block; width: 100%; height: var(--space-5); margin: var(--space-1) 0; accent-color: var(--color-primary-bright); cursor: pointer; }
+.simulation-range-ends { display: flex; justify-content: space-between; color: var(--color-text-secondary); font-size: var(--font-size-caption); line-height: 1; }
+.simulation-stress-box { margin-top: var(--space-3); padding: var(--space-3); border-radius: var(--radius-sm); background: var(--color-surface-muted); }
+.simulation-stress-box h3 { font-size: var(--font-size-label); margin-bottom: var(--space-2); }
+.simulation-stress-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+.simulation-stress-options .form-check { font-size: var(--font-size-caption); align-items: flex-start; }
+.simulation-stress-options input { flex-shrink: 0; }
+.simulation-stress-options small { display: block; color: var(--color-text-secondary); font-size: var(--font-size-caption); }
+.simulation-packaging select { width: auto; max-width: 48%; }
+.simulation-status-card { display: block; padding: var(--space-3) var(--space-4); margin: 0; }
+.simulation-status-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.simulation-verdict { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-section-title); font-weight: var(--font-weight-extrabold); }
+.simulation-verdict > span { display: grid; place-items: center; width: var(--space-8); height: var(--space-8); border-radius: var(--radius-pill); background: var(--color-surface); }
+.simulation-status-card[data-state=optimal] .simulation-verdict { color: var(--color-primary); }
+.simulation-status-card[data-state=caution] .simulation-verdict { color: var(--color-warning); }
+.simulation-status-card[data-state=incompatible] .simulation-verdict { color: var(--color-danger); }
+#simulation-status-score { font-size: var(--font-size-label); font-weight: var(--font-weight-bold); font-variant-numeric: tabular-nums; }
+.simulation-status-card p { font-size: var(--font-size-label); color: var(--color-text-body); margin-top: var(--space-1); }
+.simulation-recommendation { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-2); }
+.simulation-recommendation > span { flex-shrink: 0; }
+.simulation-recommendations { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.simulation-pack-option { height: auto; min-height: var(--space-8); padding: var(--space-2); gap: var(--space-1); font-size: var(--font-size-caption); }
+.simulation-pack-option small, .simulation-pack-option > span:last-child { display: none; }
+.simulation-pitch-text { font-size: var(--font-size-sub); line-height: var(--line-height-base); color: var(--color-text-body); background: var(--color-surface-muted); border-radius: var(--radius-sm); padding: var(--space-4); }
+.simulation-help { display: inline-flex; position: relative; flex-shrink: 0; }
+.simulation-help-button { display: inline-grid; place-items: center; width: var(--space-5); height: var(--space-5); padding: 0; border: 0; border-radius: var(--radius-pill); background: var(--color-background); color: var(--color-text-secondary); font-size: var(--font-size-caption); cursor: pointer; }
+.simulation-help-button:hover, .simulation-help-button[aria-expanded=true] { background: var(--color-primary-soft); color: var(--color-primary); }
+.simulation-tooltip { position: fixed; z-index: var(--z-modal); width: min(288px, calc(100vw - 24px)); padding: var(--space-4); background: var(--color-surface-inverse); color: var(--color-text-inverse); border-radius: var(--radius-sm); box-shadow: var(--shadow-overlay); font-size: var(--font-size-label); font-weight: var(--font-weight-regular); line-height: var(--line-height-base); white-space: normal; }
+.simulation-tooltip[hidden] { display: none; }
+.simulation-tooltip strong, .simulation-tooltip small { display: block; }
+.simulation-tooltip strong { margin-bottom: var(--space-2); }
+.simulation-tooltip small { margin-top: var(--space-2); color: var(--color-text-inverse-secondary); font-size: var(--font-size-caption); }
+@media (min-width: 1025px) and (max-height: 850px) { .simulation-stage { width: min(100%, 260px); } }
+@container page (max-width: 900px) { .simulation-hud { grid-template-columns: repeat(2, minmax(0, 1fr)); } .simulation-sim-value > .text-caption { display: none; } }
+@container page (max-width: 700px) { .simulation-top-grid, .simulation-bottom-grid { grid-template-columns: minmax(0, 1fr); } .simulation-stage { width: min(100%, 380px); } }
+@container page (max-width: 400px) { .simulation-sliders, .simulation-stress-options { grid-template-columns: minmax(0, 1fr); } .simulation-page .card-header { flex-wrap: wrap; } .simulation-pitch-text { padding: var(--space-3); } }

@@ -1,4 +1,4 @@
-/* 배합 계산, 저장 및 Canvas 시연. 공통 UI와 전역 이름을 공유하지 않습니다. */
+/* 배합 계산 및 Canvas 시연. 공통 UI와 전역 이름을 공유하지 않습니다. */
 (() => {
 'use strict';
 
@@ -6,6 +6,51 @@ const $ = id => document.getElementById('simulation-' + id);
 const fmt = n => n.toLocaleString('ko-KR');
 const theme = getComputedStyle(document.documentElement);
 const token = name => theme.getPropertyValue(name).trim();
+
+// 도움말은 한 번에 하나만 표시. 마우스, 키보드, 터치에서 같은 설명을 제공합니다.
+let activeHelp = null;
+let helpTimer;
+function closeHelp() {
+  clearTimeout(helpTimer);
+  if (!activeHelp) return;
+  activeHelp.panel.hidden = true;
+  activeHelp.button.setAttribute('aria-expanded', 'false');
+  activeHelp = null;
+}
+function openHelp(button) {
+  clearTimeout(helpTimer);
+  if (activeHelp?.button === button) return;
+  closeHelp();
+  const panel = document.getElementById(button.dataset.simulationHelp);
+  panel.hidden = false;
+  button.setAttribute('aria-expanded', 'true');
+  activeHelp = { button, panel };
+  // body에 두어 공통 container의 transform/contain 영향을 피합니다.
+  document.body.append(panel);
+  const rect = button.getBoundingClientRect();
+  const bounds = panel.getBoundingClientRect();
+  const left = Math.max(12, Math.min(rect.left, innerWidth - bounds.width - 12));
+  const below = rect.bottom + 8;
+  const top = below + bounds.height < innerHeight - 12 ? below : Math.max(12, rect.top - bounds.height - 8);
+  panel.style.left = `${left}px`;
+  panel.style.top = `${top}px`;
+}
+document.querySelectorAll('[data-simulation-help]').forEach(button => {
+  const panel = document.getElementById(button.dataset.simulationHelp);
+  button.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse') openHelp(button); });
+  button.addEventListener('pointerleave', () => { helpTimer = setTimeout(closeHelp, 180); });
+  button.addEventListener('focus', () => openHelp(button));
+  button.addEventListener('click', () => openHelp(button));
+  button.addEventListener('blur', closeHelp);
+  panel.addEventListener('pointerenter', () => clearTimeout(helpTimer));
+  panel.addEventListener('pointerleave', closeHelp);
+});
+document.addEventListener('keydown', event => { if (event.key === 'Escape') closeHelp(); });
+document.addEventListener('pointerdown', event => {
+  if (activeHelp && !activeHelp.button.contains(event.target) && !activeHelp.panel.contains(event.target)) closeHelp();
+});
+window.addEventListener('resize', closeHelp);
+window.addEventListener('scroll', closeHelp, true);
 
 const PRESETS = {
   serum: { name: '세럼', a: 2.0, c: 0.20, o: 5, h: 8, pack: 'dropper' },
@@ -50,12 +95,11 @@ const PACKS = {
 };
 
 const STATES = {
-  optimal: { label: '적합 (Optimal)', color: 'var(--color-primary)' },
-  caution: { label: '주의 (Caution)', color: 'var(--color-warning)' },
-  incompatible: { label: '부적합 (Incompatible)', color: 'var(--color-danger)' }
+  optimal: { label: '적합', color: 'var(--color-primary)' },
+  caution: { label: '주의', color: 'var(--color-warning)' },
+  incompatible: { label: '부적합', color: 'var(--color-danger)' }
 };
 
-let baseline = null;
 let current = null;
 let modified = false;
 let paused = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -101,14 +145,14 @@ const recommendationButtons = {};
 for (const [key, p] of Object.entries(PACKS)) {
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = 'btn btn-secondary simulation-pack-option';
+  button.className = 'btn btn-secondary btn-sm simulation-pack-option';
 
   const group = document.createElement('span');
   const name = document.createElement('strong');
   const detail = document.createElement('small');
   const action = document.createElement('span');
 
-  name.textContent = p.name;
+  name.textContent = p.name.split(' (')[0];
   detail.textContent = p.detail;
 
   group.append(name, detail);
@@ -172,7 +216,6 @@ function update() {
 
   $('sample-name').textContent = PRESETS[$('preset').value].name;
   $('modified').textContent = modified ? '사용자 조정 배합' : '기본 배합';
-  $('water-sync').textContent = `정제수 동기화: ${water.toFixed(2)}%`;
 
   $('active-out').textContent = a.toFixed(1) + '\%';$('active-ppm').textContent = `${fmt(activePpm)} ppm`;
   $('carb-out').textContent = c.toFixed(2) + '%';
@@ -184,11 +227,11 @@ function update() {
   $('texture').textContent = v < 2500 ? '묽은 워터리' : v < 9000 ? '산뜻한 점성' : v < 25000 ? '농축 리치' : '고밀도 밤(Balm)';
   $('flow-caption').textContent = v < 9000 ? '빠른 유동성 · 얇은 퍼짐성' : v < 25000 ? '완만한 레벨링 · 보습 밀착' : '형태 유지 · 높은 응집력';
 
-  $('recipe').textContent = `유효성분 ${a.toFixed(1)}% (${fmt(activePpm)} ppm) · 카보머 ${c.toFixed(2)}% · 오일 ${o}% · 수분유지제 ${h}% · 정제수 ${water.toFixed(2)}% = 총 100.00% 처방 동기화`;
 
-  $('pack-name').textContent = p.name;
   $('status-card').className = 'alert simulation-status-card alert-' + ({ optimal: 'info', caution: 'warning', incompatible: 'danger' }[state]);
   $('status-label').textContent = STATES[state].label;
+  $('status-card').dataset.state = state;
+  $('status-icon').textContent = { optimal: '✓', caution: '!', incompatible: '×' }[state];
   $('status-score').textContent = `호환도 ${score}점`;
 
   let reasonText = '';
@@ -206,11 +249,12 @@ function update() {
   for (const [k, { button, action, detail }] of Object.entries(recommendationButtons)) {
     const spec = PACKS[k];
     const range = Number.isFinite(spec.max) ? `${fmt(spec.min)}–${fmt(spec.max)}` : `${fmt(spec.min)} 이상`;
-    detail.textContent = `권장 범위: ${range} cPs. ${spec.detail}`;
+    detail.textContent = `${range} cPs`;
+    button.title = `권장 범위: ${range} cPs. ${spec.detail}`;
     button.hidden = !eligible.includes(k);
     button.style.display = button.hidden ? 'none' : '';
     button.setAttribute('aria-pressed', String(k === key));
-    button.className = `btn ${k === key ? 'btn-soft' : 'btn-secondary'} simulation-pack-option`;
+    button.className = `btn ${k === key ? 'btn-soft' : 'btn-secondary'} btn-sm simulation-pack-option`;
     action.textContent = k === key ? '선택됨' : '선택 →';
   }
   emptyMsg.hidden = eligible.length > 0;
@@ -219,7 +263,6 @@ function update() {
   const pitchText = generatePitchScript(v, key, state, isVitC, isOilPhase, isCapsule);
   $('pitch-script').textContent = pitchText;
 
-  renderComparison();
   if (paused) drawScene();
 }
 
@@ -269,159 +312,6 @@ $('copy-pitch-btn').addEventListener('click', () => {
   }).catch(() => {
     $('copy-pitch-btn').querySelector('span').textContent = '복사하지 못했어요. 다시 시도해 주세요';
   });
-});
-
-// 6. 전후 비교 명세 (LocalStorage)
-const STORAGE_KEY = 'integrated-formulation-baseline-v2';
-
-function snapshot() {
-  return {
-    version: 2,
-    preset: $('preset').value,
-    active: +$('active').value,
-    carb: +$('carb').value,
-    oil: +$('oil').value,
-    hum: +$('hum').value,
-    pack: $('pack').value,
-    flags: {
-      vitaminC: $('chk-vitaminc').checked,
-      oilPhase: $('chk-oilphase').checked,
-      capsule: $('chk-capsule').checked
-    },
-    savedAt: new Date().toISOString()
-  };
-}
-
-function renderComparison() {
-  $('restore-baseline').disabled = !baseline;
-  $('clear-baseline').disabled = !baseline;
-  $('comparison-table').hidden = !baseline;
-
-  $('save-baseline').textContent = baseline ? '현재 배합으로 기준 교체' : '현재 배합을 비교 기준으로 저장';
-
-  if (!baseline) {
-    $('compare-summary').textContent = '현재 배합을 저장한 뒤 슬라이더나 R&D 토글을 변경해 비교해 보세요.';
-    $('comparison-body').replaceChildren();
-    return;
-  }
-
-  const b = baseline;
-  const n = snapshot();
-  const bv = calculateViscosity(b.active, b.carb, b.oil, b.hum, b.flags.vitaminC, b.flags.capsule);
-  const nv = calculateViscosity(n.active, n.carb, n.oil, n.hum, n.flags.vitaminC, n.flags.capsule);
-  const diff = nv - bv;
-
-  const delta = (v1, v2, d = 0, unit = '') => {
-    const diffVal = v2 - v1;
-    if (Math.abs(diffVal) < 1e-5) return '변화 없음';
-    return (diffVal > 0 ? '+' : '−') + fmt(+Math.abs(diffVal).toFixed(d)) + unit;
-  };
-
-  const rows = [
-    [
-      '유효 활성 성분',
-      `${b.active.toFixed(1)}% (${fmt(b.active * 10000)} ppm)`,
-      `${n.active.toFixed(1)}% (${fmt(n.active * 10000)} ppm)`,
-      delta(b.active, n.active, 1, '%p'),
-      n.active > 5 ? '고농도 유효성분 안정화 처방 점검 필요' : '통상 규격 안정 범위'
-    ],
-    [
-      '점증제 (카보머)',
-      b.carb.toFixed(2) + '%',
-      n.carb.toFixed(2) + '%',
-      delta(b.carb, n.carb, 2, '%p'),
-      n.carb < 0.2 ? '침전 및 점도 저하 방지 모니터링' : '겔 네트워크 형성'
-    ],
-    [
-      '유상 오일 성분',
-      b.oil + '%',
-      n.oil + '%',
-      delta(b.oil, n.oil, 0, '%p'),
-      n.oil > 20 ? '고압 유화 및 전단 공정 필요' : '안정적 수상 분산'
-    ],
-    [
-      '정제수 동기화 잔량',
-      (100 - b.active - b.carb - b.oil - b.hum).toFixed(2) + '%',
-      (100 - n.active - n.carb - n.oil - n.hum).toFixed(2) + '%',
-      delta(100 - b.active - b.carb - b.oil - b.hum, 100 - n.active - n.carb - n.oil - n.hum, 2, '%p'),
-      '100.0% 정량 균형 유지'
-    ],
-    [
-      '예측 점도',
-      fmt(bv) + ' cPs',
-      fmt(nv) + ' cPs',
-      delta(bv, nv, 0, ' cPs'),
-      Math.abs(diff) > 5000 ? '토출 기구류 변경 여부 확인' : '유동성 허용치 충족'
-    ],
-    [
-      '용기 적합도 판정',
-      STATES[evaluatePackage(bv, b.pack)].label,
-      STATES[evaluatePackage(nv, n.pack)].label,
-      evaluatePackage(bv, b.pack) === evaluatePackage(nv, n.pack) ? '동일 유지' : '판정 등급 변경',
-      evaluatePackage(nv, n.pack) === 'incompatible' ? '견적 업그레이드: 전용 용기 승격 필요' : '적합 규격 유지'
-    ]
-  ];
-
-  $('comparison-body').replaceChildren(
-    ...rows.map(([label, ...values]) => {
-      const tr = document.createElement('tr');
-      const th = document.createElement('th');
-      th.scope = 'row';
-      th.textContent = label;
-      tr.append(th);
-
-      values.forEach((v, i) => {
-        const td = document.createElement('td');
-        td.textContent = v;
-        if (label === '용기 적합도 판정' && (i === 0 || i === 1)) {
-          const evalState = i === 0 ? evaluatePackage(bv, b.pack) : evaluatePackage(nv, n.pack);
-          td.style.color = STATES[evalState].color;
-          td.style.fontWeight = 'var(--font-weight-bold)';
-        }
-        tr.append(td);
-      });
-      return tr;
-    })
-  );
-
-  $('compare-summary').textContent = diff === 0
-    ? '저장 기준 처방과 현재 예측 점도가 완벽히 동일합니다.'
-    : `저장 기준 대비 점도가 ${fmt(Math.abs(diff))} cPs ${diff > 0 ? '상승(+)' : '하강(-)'}했습니다. (${Math.abs(diff / (bv || 1) * 100).toFixed(1)}% 변동)`;
-}
-
-$('save-baseline').addEventListener('click', () => {
-  baseline = snapshot();
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(baseline));
-    $('storage-note').textContent = '브라우저에 비교 기준 처방 1건이 안전하게 저장되었습니다.';
-  } catch {
-    $('storage-note').textContent = '로컬 저장을 사용할 수 없어 세션 메모리에만 유지됩니다.';
-  }
-  renderComparison();
-});
-
-$('restore-baseline').addEventListener('click', () => {
-  if (!baseline) return;
-  const b = baseline;
-  $('preset').value = b.preset;
-  $('active').value = b.active;
-  $('carb').value = b.carb;
-  $('oil').value = b.oil;
-  $('hum').value = b.hum;
-  $('pack').value = b.pack;
-
-  if (b.flags) {
-    $('chk-vitaminc').checked = !!b.flags.vitaminC;
-    $('chk-oilphase').checked = !!b.flags.oilPhase;
-    $('chk-capsule').checked = !!b.flags.capsule;
-  }
-  modified = true;
-  phase = 0;
-  update();
-});
-
-$('clear-baseline').addEventListener('click', () => {   baseline = null;   try { localStorage.removeItem(STORAGE_KEY); } catch {}$('storage-note').textContent = '저장된 기준 처방을 초기화했습니다.';
-  renderComparison();
 });
 
 // Canvas 2D 점탄성 물리 및 입자 렌더러
@@ -700,7 +590,7 @@ function drawScene() {
     ctx.font = `${token('--font-size-caption')} ${token('--font-family-base')}`;
     ctx.fillStyle = token('--color-warning');
     ctx.textAlign = 'center';
-    ctx.fillText('유수분 층분리 발생 (HLB 불균형)', x, floor - poolH - 10);
+    ctx.fillText('유수분 층분리 발생 (HLB 불균형)', x, floor - poolH - 10, width - 24);
   }
 
   // [R&D 시각 효과 2: 특허 골드 마이크로 캡슐 파티클 부유]
@@ -761,7 +651,7 @@ function drawScene() {
   ctx.textAlign = 'center';
   ctx.fillStyle = current.isCapsule ? token('--color-warning') : token('--color-text-secondary');
   const stageNotice = current.isCapsule ? `[특허 캡슐화 보호 중] ${stageText}` : stageText;
-  ctx.fillText(stageNotice, x, height - 24, width - 32);
+  ctx.fillText(stageNotice, x, height - 8, width - 32);
 }
 
 function tick(time) {
