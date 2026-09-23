@@ -13,7 +13,7 @@
   <header class="page-header">
     <h1 class="page-title">AI 제형/샘플 시뮬레이션</h1>
     <div class="page-actions">
-      <button class="btn btn-primary btn-sm simulation-brief-open" id="simulation-brief-open" type="button" data-modal-open="simulation-brief-modal"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5H6a1.5 1.5 0 0 0-1.5 1.5v12A1.5 1.5 0 0 0 6 17.5h8a1.5 1.5 0 0 0 1.5-1.5V6.5z"/><path d="M11.5 2.5v4h4M7.5 10.5h5M7.5 13.5h3"/></svg>개발요청서 불러오기<span class="simulation-brief-ai">AI 분석</span></button>
+      <button class="btn btn-primary btn-sm simulation-brief-open" id="simulation-brief-open" type="button" data-modal-open="simulation-brief-modal"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5H6a1.5 1.5 0 0 0-1.5 1.5v12A1.5 1.5 0 0 0 6 17.5h8a1.5 1.5 0 0 0 1.5-1.5V6.5z"/><path d="M11.5 2.5v4h4M7.5 10.5h5M7.5 13.5h3"/></svg>개발요청서 분석/적용</button>
       <button class="btn btn-surface btn-sm" id="simulation-reset" type="button">초기화</button>
       <button class="btn btn-surface btn-sm" id="simulation-motion" type="button" aria-pressed="false">시연 일시정지</button>
     </div>
@@ -21,7 +21,7 @@
   <div class="simulation-top-grid">
     <section class="card simulation-preview" aria-label="실시간 샘플 미리보기">
       <div class="card-header simulation-preview-header">
-        <div class="simulation-preset-row"><select class="form-control form-control-sm" id="simulation-preset" aria-label="샘플 제형"><option value="serum">샘플 제형 · 세럼</option><option value="ampoule" selected>샘플 제형 · 고농축 앰플</option><option value="lotion">샘플 제형 · 로션</option><option value="cream">샘플 제형 · 크림</option></select><span class="simulation-brief-badge" id="simulation-brief-badge" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg>개발요청서 반영됨</span></div>
+        <div class="simulation-preset-row"><select class="form-control form-control-sm" id="simulation-preset" aria-label="샘플 제형"><option value="serum">샘플 제형 · 세럼</option><option value="ampoule" selected>샘플 제형 · 고농축 앰플</option><option value="lotion">샘플 제형 · 로션</option><option value="cream">샘플 제형 · 크림</option></select><span class="simulation-brief-badge" id="simulation-brief-badge" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg><span id="simulation-brief-badge-text"></span></span></div>
         <div class="simulation-sim-value"><span class="text-caption">예측 점도</span><strong id="simulation-viscosity"></strong><small>cPs</small></div>
       </div>
       <div class="card-body">
@@ -99,63 +99,49 @@
   </div>
 </div>
 <div class="modal-backdrop simulation-brief-backdrop" id="simulation-brief-modal">
-  <div class="modal modal-lg simulation-brief-modal" role="dialog" aria-modal="true" aria-labelledby="simulation-brief-title" data-step="upload">
+  <div class="modal modal-lg simulation-brief-modal" role="dialog" aria-modal="true" aria-labelledby="simulation-brief-title" data-step="select">
     <div class="modal-header">
       <div>
-        <h2 class="modal-title" id="simulation-brief-title">개발요청서 AI 분석</h2>
-        <p class="text-caption simulation-brief-subtitle">바이어 요청서에서 타깃 제형과 배합 요건을 추출해 시뮬레이터에 적용합니다.</p>
+        <h2 class="modal-title" id="simulation-brief-title">개발요청서 분석/적용</h2>
+        <p class="text-caption simulation-brief-subtitle">바이어 개발의뢰서에서 목표 제형 스펙을 추출해 배합·물성·용기 적합도를 동기화합니다.</p>
       </div>
       <button type="button" class="modal-close" data-modal-close aria-label="닫기">×</button>
     </div>
     <div class="modal-body">
-      <section class="simulation-brief-step" data-step-panel="upload">
-        <label class="file-upload simulation-brief-drop" id="simulation-brief-drop">
-          <input type="file" id="simulation-brief-file" accept=".pdf,.doc,.docx">
-          <span class="simulation-brief-drop-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M4 14.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3.5"/></svg></span>
-          <span class="file-upload__title">개발요청서(PDF, Word)를 드래그하거나 클릭하여 업로드하세요.</span>
-          <span class="text-caption">PDF · DOC · DOCX / 최대 20MB</span>
-        </label>
-        <p class="simulation-brief-error" id="simulation-brief-error" role="alert" hidden></p>
-        <div class="simulation-brief-quick">
-          <span class="simulation-brief-quick-label">빠른 시연 <small>Quick Demo</small></span>
-          <div class="simulation-brief-chips" id="simulation-brief-chips"></div>
-        </div>
-      </section>
-      <section class="simulation-brief-step simulation-brief-analyzing" data-step-panel="analyzing" aria-live="polite">
-        <div class="simulation-brief-file-row"><span class="simulation-brief-file-icon" aria-hidden="true">PDF</span><strong class="simulation-brief-filename" data-brief-filename></strong></div>
-        <div class="simulation-brief-loader"><span class="spinner spinner-sm" aria-hidden="true"></span><p>AI가 타깃 제형 및 배합 요건을 분석 중입니다...</p></div>
+      <div class="simulation-brief-layout" data-step-panel="select">
+        <section class="simulation-brief-section" aria-labelledby="simulation-brief-upload-title">
+          <h3 class="simulation-brief-heading" id="simulation-brief-upload-title">신규 파일 업로드</h3>
+          <label class="simulation-brief-drop" id="simulation-brief-drop">
+            <input type="file" id="simulation-brief-file" accept=".pdf,.doc,.docx">
+            <span class="simulation-brief-drop-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18.5H6.5a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.6 8.1a4.25 4.25 0 0 1-.1 8.5V16.6"/><path d="M12 20.5v-8M8.75 15.25 12 12l3.25 3.25"/></svg></span>
+            <strong>바이어 개발의뢰서 파일(PDF, Word)을<br>드래그하거나 클릭하여 업로드</strong>
+            <span>PDF · DOC · DOCX / 최대 20MB</span>
+          </label>
+          <p class="simulation-brief-error" id="simulation-brief-error" role="alert" hidden></p>
+        </section>
+        <section class="simulation-brief-section" aria-labelledby="simulation-brief-inbox-title">
+          <div class="simulation-brief-heading-row">
+            <h3 class="simulation-brief-heading" id="simulation-brief-inbox-title">R&amp;D 수신함 <small>Inbox</small></h3>
+            <span class="simulation-brief-count">최근 접수 <b id="simulation-brief-inbox-count"></b></span>
+          </div>
+          <ul class="simulation-inbox" id="simulation-brief-inbox"></ul>
+          <p class="simulation-brief-hint">카드를 업로드 영역으로 끌어다 놓아도 분석할 수 있습니다.</p>
+        </section>
+      </div>
+      <section class="simulation-brief-analyzing" data-step-panel="analyzing" aria-live="polite">
+        <div class="simulation-brief-file-row"><span class="simulation-brief-file-icon" id="simulation-brief-file-icon" aria-hidden="true">PDF</span><strong class="simulation-brief-filename" data-brief-filename></strong></div>
+        <div class="simulation-brief-loader"><span class="spinner spinner-sm" aria-hidden="true"></span><p>AI 문서 파싱 및 요구 제형 스펙 추출 중...</p></div>
         <div class="simulation-brief-progress" aria-hidden="true"><span id="simulation-brief-progress"></span></div>
         <ul class="simulation-brief-checks" id="simulation-brief-checks">
-          <li>점도 요건 추출</li><li>유효성분 함량 파싱</li><li>타깃 사용감 도출</li>
+          <li>타깃 사용감 추출</li><li>배합 요건 파싱</li><li>용기 적합도 산출</li>
         </ul>
       </section>
-      <section class="simulation-brief-step simulation-brief-result" data-step-panel="result">
-        <div class="simulation-brief-file-row"><span class="simulation-brief-file-icon" aria-hidden="true">PDF</span><strong class="simulation-brief-filename" data-brief-filename></strong><span class="badge badge-success">분석 완료</span></div>
-        <blockquote class="simulation-brief-request"><span>요청 타깃</span><p id="simulation-brief-request"></p></blockquote>
-        <div class="simulation-brief-keywords" id="simulation-brief-keywords"></div>
-        <div class="simulation-brief-grid">
-          <div class="simulation-brief-panel">
-            <h3>추천 배합비</h3>
-            <dl class="simulation-brief-mix" id="simulation-brief-mix"></dl>
-          </div>
-          <div class="simulation-brief-panel">
-            <h3>목표 물성</h3>
-            <dl class="simulation-brief-specs">
-              <div><dt>목표 점도 <small>요청서</small></dt><dd><strong id="simulation-brief-target-v"></strong> cPs</dd></div>
-              <div><dt>시뮬레이션 예측</dt><dd><strong id="simulation-brief-predicted-v"></strong> cPs</dd></div>
-              <div><dt>목표 질감</dt><dd><span class="simulation-brief-pill" id="simulation-brief-texture"></span></dd></div>
-              <div><dt>요청 용기</dt><dd id="simulation-brief-pack"></dd></div>
-            </dl>
-          </div>
-        </div>
-      </section>
-    </div>
-    <div class="modal-footer simulation-brief-footer">
-      <p class="text-caption simulation-brief-note">시연 모드 · 파일은 서버로 전송되지 않으며, 파일명에 가까운 샘플 분석 결과를 표시합니다.</p>
-      <button type="button" class="btn btn-secondary" id="simulation-brief-back">다른 요청서 선택</button>
-      <button type="button" class="btn btn-primary" id="simulation-brief-apply">이 제형으로 시뮬레이션 적용하기</button>
     </div>
   </div>
+</div>
+<div class="simulation-toast" id="simulation-toast" role="status" aria-live="polite" hidden>
+  <span class="simulation-toast-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg></span>
+  <span><strong id="simulation-toast-title"></strong><small id="simulation-toast-detail"></small></span>
 </div>
 {% endblock %}
 {% block page_js %}<script src="{{ url_for('asset', filename='04_simulation/simulation.js') }}"></script>{% endblock %}
