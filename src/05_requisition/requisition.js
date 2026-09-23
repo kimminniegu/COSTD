@@ -5,7 +5,17 @@
   if (!root) return;
   const types = ["스킨케어", "베이스 메이크업", "립", "아이", "바디", "헤어", "클렌징", "선케어", "기타"];
   const tiers = { low: "저가", mid: "중가", high: "고가" };
-  const labels = { customer: "고객사", product_name: "제품명", product_type: "제품 유형", target_price_tier: "목표 가격대", export_countries: "수출 대상국", buyer_prohibited_ingredients: "수출 금지 원료" };
+  const sections = JSON.parse($("schema").textContent);
+  const definitions = sections.flatMap(([, fields]) => fields);
+  const labels = Object.fromEntries(definitions.map(([key, label]) => [key, label]));
+  const kinds = Object.fromEntries(definitions.map(([key, , kind]) => [key, kind]));
+  const chipFields = definitions.filter(([, , kind]) => kind === "list").map(([key]) => key);
+  const get = (data, key) => key.split(".").reduce((value, part) => value?.[part], data);
+  function set(data, key, value) {
+    const parts = key.split("."), last = parts.pop();
+    const parent = parts.reduce((obj, part) => (obj[part] ||= {}), data);
+    parent[last] = value;
+  }
   const countries = ["미국", "캐나다", "중국", "일본", "한국", "프랑스", "독일", "영국", "호주", "베트남", "태국", "인도네시아", "싱가포르", "인도", "아랍에미리트", "사우디아라비아"];
   const methods = { auto: "자동변환", auto_edited: "자동변환 후 수정", manual: "직접 작성", manual_edited: "직접 작성 후 수정" };
   let state = "upload", saved = null, draft = null, originalFile = null, controller = null;
@@ -20,8 +30,12 @@
     creation_method: "manual", customer: "", source_language: "", target_language: $("target-language").value,
     product_name: "", product_type: "", product_type_custom: "", target_price_tier: "",
     export_countries: [], buyer_prohibited_ingredients: [], regulatory_restricted_ingredients: [],
-    benchmark_product_name: "", recipients: [], review_status: "needs_review",
-    source_file: "", version: 1, field_provenance: []
+    benchmark_product_name: "", review_status: "needs_review",
+    source_file: "", version: 1, field_provenance: [], raw_extracted_data: {}, reference_files: [],
+    product_development: Object.fromEntries(definitions.filter(([key]) => key.startsWith("product_development.")).map(([key]) => [key.split(".")[1], ""])),
+    ingredients: { necessary: [], ideal: [] },
+    usage: { application_type: "", directions_for_use: "", additional_comments: "" },
+    quality: { stability: { required: null, duration: "", responsibility: "" } }
   });
   function notice(message = "") {
     $("notice").textContent = message;
@@ -43,13 +57,15 @@
     if (key === "product_type") return data.product_type === "기타" ? data.product_type_custom || "확인 필요" : data.product_type;
     if (key === "target_price_tier") return tiers[data[key]] || "";
     if (key === "buyer_prohibited_ingredients") return [...data[key], ...data.regulatory_restricted_ingredients].join(", ");
-    return Array.isArray(data[key]) ? data[key].join(", ") : data[key];
+    const value = get(data, key);
+    if (kinds[key] === "required") return value === true ? "필요" : value === false ? "불필요" : "확인 필요";
+    return Array.isArray(value) ? value.join(", ") : value;
   }
   function input(key, placeholder = "") {
-    return '<input class="form-control" id="requisition-input-' + key + '" data-field="' + key + '" maxlength="300" value="' + escape(current()[key]) + '" placeholder="' + escape(placeholder) + '">';
+    return '<input class="form-control" id="requisition-input-' + key + '" data-field="' + key + '" maxlength="10000" value="' + escape(get(current(), key)) + '" placeholder="' + escape(placeholder) + '">';
   }
   function chips(key, title) {
-    const values = current()[key];
+    const values = get(current(), key);
     const isCountry = key === "export_countries";
     return '<div class="requisition-chips">' + values.map((value, index) =>
       '<span class="multi-select__chip">' + escape(value) + '<button type="button" class="multi-select__remove" data-remove="' + key + '" data-index="' + index + '" aria-label="' + escape(value) + ' 삭제">×</button></span>').join("") +
@@ -75,11 +91,21 @@
     } else if (key === "target_price_tier") {
       control = '<div class="requisition-options" role="group" aria-label="목표 가격대">' + [["", "미정"], ...Object.entries(tiers)].map(([value, name]) =>
         '<label class="form-check"><input type="radio" name="requisition-tier" data-field="target_price_tier" value="' + value + '"' + (data[key] === value ? " checked" : "") + ">" + name + "</label>").join("") + "</div>";
-    } else if (key === "export_countries" || key === "buyer_prohibited_ingredients") {
-      control = chips(key, key === "export_countries" ? "국가 선택 또는 입력" : "바이어 지정 원료 입력");
+    } else if (kinds[key] === "required" || kinds[key] === "application") {
+      const options = kinds[key] === "required" ? [["", "확인 필요"], ["true", "필요"], ["false", "불필요"]] : [["", "선택하세요"], ...["Leave-on", "Rinse-off", "기타", "확인 필요"].map((v) => [v, v])];
+      control = '<select class="form-control" id="requisition-input-' + key + '" data-field="' + key + '">' + options.map(([value, label]) => '<option value="' + value + '"' + (String(get(data, key) ?? "") === value ? " selected" : "") + '>' + label + '</option>').join("") + '</select>';
+    } else if (kinds[key] === "textarea") {
+      control = '<textarea class="form-control" rows="4" maxlength="10000" id="requisition-input-' + key + '" data-field="' + key + '">' + escape(get(data, key)) + '</textarea>';
+    } else if (chipFields.includes(key)) {
+      control = chips(key, key === "export_countries" ? "국가 선택 또는 입력" : labels[key] + " 입력");
       if (key === "buyer_prohibited_ingredients") control += '<p class="form-help">바이어가 사용하지 말라고 지정한 원료를 입력해요.</p>' +
         (data.regulatory_restricted_ingredients.length ? '<p class="form-help">규제 검토 대상: ' + escape(data.regulatory_restricted_ingredients.join(", ")) + " · 규제 확인 필요</p>" : "");
     } else control = input(key, labels[key] + " 입력");
+    const provenance = (data.field_provenance || []).find((item) => item.field_key === key);
+    if (!editing() && provenance) {
+      if (provenance.review_status === "not_applicable") control = '<p class="requisition-field-value">해당 없음</p>';
+      control += '<small class="text-caption">' + ({ confirmed: "✓ 확인 완료", needs_review: "⚠ 확인 필요", missing: "미입력", not_applicable: "해당 없음", user_edited: "✓ 사용자 수정" }[provenance.review_status] || "") + '</small>';
+    }
     return '<div class="form-group" id="requisition-field-' + key + '">' +
       (editing() && key !== "target_price_tier" ? '<label class="form-label" for="requisition-input-' + key + '">' : '<p class="form-label">') +
       labels[key] + (editing() && required ? ' <span class="is-required">*</span>' : "") +
@@ -108,14 +134,15 @@
     $("loading").hidden = state !== "loading";
     $("document").hidden = !["manual", "edit", "result"].includes(state);
     $("new").hidden = state !== "result";
-    const headings = { upload: ["STEP 1 · 시작", "개발요청서 분석"], loading: ["STEP 1 · 자동변환", "개발요청서 분석"], result: ["STEP 2 · 결과 확인", "개발요청서"], edit: ["STEP 3 · 수정", "개발요청서 수정"], manual: ["STEP 1 · 직접 작성", "개발요청서 직접 작성"] };
+    const headings = { upload: ["STEP 1 · 시작", "개발요청서 분석"], loading: ["STEP 1 · 자동변환", "개발요청서 분석"], result: ["STEP 2 · 결과 확인", "개발요청서"], edit: ["STEP 3 · 수정", "개발요청서 수정"], manual: ["STEP 4 · 직접 작성", "개발요청서 직접 작성"] };
     $("step").textContent = headings[state][0];
     $("title").textContent = headings[state][1];
     $("description").textContent = state === "upload" || state === "loading" ? "바이어 요청서를 변환하거나 직접 작성하여 개발팀에 전달해요." :
       editing() ? "필수 항목을 입력하고 개발팀에 전달할 요청서를 완성해요." : "내용을 확인하고 필요하면 수정한 뒤 PDF로 저장해요.";
     if (state === "upload" || state === "loading") return;
     const data = current();
-    $("fields").innerHTML = Object.keys(labels).map(field).join("");
+    $("fields").innerHTML = sections.map(([title, fields]) => '<section class="requisition-section"><h2 class="card-title">' + escape(title) + '</h2><div class="requisition-fields">' + fields.map(([key]) => field(key)).join("") + '</div></section>').join("");
+    renderReferences();
     $("panel-title").textContent = editing() ? "작성 상태" : "문서 정보";
     $("form-help").textContent = editing() ? "* 표시된 항목은 필수 입력이에요." : "개발에 필요한 핵심 정보를 확인해요.";
     $("version").textContent = "v" + data.version;
@@ -132,7 +159,8 @@
     const required = missing(data), checks = reviews(data);
     $("method").textContent = methods[data.creation_method];
     $("count-label").textContent = editing() ? "채운 항목" : "입력 완료";
-    $("count").textContent = Object.keys(labels).filter((key) => filled(fieldValue(data, key)) && !(key === "product_type" && required.includes(key))).length + " / 6";
+    $("count").textContent = Object.keys(labels).filter((key) => filled(get(data, key)) && !(key === "product_type" && required.includes(key))).length + " / " + definitions.length;
+    $("export-review").textContent = data.export_countries.length ? data.export_countries.join(", ") + " · ⚠ 규제 확인 필요" : "미입력";
     $("missing-wrap").hidden = !editing() || !required.length;
     $("missing").textContent = required.map((key) => labels[key]).join(", ");
     $("review").textContent = checks.length ? checks.length + "건 · " + checks.join(", ") : "없음";
@@ -146,23 +174,75 @@
     $("title").scrollIntoView({ block: "start", behavior: "instant" });
   }
   function markEdited(key) {
-    const item = (draft.field_provenance || []).find((entry) => entry.field_key === key);
+    let item = draft.field_provenance.find((entry) => entry.field_key === key);
+    if (!item) {
+      item = { field_key: key, source_value: "", translated_value: null, source_page: "", source_language: draft.source_language, target_language: draft.target_language };
+      draft.field_provenance.push(item);
+    }
     if (item) {
-      item.user_value = clone(draft[key]);
+      item.user_value = clone(get(draft, key));
       item.input_source = "user_edited";
-      item.review_status = "reviewed";
+      item.review_status = "user_edited";
     }
   }
   function addChip(key) {
     const el = $("input-" + key), value = el.value.trim();
     if (!value) return;
-    if (draft[key].length >= 50) return notice("한 항목에 최대 50개까지 추가할 수 있어요.");
-    if (!draft[key].some((item) => item.toLocaleLowerCase() === value.toLocaleLowerCase())) draft[key].push(value);
+    if (get(draft, key).length >= 50) return notice("한 항목에 최대 50개까지 추가할 수 있어요.");
+    if (!get(draft, key).some((item) => item.toLocaleLowerCase() === value.toLocaleLowerCase())) get(draft, key).push(value);
     markEdited(key);
     $("field-" + key).outerHTML = field(key);
     updateSummary();
     $("input-" + key).focus();
   }
+  function referenceMarkup(data, printable = false) {
+    return (data.reference_files || []).map((file, index) => '<figure class="requisition-reference">' +
+      (/^data:image\/(png|jpeg|webp);base64,/.test(file.data_url || "") ? '<img src="' + escape(file.data_url) + '" alt="' + escape(file.name) + '" style="max-width:100%;max-height:65mm">' : '') +
+      '<figcaption>' + escape(file.name) + '</figcaption>' +
+      (!printable ? '<a download="' + escape(file.name) + '" href="' + escape(file.data_url) + '">다운로드</a>' : '') +
+      (!printable && editing() ? '<button type="button" class="btn btn-secondary btn-sm" data-remove-reference="' + index + '">삭제</button>' : '') + '</figure>').join("");
+  }
+  function renderReferences() {
+    $("references").innerHTML = '<div class="requisition-reference-grid">' + referenceMarkup(current()) + '</div>' +
+      (originalFile ? '<button type="button" class="btn btn-secondary" data-original-file>원본 RFP 다운로드</button>' : '') +
+      (editing() ? '<label class="form-label">참고자료 추가<input class="form-control" type="file" id="requisition-reference-input" multiple accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.xlsx"></label><p class="form-help">이미지는 PDF에 포함되고, 문서는 파일명으로 표시돼요. 파일당 5MB, 전체 20MB까지 추가할 수 있어요.</p>' : !(current().reference_files || []).length ? '<p class="text-caption">등록된 참고자료가 없어요.</p>' : '');
+  }
+  $("document").addEventListener("change", async (event) => {
+    if (!editing()) return;
+    if (event.target.id !== "requisition-reference-input") return;
+    const activeDraft = draft;
+    const files = [...event.target.files];
+    $("primary").disabled = true;
+    try {
+      for (const file of files) {
+        if (!/\.(png|jpe?g|webp|pdf|docx|xlsx)$/i.test(file.name) || !file.size || file.size > 5 * 1024 * 1024) throw new Error("참고자료 형식과 크기(최대 5MB)를 확인해 주세요.");
+        if (activeDraft.reference_files.length >= 20 || activeDraft.reference_files.reduce((total, item) => total + item.size, 0) + file.size > 20 * 1024 * 1024) throw new Error("참고자료는 최대 20개, 전체 20MB까지 추가할 수 있어요.");
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error("참고자료를 읽지 못했어요."));
+          reader.readAsDataURL(file);
+        });
+        if (draft !== activeDraft || !editing()) return;
+        activeDraft.reference_files.push({ name: file.name, size: file.size, data_url: dataUrl });
+      }
+      markEdited("reference_files");
+    } catch (error) { notice(error.message); }
+    finally { $("primary").disabled = false; if (draft === activeDraft && editing()) renderReferences(); }
+  });
+  $("references").addEventListener("click", (event) => {
+    const remove = event.target.closest("[data-remove-reference]");
+    if (remove && editing()) {
+      draft.reference_files.splice(Number(remove.dataset.removeReference), 1);
+      markEdited("reference_files");
+      renderReferences();
+    }
+    if (event.target.closest("[data-original-file]") && originalFile) {
+      const url = URL.createObjectURL(originalFile), link = document.createElement("a");
+      link.href = url; link.download = originalFile.name; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+  });
   function closeCountries() {
     const el = $("input-export_countries"), list = $("country-list");
     if (!el || !list) return;
@@ -197,7 +277,7 @@
   $("document").addEventListener("input", (event) => {
     const el = event.target, key = el.dataset.field;
     if (!editing() || !key) return;
-    draft[key] = el.value;
+    set(draft, key, kinds[key] === "required" ? (el.value === "" ? null : el.value === "true") : el.value);
     markEdited(key);
     if (key === "product_type") {
       $("custom-wrap").hidden = el.value !== "기타";
@@ -220,7 +300,7 @@
     if (add) addChip(add.dataset.add);
     if (remove) {
       const key = remove.dataset.remove;
-      draft[key].splice(Number(remove.dataset.index), 1);
+      get(draft, key).splice(Number(remove.dataset.index), 1);
       markEdited(key);
       const pendingValue = $("input-" + key).value;
       $("field-" + key).outerHTML = field(key);
@@ -261,15 +341,16 @@
     if (!["upload", "manual"].includes(state)) return;
     if (mode === "manual" && state !== "manual") {
       draft = draft || blank();
+      if (!draft.customer) draft.customer = $("setting-customer").value.trim();
       transition("manual");
     } else if (mode === "auto" && state === "manual") {
-      ["export_countries", "buyer_prohibited_ingredients"].forEach((key) => {
+      chipFields.forEach((key) => {
         const value = $("input-" + key).value.trim();
-        if (value && draft[key].length < 50 && !draft[key].includes(value)) draft[key].push(value);
+        if (value && get(draft, key).length < 50 && !get(draft, key).includes(value)) get(draft, key).push(value);
       });
       transition("upload");
     }
-    $(mode).focus({ preventScroll: true });
+    if (state === "upload") $(mode).focus({ preventScroll: true });
   }
   ["auto", "manual"].forEach((mode, index) => {
     $(mode).addEventListener("click", () => selectMode(mode));
@@ -295,7 +376,7 @@
     event.preventDefault();
     if (state === "result") { await printPDF(); return; }
     // 추가 버튼을 누르지 않은 마지막 국가/원료도 완료 시 반영합니다.
-    const pendingChips = ["export_countries", "buyer_prohibited_ingredients"].map((key) => [key, $("input-" + key).value.trim()]);
+    const pendingChips = chipFields.map((key) => [key, $("input-" + key).value.trim()]);
     for (const [key, value] of pendingChips) {
       if (!value) continue;
       $("input-" + key).value = value;
@@ -317,8 +398,8 @@
       return notice("필수 항목을 확인해 주세요: " + absent.map((key) => labels[key]).join(", "));
     }
     if (state === "edit") {
-      const keys = [...Object.keys(labels), "product_type_custom", "benchmark_product_name"];
-      if (keys.some((key) => JSON.stringify(draft[key]) !== JSON.stringify(saved[key]))) {
+      const keys = [...Object.keys(labels), "product_type_custom", "benchmark_product_name", "reference_files"];
+      if (keys.some((key) => JSON.stringify(get(draft, key)) !== JSON.stringify(get(saved, key)))) {
         draft.creation_method = saved.creation_method.startsWith("auto") ? "auto_edited" : "manual_edited";
         draft.version = saved.version + 1;
       }
@@ -339,7 +420,6 @@
     body.append("customer", $("setting-customer").value.trim());
     body.append("source_language", $("source-language").value);
     body.append("target_language", $("target-language").value);
-    body.append("recipients", "[]");
     const requestController = new AbortController();
     controller = requestController;
     const timer = setTimeout(() => requestController.abort("timeout"), 150000);
@@ -389,7 +469,12 @@
       const date = new Date(), datePart = [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("");
       const safePart = (value) => String(value || "Unknown").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "").replace(/\s+/g, "").slice(0, 70);
       const filename = "DevelopmentRequest_" + safePart(data.customer) + "_" + safePart(data.product_name) + "_" + data.target_language.toUpperCase() + "_" + datePart + "_v" + data.version;
-      const rows = [...Object.keys(labels).map((key) => [labels[key], fieldValue(data, key) || "미입력"]),
+      const pdfValue = (key) => {
+        const provenance = data.field_provenance.find((item) => item.field_key === key);
+        if (provenance?.review_status === "not_applicable") return "해당 없음";
+        return fieldValue(data, key) || (provenance?.review_status === "needs_review" ? "확인 필요" : "미입력");
+      };
+      const rows = [...Object.keys(labels).map((key) => [labels[key], pdfValue(key)]),
         ["벤치마크 제품명", data.benchmark_product_name || "미입력"]];
       if (data.buyer_prohibited_ingredients.length || data.regulatory_restricted_ingredients.length) {
         rows[5][1] = [
@@ -397,15 +482,17 @@
           data.regulatory_restricted_ingredients.length ? "규제 검토 대상: " + data.regulatory_restricted_ingredients.join(", ") : ""
         ].filter(Boolean).join("\n");
       }
-      const printHtml = '<main><h1>개발요청서</h1><dl>' +
-        rows.map(([label, value]) => "<div><dt>" + escape(label) + "</dt><dd>" + escape(value) + "</dd></div>").join("") +
-        "</dl><footer>v" + data.version + " · " + datePart + "<br>수출 대상국의 규제 확인이 필요해요.</footer></main>";
+      const printHtml = '<main><h1>개발요청서</h1>' + sections.map(([title, fields], index) => '<section><h2>' + escape(title) + '</h2><dl>' +
+        fields.map(([key, label]) => '<div><dt>' + escape(label) + '</dt><dd>' + escape(key === "buyer_prohibited_ingredients" ? rows[5][1] : pdfValue(key)) + '</dd></div>').join('') +
+        (index === 0 ? '<div><dt>벤치마크 제품명</dt><dd>' + escape(data.benchmark_product_name || "미입력") + '</dd></div>' : '') + '</dl></section>').join('') +
+        '<section><h2>06 참고자료</h2>' + (referenceMarkup(data, true) || '<p>등록된 참고자료 없음</p>') + '</section>' +
+        '<footer>v' + data.version + " · " + datePart + "<br>수출 대상국의 규제 확인이 필요해요.</footer></main>";
       const pdfRoot = document.createElement("div");
       pdfRoot.innerHTML = printHtml;
       pdfRoot.style.cssText = "position:fixed;left:-100000px;top:0;width:180mm;padding:0;background:#fff;color:#202733;font-family:Arial,sans-serif";
       pdfRoot.querySelector("main").style.cssText = "width:180mm;margin:0 auto";
       pdfRoot.querySelector("h1").style.cssText = "font-size:22px;text-align:center;margin:0 0 24px";
-      pdfRoot.querySelector("dl").style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:2px solid #6b7280;margin:0";
+      pdfRoot.querySelectorAll("dl").forEach((list) => { list.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:2px solid #6b7280;margin:0"; });
       pdfRoot.querySelectorAll("dl div").forEach((row, index) => { row.style.cssText = "display:grid;grid-template-columns:30mm minmax(0,1fr);border-bottom:1px solid #d4d7dc;break-inside:avoid"; if (index % 2 === 0) row.style.borderRight = "1px solid #d4d7dc"; if (index === rows.length - 1) { row.style.gridColumn = "1 / -1"; row.style.borderRight = "0"; } });
       pdfRoot.querySelectorAll("dt").forEach((label) => { label.style.cssText = "display:block;margin:0;padding:4mm 3mm;background:#eceef1;border-right:1px solid #d4d7dc;font-size:10pt;font-weight:700"; });
       pdfRoot.querySelectorAll("dd").forEach((value) => { value.style.cssText = "margin:0;padding:4mm 3mm;min-width:0;font-size:10pt;overflow-wrap:anywhere;white-space:pre-wrap"; });
@@ -416,12 +503,13 @@
       frame.className = "requisition-print-frame";
       frame.title = "개발요청서 PDF 저장";
       const loaded = new Promise((resolve) => { frame.onload = resolve; });
-      frame.srcdoc = '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>' + escape(filename) +
-        '</title><style>@page{size:A4;margin:12mm}body{margin:0;color:#202733;font-family:Arial,sans-serif}*{box-sizing:border-box;print-color-adjust:exact}</style></head><body>' +
+      frame.srcdoc = '<!doctype html><html lang="' + escape(data.target_language) + '"><head><meta charset="utf-8"><title>' + escape(filename) +
+        '</title><style>@page{size:A4;margin:12mm}body{margin:0;color:#202733;font-family:Arial,sans-serif}*{box-sizing:border-box;print-color-adjust:exact}h2{font-size:14pt;break-after:avoid}figure{break-inside:avoid}img{object-fit:contain}</style></head><body>' +
         pdfRoot.querySelector("main").outerHTML + '</body></html>';
       document.body.append(frame);
       await loaded;
       await frame.contentDocument.fonts.ready;
+      await Promise.all([...frame.contentDocument.images].map((img) => img.decode().catch(() => {})));
       frame.contentWindow.focus();
       frame.contentWindow.print();
     } catch {

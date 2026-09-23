@@ -17,6 +17,7 @@ from pathlib import Path
 
 from flask import Blueprint, jsonify, request
 from werkzeug.exceptions import RequestEntityTooLarge
+from .schema import SECTIONS, FIELDS, get_value, set_value, empty_value
 
 blueprint = Blueprint("requisition", __name__, url_prefix="/api/dev-request")
 MAX_FILE_BYTES = 20 * 1024 * 1024
@@ -30,7 +31,7 @@ MIME_TYPES = {
 }
 STRING_FIELDS = ["customer", "product_name", "product_type", "product_type_custom", "target_price_tier", "benchmark_product_name"]
 ARRAY_FIELDS = ["export_countries", "buyer_prohibited_ingredients", "regulatory_restricted_ingredients"]
-DATA_FIELDS = STRING_FIELDS + ARRAY_FIELDS
+DATA_FIELDS = list(FIELDS)
 
 
 class ConversionError(Exception):
@@ -69,10 +70,29 @@ def validate_file(filename, content):
 
 
 def extraction_schema():
-    properties = {key: {"type": "string"} for key in STRING_FIELDS}
+    properties = {}
+    for path, kind in FIELDS.items():
+        parent = properties
+        keys = path.split(".")
+        for key in keys[:-1]:
+            parent = parent.setdefault(key, {"type": "object", "additionalProperties": False,
+                                            "properties": {}})["properties"]
+        parent[keys[-1]] = ({"type": "array", "items": {"type": "string"}} if kind == "list"
+                           else {"type": ["boolean", "null"]} if kind == "required"
+                           else {"type": "string"})
     properties["product_type"]["enum"] = [""] + PRODUCT_TYPES
     properties["target_price_tier"]["enum"] = ["", "low", "mid", "high"]
-    properties.update({key: {"type": "array", "items": {"type": "string"}} for key in ARRAY_FIELDS})
+    properties["usage"]["properties"]["application_type"]["enum"] = ["", "Leave-on", "Rinse-off", "기타", "확인 필요"]
+    # Excluded information is kept separately, never rendered by the public field allowlist.
+    properties["raw_extracted_data"] = {
+        "type": "object", "additionalProperties": False, "properties": {
+            group: {"type": "array", "items": {
+                "type": "object", "additionalProperties": False,
+                "properties": {key: {"type": "string"} for key in ("field_key", "source_value", "source_page")},
+                "required": ["field_key", "source_value", "source_page"],
+            }} for group in ("commercial_data", "schedule_data", "claim_data", "optional_packaging_data", "other_data")
+        },
+    }
     properties["source_language"] = {"type": "string"}
     properties["is_development_request"] = {"type": "boolean"}
     properties["evidence"] = {
@@ -82,10 +102,21 @@ def extraction_schema():
                 "field_key": {"type": "string", "enum": DATA_FIELDS},
                 "source_value": {"type": "string"},
                 "needs_review": {"type": "boolean"},
-            }, "required": ["field_key", "source_value", "needs_review"],
+                "source_page": {"type": "string"},
+                "not_applicable": {"type": "boolean"},
+            }, "required": ["field_key", "source_value", "needs_review", "source_page", "not_applicable"],
         },
     }
-    return {"type": "object", "additionalProperties": False, "properties": properties, "required": list(properties)}
+    schema = {"type": "object", "additionalProperties": False, "properties": properties}
+    def require_properties(node):
+        if node.get("type") == "object":
+            node["required"] = list(node["properties"])
+            for child in node["properties"].values():
+                require_properties(child)
+        elif node.get("type") == "array":
+            require_properties(node["items"])
+    require_properties(schema)
+    return schema
 
 
 def call_analysis(filename, content, suffix, source_language, target_language):
@@ -107,13 +138,28 @@ export_countries: only explicitly named distribution/export countries, never inf
 buyer_prohibited_ingredients: only explicit DO NOT USE/exclusion instructions from the buyer.
 regulatory_restricted_ingredients: only ingredients explicitly mentioned as restricted by regulations IN THE SOURCE; these remain unverified candidates, NOT confirmed bans.
 benchmark_product_name: a single explicitly identified Formula Benchmark or Reference Product, else empty.
-No regulatory research or approval claims. No formulation/claims/testing/packaging/quantity/cost detail fields.
+Map Formula fields to product_development: Product Description, Formula Guidelines, Base Texture,
+Appearance/Sensory, Viscosity, Base Fragrance/Flavor, Base Finish, Base Coverage, Color/Shade Benchmark(s).
+Map Necessary Ingredients and Additional Ideal Ingredients to ingredients.necessary and ingredients.ideal.
+Map Application (leave on/rinse off), Directions for Use, Additional Comments to usage.
+Map ONLY Stability from Quality Testing to quality; required is true/false/null.
+Preserve stated stability duration and responsibility. Never assign an unstated owner.
+Keep missing quality requirement null. No regulatory research or approval claims.
+Read the WHOLE file. Preserve all remaining original information in raw_extracted_data groups with source page/sheet.
+commercial_data: SKU count, quantities, MOQ, Incoterms, terms, detailed costs (including formula/component), margins.
+schedule_data: submission due date, In DC Date, launch date.
+claim_data: Target Claims/Benefits, RIPT, Ocular, Sensory Testing, Clinical Testing, other efficacy tests.
+other_data: Micro/yeast/Mold testing requirements and responsibilities; these are excluded from the research form.
+optional_packaging_data: fill weight, primary/secondary/tertiary packaging, compatibility, drop/functionality tests.
+NEVER include these excluded details in public free text (including descriptions, guidelines, additional comments).
+Preserve them in raw_extracted_data ONLY. Public fields must contain only actual formulation/development requirements.
 source_language: detected ISO language code. is_development_request: false if unreadable, unrelated, or multiple distinct product requests cannot be represented as a single request without mixing data.
-evidence: one entry per extracted field with a short exact source excerpt and needs_review=true if ambiguous or unverified.
+evidence: one entry per extracted leaf field (dotted path), exact source excerpt, page/sheet,
+needs_review=true if ambiguous/unverified; not_applicable=true only if the source explicitly says so.
 Do not fabricate values or evidence. Never include full document text in evidence."""
     payload = {
         "model": os.getenv("REQUISITION_OPENAI_MODEL", "gpt-4.1"),
-        "store": False, "max_output_tokens": 6000, "instructions": instructions,
+        "store": False, "max_output_tokens": 16000, "instructions": instructions,
         "input": [{"role": "user", "content": [
             {"type": "input_text", "text": f"Source language: {source_language}; target language: {target_language}. Extract this file."}, attachment]}],
         "text": {"format": {"type": "json_schema", "name": "development_request", "strict": True, "schema": extraction_schema()}},
@@ -167,16 +213,20 @@ def normalize_result(raw, filename, customer, source_language, target_language, 
     if not isinstance(raw, dict) or raw.get("is_development_request") is not True:
         raise ConversionError("단일 제품의 개발요청서를 확인하지 못했어요. 파일을 확인하거나 제품별로 나눠서 업로드해 주세요.", 422)
     document = {}
-    for field in STRING_FIELDS:
-        value = raw.get(field, "")
-        if not isinstance(value, str) or len(value) > 1000:
-            raise ConversionError("분석 결과의 항목 형식이 올바르지 않아요. 다시 시도해 주세요.", 502)
-        document[field] = value.strip()
-    for field in ARRAY_FIELDS:
-        values = raw.get(field, [])
-        if not isinstance(values, list) or len(values) > 50 or any(not isinstance(v, str) or len(v) > 100 for v in values):
-            raise ConversionError("분석 결과의 목록 형식이 올바르지 않아요. 다시 시도해 주세요.", 502)
-        document[field] = list(dict.fromkeys(v.strip() for v in values if v.strip()))
+    for field, kind in FIELDS.items():
+        value = get_value(raw, field, empty_value(kind))
+        if kind == "list":
+            if not isinstance(value, list) or len(value) > 50 or any(not isinstance(v, str) or len(v) > 300 for v in value):
+                raise ConversionError("분석 결과의 목록 형식이 올바르지 않아요. 다시 시도해 주세요.", 502)
+            value = list(dict.fromkeys(v.strip() for v in value if v.strip()))
+        elif kind == "required":
+            if value is not None and not isinstance(value, bool):
+                raise ConversionError("품질 시험 필요 여부를 확인하지 못했어요.", 502)
+        else:
+            if not isinstance(value, str) or len(value) > 10000:
+                raise ConversionError("분석 결과의 항목 형식이 올바르지 않아요. 다시 시도해 주세요.", 502)
+            value = value.strip()
+        set_value(document, field, value)
     if document["product_type"] not in PRODUCT_TYPES:
         document["product_type"] = ""
     if document["product_type"] != "기타":
@@ -184,31 +234,46 @@ def normalize_result(raw, filename, customer, source_language, target_language, 
     if document["target_price_tier"] not in {"low", "mid", "high"}:
         document["target_price_tier"] = ""
     evidence = raw.get("evidence", [])
-    if not isinstance(evidence, list) or len(evidence) > 30:
+    if not isinstance(evidence, list) or len(evidence) > 100:
         raise ConversionError("분석 근거를 확인하지 못했어요. 다시 시도해 주세요.", 502)
     sources = {item.get("field_key"): item for item in evidence if isinstance(item, dict) and item.get("field_key") in DATA_FIELDS}
     # 근거가 없는 추출값은 채우지 않습니다. 모델의 분류 결과도 검토 가능하게 유지합니다.
     for field in DATA_FIELDS:
         source = sources.get(field, {}).get("source_value", "")
         if not isinstance(source, str) or not source.strip():
-            document[field] = [] if field in ARRAY_FIELDS else ""
+            set_value(document, field, empty_value(FIELDS[field]))
     detected = raw.get("source_language")
     if not isinstance(detected, str) or len(detected) > 20:
         detected = "unknown"
     provenance = [{
         "field_key": field, "source_value": str(sources.get(field, {}).get("source_value", ""))[:2000],
-        "translated_value": document[field], "user_value": None,
+        "translated_value": get_value(document, field), "user_value": None,
+        "source_page": str(sources.get(field, {}).get("source_page", ""))[:100],
         "source_language": source_language if source_language != "auto" else detected,
         "target_language": target_language, "input_source": "auto",
-        "review_status": "needs_review" if sources.get(field, {}).get("needs_review", False) else "extracted",
+        "review_status": (
+            "not_applicable" if sources.get(field, {}).get("not_applicable") and sources.get(field, {}).get("source_value")
+            else "needs_review" if sources.get(field, {}).get("needs_review", False)
+            else "confirmed" if get_value(document, field) not in (None, "", [])
+            else "missing"),
     } for field in DATA_FIELDS]
     if customer:
         document["customer"] = customer
-        provenance[0].update(user_value=customer, input_source="user_edited", review_status="reviewed")
+        provenance[0].update(user_value=customer, input_source="user_edited", review_status="user_edited")
+    for item in provenance:
+        if item["field_key"] == "target_price_tier" and not document["target_price_tier"]:
+            item["review_status"] = "needs_review"
+        if item["field_key"] == "regulatory_restricted_ingredients" and document["regulatory_restricted_ingredients"]:
+            item["review_status"] = "needs_review"
+    raw_data = raw.get("raw_extracted_data", {})
+    if not isinstance(raw_data, dict) or len(json.dumps(raw_data, ensure_ascii=False)) > 250000:
+        raise ConversionError("원문 보존 데이터의 형식 또는 크기를 확인해 주세요.", 502)
+    # The browser keeps raw data in memory; form/PDF render exclusively the shared field list.
     document.update(
         document_id=str(uuid.uuid4()), creation_method="auto", source_language=source_language if source_language != "auto" else detected,
         target_language=target_language, recipients=recipients, source_file=filename, version=1,
         review_status="needs_review", field_provenance=provenance,
+        raw_extracted_data=raw_data, reference_files=[],
     )
     return document
 

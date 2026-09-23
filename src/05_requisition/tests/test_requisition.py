@@ -22,14 +22,76 @@ def extracted():
     values.update(customer="Glowtree", product_name="Setting Powder", product_type="베이스 메이크업",
                   export_countries=["미국"], buyer_prohibited_ingredients=["Talc"],
                   source_language="en", is_development_request=True)
-    values["evidence"] = [{"field_key": key, "source_value": str(values[key]), "needs_review": False}
-                          for key in service.DATA_FIELDS if values[key]]
+    values["evidence"] = [{"field_key": key, "source_value": str(service.get_value(values, key)), "needs_review": False}
+                          for key in service.DATA_FIELDS if service.get_value(values, key)]
     return values
 
 
 class RequisitionTest(unittest.TestCase):
     def setUp(self):
         self.client = app.test_client()
+        with self.client.session_transaction() as session:
+            session["user"] = {"id": 1, "name": "테스트", "email": "test@example.com", "team": "연구소"}
+
+    def test_authentication_required(self):
+        anonymous = app.test_client()
+        self.assertEqual(anonymous.get("/dev-request").status_code, 302)
+        with patch.object(service, "call_analysis") as provider:
+            self.assertEqual(anonymous.post("/api/dev-request/convert").status_code, 401)
+            provider.assert_not_called()
+
+    def test_full_schema_and_raw_data_are_separate(self):
+        result = extracted()
+        fields = {
+            "product_development.texture": "가벼운 파우더",
+            "ingredients.necessary": ["Silica"],
+            "usage.application_type": "Leave-on",
+            "quality.stability.required": False,
+            "quality.stability.duration": "12주",
+        }
+        for key, value in fields.items():
+            service.set_value(result, key, value)
+            result["evidence"].append({"field_key": key, "source_value": str(value), "source_page": "3", "needs_review": False})
+        service.set_value(result, "quality.micro.required", True)
+        service.set_value(result, "quality.micro.responsibility", "PRIVATE_MICRO_OWNER")
+        result["raw_extracted_data"] = {
+            "commercial_data": [{"field_key": "MOQ", "source_value": "SECRET_QUANTITY", "source_page": "2"}],
+            "claim_data": [{"field_key": "Clinical Testing", "source_value": "PRIVATE_CLAIM_TEST", "source_page": "3"}],
+            "other_data": [{"field_key": "Micro", "source_value": "PRIVATE_MICRO_OWNER", "source_page": "3"}],
+        }
+        document = service.normalize_result(result, "brief.pdf", "", "auto", "ko", [])
+        for key, value in fields.items():
+            self.assertEqual(service.get_value(document, key), value)
+        self.assertNotIn("micro", document["quality"])
+        self.assertEqual(document["raw_extracted_data"], result["raw_extracted_data"])
+        self.assertNotIn("SECRET_QUANTITY", json.dumps({key: document[key] for key in ("product_development", "quality", "usage")}))
+        public_document = {key: value for key, value in document.items() if key != "raw_extracted_data"}
+        self.assertNotIn("PRIVATE_MICRO_OWNER", json.dumps(public_document))
+        self.assertNotIn("PRIVATE_CLAIM_TEST", json.dumps(public_document))
+        provenance = next(item for item in document["field_provenance"] if item["field_key"] == "quality.stability.required")
+        self.assertEqual(provenance["source_page"], "3")
+        self.assertEqual(provenance["review_status"], "confirmed")
+
+    def test_nested_fields_require_evidence_and_valid_types(self):
+        result = extracted()
+        result["product_development"] = {"texture": "Invented"}
+        document = service.normalize_result(result, "brief.pdf", "", "auto", "ko", [])
+        self.assertEqual(document["product_development"]["texture"], "")
+        for value in ("필요", 1, [], {}):
+            result["quality"] = {"stability": {"required": value}}
+            with self.assertRaises(service.ConversionError):
+                service.normalize_result(result, "brief.pdf", "", "auto", "ko", [])
+
+    def test_extraction_schema_is_strict_recursively(self):
+        def check(node):
+            if node["type"] == "object":
+                self.assertFalse(node["additionalProperties"])
+                self.assertEqual(set(node["required"]), set(node["properties"]))
+                for child in node["properties"].values():
+                    check(child)
+            elif node["type"] == "array":
+                check(node["items"])
+        check(service.extraction_schema())
 
     def post(self, content=b"%PDF-1.7\nfixture", name="brief.pdf", **settings):
         return self.client.post("/api/dev-request/convert", data={

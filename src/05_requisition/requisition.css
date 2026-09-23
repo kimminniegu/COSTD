@@ -6,7 +6,12 @@
 .requisition-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: var(--space-6); align-items: start; }
 .requisition-layout > *, .requisition-fields > * { min-width: 0; }
 #requisition-document { grid-template-columns: minmax(0, 1fr) 260px; }
-#requisition-document > .requisition-panel { align-self: end; height: calc(100% - 72px); margin-top: 72px; box-sizing: border-box; }
+#requisition-document > .requisition-panel { align-self: start; box-sizing: border-box; }
+.requisition-section { margin-bottom: 24px; }
+.requisition-section > h2 { margin-bottom: 12px; }
+.requisition-reference-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.requisition-reference { margin: 0; padding: 12px; border: 1px solid #d4d7dc; overflow-wrap: anywhere; }
+.requisition-reference img { object-fit: contain; }
 .requisition-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; border-top: 2px solid #6b7280; }
 .requisition-paper { min-height: auto; border-radius: 0; }
 .requisition-paper > .card-header { padding: 16px 20px; border-bottom: 1px solid #cbd1d8; background: #f7f8fa; }
@@ -27,8 +32,6 @@
 .requisition-options { display: flex; flex-wrap: wrap; gap: var(--space-4); }
 .requisition-drop { min-height: 265px; gap: var(--space-5); justify-content: center; }
 .requisition-drop:focus-within, .requisition-drop:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
-.requisition-divider { display: flex; gap: var(--space-4); align-items: center; margin: var(--space-8) 0; color: var(--color-text-placeholder); font-size: var(--font-size-label); }
-.requisition-divider::before, .requisition-divider::after { content: ""; flex: 1; height: 1px; background: var(--color-border-strong); }
 .requisition-center { text-align: center; }
 .requisition-notice { margin-bottom: var(--space-6); }
 .requisition-summary { display: grid; gap: var(--space-5); }

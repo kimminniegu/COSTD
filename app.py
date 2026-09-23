@@ -150,7 +150,7 @@ def simulation():
 @app.route("/dev-request")
 @login_required
 def dev_request():
-    return render_template("05_requisition/requisition.html")
+    return render_template("05_requisition/requisition.html", request_sections=requisition_service.SECTIONS)
 
 
 # ---------------------------------------------------------------------------
@@ -229,8 +229,16 @@ def home_api_regulations():
 
 # 숫자로 시작하는 폴더명은 일반 import 문으로 불러올 수 없으므로
 # import_module을 사용해 개발요청서 자동변환 API를 등록합니다.
-# 직접 작성·수정·최종값 PDF 저장은 requisition.js에서 처리합니다.
+# 공통 스키마로 자동변환·직접작성·수정·최종값 PDF 출력을 연결합니다.
 requisition_service = import_module("src.05_requisition.service")
+
+
+@requisition_service.blueprint.before_request
+def require_requisition_user():
+    if not auth.current_user():
+        return jsonify(error="로그인 후 다시 이용해 주세요."), 401
+
+
 app.register_blueprint(requisition_service.blueprint)
 
 
