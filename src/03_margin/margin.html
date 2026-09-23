@@ -1,34 +1,227 @@
-{% extends "common/base.html" %}
-{# 담당자 C — 원가 경쟁력 및 마진 시뮬레이션 / 기능 명세: src/03_margin/margin.md #}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>화장품 ODM 원가 & 마진 대시보드</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 커스텀 스타일시트 연결 -->
+  <link rel="stylesheet" href="/static/03_margin/margin.css">
+</head>
+<body class="bg-slate-50 text-slate-800">
 
-{% block title %}원가 경쟁력 및 마진 시뮬레이션{% endblock %}
-
-{% block page_css %}
-<link rel="stylesheet" href="{{ url_for('asset', filename='03_margin/margin.css') }}">
-{% endblock %}
-
-{% block content %}
-<div class="page-header">
-  <div>
-    <h1 class="page-title">원가 경쟁력 및 마진 시뮬레이션</h1>
-  </div>
-  <div class="page-actions">
-    <a class="btn btn-surface" href="{{ url_for('home') }}">← 홈으로</a>
-  </div>
-</div>
-
-<section class="section">
-  <div class="card">
-    <div class="card-body">
-      <div class="placeholder">
-        <p class="placeholder-title">원가 경쟁력 및 마진 시뮬레이션</p>
-        <p>이 영역은 margin.md를 기준으로 담당자가 구현합니다.</p>
-      </div>
+  <header class="bg-indigo-900 text-white px-6 py-4 shadow flex justify-between items-center">
+    <div>
+      <h1 class="text-xl font-bold">BeautyCore ODM 원가 및 마진 시뮬레이션</h1>
+      <p class="text-xs text-indigo-200" id="header-project-name">Loading project info...</p>
     </div>
-  </div>
-</section>
-{% endblock %}
+    <!-- 3개 하부 탭 컨트롤러 -->
+    <div class="flex gap-2">
+      <button class="sub-tab-btn active px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white" data-target="tab1">1. 수량별 원가</button>
+      <button class="sub-tab-btn px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-800 text-indigo-200" data-target="tab2">2. 물류·환율 역산</button>
+      <button class="sub-tab-btn px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-800 text-indigo-200" data-target="tab3">3. 견적서(PI) 발행</button>
+    </div>
+  </header>
 
-{% block page_js %}
-<script src="{{ url_for('asset', filename='03_margin/margin.js') }}"></script>
-{% endblock %}
+  <main class="max-w-7xl mx-auto p-6">
+    
+    <!-- [하부 탭 1] 수량별 원가 구간 -->
+    <section id="tab1" class="tab-content space-y-6">
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <h2 class="text-lg font-bold mb-4 text-slate-800">MOQ 구간별 제조원가 및 기준 공급가 (Ex-Works)</h2>
+        <table class="w-full text-left text-sm border-collapse">
+          <thead class="bg-slate-100 text-slate-600">
+            <tr>
+              <th class="p-3">수량 구간 (MOQ)</th>
+              <th class="p-3">제조 원가 (Ex-Works)</th>
+              <th class="p-3">목표 마진율 (%)</th>
+              <th class="p-3">권장 원화 판매가</th>
+              <th class="p-3 text-center">작업</th>
+            </tr>
+          </thead>
+          <tbody id="tier-table-body">
+            <!-- JS 동적 렌더링 -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- [하부 탭 2] 물류·인코텀즈 & 바이어 역산 시뮬레이터 -->
+    <section id="tab2" class="tab-content hidden grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- 좌측 입력 패널 -->
+      <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-6">
+        <h2 class="text-lg font-bold border-b pb-3">수출 조건 및 포워더 견적 입력</h2>
+        
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">발주 수량 (pcs)</label>
+            <input type="number" id="input-qty" value="10000" class="w-full border rounded p-2 text-sm sim-trigger">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">공장 출하 원가 (Ex-Works, KRW)</label>
+            <input type="number" id="input-exw-cost" value="1500" class="w-full border rounded p-2 text-sm bg-slate-100 sim-trigger" readonly>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-2">인코텀즈 조건</label>
+          <div class="flex gap-6">
+            <label class="flex items-center gap-2 cursor-pointer text-sm font-semibold">
+              <input type="radio" name="incoterms" value="FOB" checked class="sim-trigger"> FOB (수출항 본선인도)
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer text-sm font-semibold">
+              <input type="radio" name="incoterms" value="CIF" class="sim-trigger"> CIF (운임·보험료 포함)
+            </label>
+          </div>
+        </div>
+
+        <!-- 포워더 견적 입력부 -->
+        <div class="p-4 bg-slate-50 rounded-lg space-y-3">
+          <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">포워더 견적서 금액 입력</h3>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs text-slate-600">국내 로컬비용 (내륙운임+THC+통관, KRW)</label>
+              <input type="number" id="input-local-charge" value="450000" class="w-full border rounded p-2 text-sm sim-trigger">
+            </div>
+            <div id="cif-freight-group" class="hidden">
+              <label class="block text-xs text-slate-600">해상/항공 운임 (Freight, USD)</label>
+              <input type="number" id="input-freight-usd" value="0" class="w-full border rounded p-2 text-sm sim-trigger">
+            </div>
+          </div>
+          <div id="cif-insurance-group" class="grid grid-cols-2 gap-4 hidden">
+            <div>
+              <label class="block text-xs text-slate-600">적하 보험료 (Insurance, KRW)</label>
+              <input type="number" id="input-insurance-krw" value="0" class="w-full border rounded p-2 text-sm sim-trigger">
+            </div>
+          </div>
+        </div>
+
+        <!-- 환율 & 바이어 제안가 -->
+        <div class="grid grid-cols-2 gap-4 pt-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">기준 환율 (USD/KRW)</label>
+            <input type="number" id="input-base-fx" value="1350" class="w-full border rounded p-2 text-sm sim-trigger">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">환율 변동성 스트레스 테스트 (<span id="fx-stress-display">0%</span>)</label>
+            <input type="range" id="input-fx-stress" min="-10" max="10" step="1" value="0" class="w-full mt-2 sim-trigger">
+          </div>
+        </div>
+
+        <div class="border-t pt-4">
+          <label class="block text-sm font-bold text-slate-800 mb-1">바이어 역제시 외화 단가 (USD $)</label>
+          <input type="number" step="0.05" id="input-target-price" value="1.70" class="w-full border-2 border-indigo-500 rounded p-2 text-base font-bold text-indigo-700 sim-trigger">
+        </div>
+      </div>
+
+      <!-- 우측 결과 요약 카드 -->
+      <div class="space-y-4">
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">포워더 전달용 물류 스펙</h3>
+          <p class="text-2xl font-black text-slate-800" id="res-total-cbm">0.0 CBM</p>
+          <p class="text-xs text-slate-500 mt-1" id="res-boxes-weight">총 0 박스 / 0 kg</p>
+          <div class="mt-3 text-xs bg-slate-100 p-2 rounded flex justify-between">
+            <span>개당 배부 물류비:</span>
+            <span class="font-bold" id="res-unit-logistics">0 원</span>
+          </div>
+        </div>
+
+        <div id="status-card" class="p-5 rounded-xl border shadow-sm bg-slate-50">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">영업이익률 판정</span>
+            <span id="badge-status" class="px-2 py-0.5 rounded text-xs font-extrabold text-white bg-slate-500">-</span>
+          </div>
+          <div class="text-3xl font-black text-slate-800" id="res-margin-pct">0.0%</div>
+          <p class="text-xs text-slate-500 mt-1" id="res-margin-detail">개당 마진: 0원</p>
+          
+          <div class="mt-4 pt-3 border-t border-slate-200 text-xs space-y-1">
+            <div class="flex justify-between">
+              <span>적용 환율:</span>
+              <span class="font-semibold" id="res-applied-fx">0 원/$</span>
+            </div>
+            <div class="flex justify-between">
+              <span>개당 총 투입원가:</span>
+              <span class="font-semibold" id="res-total-cost">0 원</span>
+            </div>
+          </div>
+
+          <button id="btn-save-pi" class="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded text-xs shadow">
+            이 조건으로 견적서(PI) 저장
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- [하부 탭 3] 영문 견적서(PI) & 협상 히스토리 -->
+    <section id="tab3" class="tab-content hidden space-y-6">
+      <div class="bg-white p-8 rounded-xl shadow-sm border border-slate-300 font-mono text-xs text-slate-800 max-w-4xl mx-auto print-area">
+        <div class="text-center font-bold text-lg border-b pb-4 mb-4">PROFORMA INVOICE</div>
+        <div class="grid grid-cols-2 gap-4 pb-4 border-b font-sans">
+          <div>
+            <p class="font-bold">[SELLER / EXPORTER]</p>
+            <p>BeautyCore ODM Korea Inc.</p>
+            <p>123 Pangyo-ro, Bundang-gu, Seongnam-si, Korea</p>
+          </div>
+          <div>
+            <p class="font-bold">[TRADE TERMS]</p>
+            <p>Incoterms: <span id="pi-incoterms" class="font-bold text-indigo-700">FOB</span></p>
+            <p>Payment: T/T 30% Deposit, 70% Before Shipment</p>
+          </div>
+        </div>
+
+        <table class="w-full my-4 text-left border-collapse font-sans">
+          <thead>
+            <tr class="border-b">
+              <th class="py-2">Description</th>
+              <th class="py-2 text-right">Quantity</th>
+              <th class="py-2 text-right">Unit Price (USD)</th>
+              <th class="py-2 text-right">Amount (USD)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="border-b">
+              <td class="py-2" id="pi-item-name">Hydro Moisture Serum</td>
+              <td class="py-2 text-right" id="pi-qty">10,000 pcs</td>
+              <td class="py-2 text-right font-bold text-indigo-600" id="pi-unit-price">$1.70</td>
+              <td class="py-2 text-right font-bold" id="pi-total-amount">$17,000.00</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="bg-slate-50 p-3 rounded text-slate-600 mb-6 font-sans" id="pi-logistics-summary">
+          총 0 카톤 / 0.00 CBM / 약 0.00 kg
+        </div>
+
+        <div class="flex justify-end gap-3 font-sans print:hidden">
+          <button onclick="window.print()" class="px-4 py-2 border border-slate-300 rounded hover:bg-slate-100 font-bold">인쇄 / PDF 출력</button>
+        </div>
+      </div>
+
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <h3 class="text-sm font-bold mb-3 text-slate-800">버전별 협상 히스토리 아카이브</h3>
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-100 text-slate-600">
+            <tr>
+              <th class="p-2">버전</th>
+              <th class="p-2">문서 번호</th>
+              <th class="p-2">발주일자</th>
+              <th class="p-2">수량</th>
+              <th class="p-2">조건</th>
+              <th class="p-2">제시가(USD)</th>
+              <th class="p-2">마진율(%)</th>
+              <th class="p-2">비고</th>
+            </tr>
+          </thead>
+          <tbody id="history-table-body">
+            <!-- JS 동적 렌더링 -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 프론트엔드 모듈 스크립트 연결 -->
+  <script src="/static/03_margin/margin.js"></script>
+</body>
+</html>

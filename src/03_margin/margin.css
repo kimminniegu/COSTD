@@ -1,4 +1,207 @@
-/* 원가 경쟁력 및 마진 시뮬레이션 전용 CSS (담당자 C)
-   이 페이지에서만 필요한 스타일만 작성합니다.
-   Button / Card / Form 등 공통 요소는 src/common/style.css 를 사용하고 다시 정의하지 않습니다.
-   충돌 방지를 위해 class 이름은 "margin-" 접두사를 사용합니다. */
+/* ========================================================
+   [03_margin] 원가 경쟁력 및 마진 시뮬레이션 스타일시트
+   - docs/design_system.md 디자인 토큰 완벽 준수
+   ======================================================== */
+
+/* 1. 서브 탭 컨트롤러 네비게이션 */
+.sub-tab-group {
+  display: flex;
+  gap: 8px;
+  background-color: var(--color-gray-100, #F1F5F9);
+  padding: 4px;
+  border-radius: var(--radius-md, 8px);
+  width: fit-content;
+}
+
+.sub-tab-btn {
+  padding: 8px 16px;
+  font-size: var(--text-sm, 14px);
+  font-weight: 600;
+  color: var(--color-gray-600, #64748B);
+  border-radius: var(--radius-sm, 6px);
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+}
+
+.sub-tab-btn:hover {
+  color: var(--color-gray-900, #0F172A);
+}
+
+.sub-tab-btn.active {
+  background-color: var(--color-white, #FFFFFF);
+  color: var(--color-primary-600, #2563EB);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* 2. 대시보드 카드 & 컨테이너 */
+.margin-card {
+  background-color: var(--color-white, #FFFFFF);
+  border: 1px solid var(--color-gray-200, #E2E8F0);
+  border-radius: var(--radius-lg, 12px);
+  padding: 24px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.margin-card-title {
+  font-size: var(--text-base, 16px);
+  font-weight: 700;
+  color: var(--color-gray-900, #0F172A);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 3. 폼 컨트롤 (인풋, 라디오, 슬라이더) */
+.margin-form-label {
+  display: block;
+  font-size: var(--text-xs, 12px);
+  font-weight: 600;
+  color: var(--color-gray-700, #334155);
+  margin-bottom: 6px;
+}
+
+.margin-input {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: var(--text-sm, 14px);
+  color: var(--color-gray-900, #0F172A);
+  background-color: var(--color-white, #FFFFFF);
+  border: 1px solid var(--color-gray-300, #CBD5E1);
+  border-radius: var(--radius-md, 8px);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+
+.margin-input:focus {
+  border-color: var(--color-primary-500, #3B82F6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.margin-input:read-only {
+  background-color: var(--color-gray-50, #F8FAFC);
+  color: var(--color-gray-500, #64748B);
+  cursor: not-allowed;
+}
+
+/* 타겟 제안가 강조 인풋 */
+.margin-input-highlight {
+  border: 2px solid var(--color-primary-500, #3B82F6);
+  font-weight: 700;
+  font-size: var(--text-base, 16px);
+  color: var(--color-primary-700, #1D4ED8);
+}
+
+/* 슬라이더(스트레스 테스트) */
+.margin-slider {
+  width: 100%;
+  accent-color: var(--color-primary-500, #3B82F6);
+  cursor: pointer;
+}
+
+/* 4. 마진 판정 상태 카드 및 배지 (Safe / Review / Danger) */
+.status-card {
+  border-radius: var(--radius-lg, 12px);
+  padding: 20px;
+  transition: all 0.3s ease;
+  border-width: 1px;
+}
+
+.status-card.status-safe {
+  background-color: #ECFDF5;
+  border-color: #A7F3D0;
+}
+
+.status-card.status-review {
+  background-color: #FFFBEB;
+  border-color: #FDE68A;
+}
+
+.status-card.status-danger {
+  background-color: #FEF2F2;
+  border-color: #FECACA;
+}
+
+/* 뱃지 */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: var(--text-xs, 12px);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.badge-safe {
+  background-color: #10B981;
+  color: #FFFFFF;
+}
+
+.badge-review {
+  background-color: #F59E0B;
+  color: #FFFFFF;
+}
+
+.badge-danger {
+  background-color: #EF4444;
+  color: #FFFFFF;
+}
+
+/* 5. 데이터 테이블 디자인 (디자인 시스템 공통 적용) */
+.margin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm, 14px);
+}
+
+.margin-table th {
+  background-color: var(--color-gray-50, #F8FAFC);
+  color: var(--color-gray-600, #475569);
+  font-weight: 600;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-gray-200, #E2E8F0);
+}
+
+.margin-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-gray-100, #F1F5F9);
+  color: var(--color-gray-800, #1E293B);
+}
+
+.margin-table tbody tr:hover {
+  background-color: var(--color-gray-50, #F8FAFC);
+}
+
+/* 6. 견적서(PI) 미리보기 및 인쇄(@media print) 전용 규격 */
+.pi-preview-sheet {
+  background: #FFFFFF;
+  border: 1px solid var(--color-gray-300, #CBD5E1);
+  border-radius: var(--radius-lg, 12px);
+  padding: 40px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  font-family: 'NanumSquare Neo', monospace;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .pi-preview-sheet, .pi-preview-sheet * {
+    visibility: visible;
+  }
+  .pi-preview-sheet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
