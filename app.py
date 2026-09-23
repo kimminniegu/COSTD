@@ -11,6 +11,7 @@ API 처리, AI 기능, 계산 로직, 파일 분석 등은 각 담당자가
 """
 
 import os
+from importlib import import_module
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -89,6 +90,12 @@ def dev_request():
 
 
 # [E] 개발요청서 — 접두사: /api/dev-request/...
+
+# 숫자로 시작하는 폴더명은 일반 import 문으로 불러올 수 없으므로
+# import_module을 사용해 개발요청서 자동변환 API를 등록합니다.
+# 직접 작성·수정·최종값 PDF 저장은 requisition.js에서 처리합니다.
+requisition_service = import_module("src.05_requisition.service")
+app.register_blueprint(requisition_service.blueprint)
 
 
 if __name__ == "__main__":

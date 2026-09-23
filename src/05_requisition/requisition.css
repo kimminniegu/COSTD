@@ -1,4 +1,73 @@
-/* 개발요청서 전용 CSS (담당자 E)
-   이 페이지에서만 필요한 스타일만 작성합니다.
-   Button / Card / Form 등 공통 요소는 src/common/style.css 를 사용하고 다시 정의하지 않습니다.
-   충돌 방지를 위해 class 이름은 "requisition-" 접두사를 사용합니다. */
+/* 공통 컴포넌트는 그대로 사용하고 개발요청서 배치만 정의합니다. */
+#requisition-app [hidden] { display: none !important; }
+.requisition-mode-card { margin-bottom: var(--space-6); }
+.requisition-mode-card .tabs { display: flex; }
+.requisition-mode-card .tab { flex: 1; }
+.requisition-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: var(--space-6); align-items: start; }
+.requisition-layout > *, .requisition-fields > * { min-width: 0; }
+#requisition-document { grid-template-columns: minmax(0, 1fr) 260px; }
+#requisition-document > .requisition-panel { align-self: end; height: calc(100% - 72px); margin-top: 72px; box-sizing: border-box; }
+.requisition-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; border-top: 2px solid #6b7280; }
+.requisition-paper { min-height: auto; border-radius: 0; }
+.requisition-paper > .card-header { padding: 16px 20px; border-bottom: 1px solid #cbd1d8; background: #f7f8fa; }
+.requisition-paper > .card-body { padding: 20px; }
+.requisition-fields > .form-group, .requisition-benchmark-row { display: grid; grid-template-columns: 136px minmax(0, 1fr); gap: 0; margin: 0; border-bottom: 1px solid #d4d7dc; }
+.requisition-fields > .form-group:nth-child(odd) { border-right: 1px solid #d4d7dc; }
+.requisition-fields > .form-group > .form-label, .requisition-benchmark-row > .form-label { display: block; align-content: center; margin: 0; padding: 14px 16px; background: #eceef1; color: #202733; font-weight: 700; border-right: 1px solid #d4d7dc; }
+.requisition-field-content { min-width: 0; padding: 12px; align-content: center; }
+.requisition-field-value { margin: 0; padding: 6px 10px; min-height: 36px; border: 1px solid #d9dde2; background: #f9fafb; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
+.requisition-paper .form-control { border-radius: 2px; }
+.requisition-paper .form-help { margin-top: 8px; }
+.requisition-panel { border-radius: 0; }
+.requisition-panel > .card-header { padding: 12px 20px; }
+.requisition-panel > .card-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 16px 20px; }
+.requisition-panel-actions { grid-template-columns: minmax(0, 1fr); }
+.requisition-panel-actions > p { text-align: left; }
+.requisition-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.requisition-options { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.requisition-drop { min-height: 265px; gap: var(--space-5); justify-content: center; }
+.requisition-drop:focus-within, .requisition-drop:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+.requisition-divider { display: flex; gap: var(--space-4); align-items: center; margin: var(--space-8) 0; color: var(--color-text-placeholder); font-size: var(--font-size-label); }
+.requisition-divider::before, .requisition-divider::after { content: ""; flex: 1; height: 1px; background: var(--color-border-strong); }
+.requisition-center { text-align: center; }
+.requisition-notice { margin-bottom: var(--space-6); }
+.requisition-summary { display: grid; gap: var(--space-5); }
+.requisition-summary > div { display: flex; gap: var(--space-4); justify-content: space-between; }
+.requisition-summary dt { color: var(--color-text-secondary); font-size: var(--font-size-label); }
+.requisition-summary dd { margin: 0; font-weight: var(--font-weight-bold); text-align: right; }
+.requisition-panel-section { padding-top: var(--space-6); border-top: var(--border-default); overflow-wrap: anywhere; }
+.requisition-panel-actions { display: grid; gap: var(--space-3); }
+.requisition-loading { min-height: 410px; text-align: center; }
+.requisition-chip-entry { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
+.requisition-chip-entry input { min-width: 0; flex: 1; }
+.requisition-chip-input { position: relative; flex: 1; min-width: 0; }
+.requisition-chip-input input { width: 100%; }
+.requisition-country-list { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20; max-height: 220px; overflow-y: auto; background: var(--color-surface, #fff); border: var(--border-default, 1px solid #ddd); border-radius: var(--radius-md, 8px); box-shadow: 0 4px 12px rgb(0 0 0 / 12%); padding: 4px; }
+.requisition-country-option { display: block; width: 100%; border: 0; background: transparent; color: var(--color-text-primary); padding: 8px 12px; text-align: left; font: inherit; cursor: pointer; border-radius: 4px; }
+.requisition-country-option:hover, .requisition-country-option[aria-selected="true"] { background: var(--color-primary-light, #eef2ff); }
+.requisition-country-empty { margin: 0; padding: 8px 12px; color: var(--color-text-secondary); font-size: var(--font-size-label); }
+.requisition-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.requisition-chips .multi-select__chip { max-width: 100%; height: auto; min-height: var(--space-8); overflow-wrap: anywhere; }
+.requisition-review-item { margin-top: var(--space-2); }
+.requisition-session-note { margin-top: var(--space-6); }
+.requisition-invalid { outline: 1px solid var(--color-danger); border-radius: var(--radius-md); }
+.requisition-print-frame { position: fixed; width: 1px; height: 1px; border: 0; bottom: 0; right: 0; }
+@container page (max-width: 1100px) {
+  .requisition-fields { grid-template-columns: minmax(0, 1fr); }
+  .requisition-fields > .form-group:nth-child(odd) { border-right: 0; }
+  .requisition-paper { min-height: auto; }
+}
+@container page (max-width: 880px) {
+  #requisition-upload { grid-template-columns: minmax(0, 1fr); }
+}
+@container page (max-width: 680px) {
+  #requisition-document { grid-template-columns: minmax(0, 1fr); }
+  #requisition-document > .requisition-panel { height: auto; margin-top: 0; }
+}
+@container page (max-width: 560px) {
+  .requisition-fields > .form-group, .requisition-benchmark-row { grid-template-columns: 100px minmax(0, 1fr); }
+  .requisition-fields > .form-group > .form-label, .requisition-benchmark-row > .form-label { padding: 10px; }
+  .requisition-paper > .card-body { padding: 10px; }
+  .requisition-field-content { padding: 10px; }
+  .requisition-panel > .card-body { grid-template-columns: minmax(0, 1fr); }
+}
