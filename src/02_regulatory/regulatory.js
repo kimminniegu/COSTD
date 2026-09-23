@@ -59,6 +59,30 @@
     return String(iso).replace("T", " ");
   }
 
+  /* 한국시간(KST) 표시. 시간대 정보가 있는 ISO 문자열만 변환하고, 시간대가 없는 값(API 레코드 updated_at 등)은 그대로 두고 표기한다 */
+  var KST_FMT = null;
+  try { KST_FMT = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }); } catch (e) { KST_FMT = null; }
+  function formatKst(iso) {
+    if (!iso) return "—";
+    var s = String(iso);
+    if (!/(Z|[+-]\d\d:?\d\d)$/.test(s)) return formatTime(s) + " (시간대 미표기)";
+    var d = new Date(s);
+    if (isNaN(d.getTime()) || !KST_FMT) return formatTime(s);
+    return KST_FMT.format(d).replace("T", " ") + " KST";
+  }
+
+  /* 출처별 날짜·갱신 안내 (직접 검색·일괄 조회·상세가 공유). 시각을 만들어내지 않는다 */
+  function acquiredText(res) {
+    if (!res) return "—";
+    if (res.source === "mfds") return res.acquired_at ? formatKst(res.acquired_at) + " (수집 완료 시각, DB 기록)" : "수집 시각 미기록";
+    return res.acquired_at || res.queried_at ? formatKst(res.acquired_at || res.queried_at) + " (API 응답 확보 시각)" : "—";
+  }
+  function refreshText(res) {
+    if (!res) return "—";
+    if (res.source === "mfds") return res.refresh_policy || "수동 재수집 (자동 갱신 없음)";
+    return res.refresh_policy || "갱신 주기 확인 필요";
+  }
+
   /* 준비 중 안내 (파일 탭 등 미구현 기능) ----------------------------------- */
   var devNotice = $("regulatory-dev-notice");
 
@@ -637,7 +661,7 @@
   var DB_KINDS = { db_missing: "DB 미설치 (수집 DB 없음)", db_incomplete: "수집 미완료 (완료된 수집 없음)", db_error: "DB 읽기 오류" };
   function sourceText(res) {
     if (!res) return "—";
-    if (res.source === "mfds") return "식약처 수집 DB · 수집 시각(DB 기록) " + formatTime(res.collected_at) + " — 원천 갱신일·법령 개정일 아님";
+    if (res.source === "mfds") return "식약처 수집 DB";
     return "기존 API (RapidAPI)";
   }
 
@@ -740,10 +764,13 @@
     var sel = ctx.selected || {};
     set("match-name", ingredientFull(res, ctx) + " · code " + sel.code);
     set("match-method", ctx.matchMethod || "—");
-    set("match-updated", sel.record_updated_at ? sel.record_updated_at + " (API 레코드 updated_at)" : "미제공");
+    set("match-updated", sel.record_updated_at ? formatKst(sel.record_updated_at) + " (API 레코드 updated_at — 규제 자료 갱신일 아님)" : "미제공");
 
     set("lookup-source", sourceText(res) + (err && err.source === "mfds" ? "식약처 수집 DB" : ""));
-    set("collected-at", res && res.source === "mfds" ? formatTime(res.collected_at) + " (원천 갱신일 아님)" : "해당 없음");
+    set("collected-at", res && res.source === "mfds" ? (res.collected_at ? formatKst(res.collected_at) + " (원천 갱신일 아님)" : "수집 시각 미기록") : "해당 없음");
+    set("acquired-at", acquiredText(res));
+    set("refresh-policy", refreshText(res) + (res && res.refresh_basis ? " — " + res.refresh_basis : ""));
+    set("law-dates", res && res.law_dates ? res.law_dates : "미제공");
     set("link-basis", res && res.source === "mfds" ? ((res.link_basis && res.link_basis.length ? res.link_basis.join("·") : "—") + (res.matched_identity ? " → " + res.matched_identity.std_name + (res.matched_identity.eng_name ? " (" + res.matched_identity.eng_name + ")" : "") : "") + (res.link_conflict ? " · " + res.link_conflict : "")) : "해당 없음");
     var relNode = el("span");
     var relUl = el("ul", "regulatory-notes");
@@ -774,13 +801,13 @@
     set("source", srcNode);
     set("disclaimer", res && res.disclaimer ? res.disclaimer : "미제공");
     set("source-updated", res && res.source_updated_at ? res.source_updated_at : "미제공");
-    set("queried-at", formatTime(res && res.queried_at));
+    set("queried-at", (res && res.queried_at ? formatKst(res.queried_at) : "—") + (res && res.source === "mfds" ? " (DB 를 읽은 시각)" : ""));
     set("verified-at", "미실시");
   }
 
   function renderSingle(res, ctx) {
     state.resultKey = conditionKey(ctx);
-    setText($("regulatory-result-time"), formatTime(res.queried_at));
+    setText($("regulatory-result-time"), formatKst(res.acquired_at || res.queried_at));
     setText($("regulatory-single-name"), ingredientKr(res, ctx));
     setText($("regulatory-single-inci"), ingredientInci(res, ctx) || "영문명 미제공");
     setText($("regulatory-single-market"), ctx.marketLabel);
@@ -810,6 +837,10 @@
     show($("regulatory-single-related"), relN > 0);
     setText($("regulatory-single-related-note"), relN ? "이름을 포함하는 항목 " + relN + "건 (염류·유도체·성분군 등). 확정 규제가 아니며 적용 여부는 직접 확인해 주세요." : "");
     setText($("regulatory-single-source"), sourceText(res));
+    setText($("regulatory-single-acquired"), acquiredText(res));
+    setText($("regulatory-single-refresh"), refreshText(res));
+    setText($("regulatory-single-srcdate"), res.source_updated_at ? formatKst(res.source_updated_at) : "미제공");
+    setText($("regulatory-single-lawdate"), res.law_dates ? res.law_dates : "미제공");
     setText($("regulatory-single-nodata-body"), (noDataReason(res) || "허용되거나 안전하다는 뜻은 아니에요.") + " 다른 자료로 추가 확인이 필요해요.");
     var nodataNote = $("regulatory-single-nodata-note");
     if (nodataNote) { setText(nodataNote, res.result_note ? "API 안내(원문): " + res.result_note : ""); show(nodataNote, !!res.result_note); }
@@ -841,6 +872,7 @@
       : (errorCategory(err) === "source_unavailable" ? "출처 이용 불가 (" + DB_KINDS[err.kind] + ")"
       : (err && err.kind === "validation" ? "입력 확인" : (err && err.kind === "network" ? "연결 실패" : "API 오류")));
     setText($("regulatory-single-source"), "조회 출처: " + (SOURCE_LABEL[ctx.source] || ctx.source || "—"));
+    setText($("regulatory-single-acquired"), "—"); setText($("regulatory-single-refresh"), "—");
     setText($("regulatory-result-error-kind"),
       category + " · 오류 종류: " + ((err && err.kind) || "unknown") +
       (err && err.http_status ? " · 외부 API HTTP " + err.http_status : "") + " · 입력한 조건은 그대로 남아 있어요.");
@@ -1046,7 +1078,7 @@
     if (result.file && result.file.kind === "pdf") scopeText = "처리 범위: " + (sc.processed || (sc.pages + "쪽")) + (sc.ocr_pages && sc.ocr_pages.length ? " · OCR " + sc.ocr_pages.map(function (p) { return p + "쪽"; }).join(", ") : "");
     else if (result.file && result.file.kind === "image") scopeText = "처리 범위: " + (sc.processed || "이미지") + " · OCR";
     else if (result.file && result.file.kind === "xlsx") scopeText = "처리 범위: 시트 ‘" + (sc.selected_sheet || "") + "’ (" + (sc.scanned_rows || 0) + "행 확인" + (sc.sheets > 1 ? ", 전체 " + sc.sheets + "개 시트 중" : "") + ")";
-    setText($("regulatory-review-scope"), scopeText + (result.extracted_at ? " · 추출 시각 " + formatTime(result.extracted_at) : ""));
+    setText($("regulatory-review-scope"), scopeText + (result.extracted_at ? " · 추출 시각 " + formatKst(result.extracted_at) : ""));
 
     var docMarket = $("regulatory-file-doc-market");
     if (docMarket) docMarket.textContent = result.document_market && result.document_market.text ? result.document_market.text + " (" + result.document_market.location + ")" : "미확인";
@@ -1451,7 +1483,14 @@
       body.appendChild(tr);
     });
 
-    setText($("regulatory-result-time"), formatTime(new Date().toISOString().slice(0, 19)));
+    var stamps = rows.map(function (x) { return x.result && x.result.res ? (x.result.res.acquired_at || x.result.res.queried_at) : null; }).filter(Boolean).sort();
+    var anyRes = rows.map(function (x) { return x.result && x.result.res; }).filter(Boolean)[0] || null;
+    var stampText = !stamps.length ? "—" : (stamps[0] === stamps[stamps.length - 1] ? formatKst(stamps[0]) : formatKst(stamps[0]) + " ~ " + formatKst(stamps[stamps.length - 1]) + " (행마다 다름 — 개별 시각은 상세에서)");
+    setText($("regulatory-result-time"), stampText);
+    var srcLabel = SOURCE_LABEL[fileSource()] || fileSource();
+    var missing = fileSource() === "mfds" && anyRes && !anyRes.acquired_at;
+    setText($("regulatory-batch-freshness"), "출처: " + srcLabel + " · 데이터 확보 시각: " + (missing ? "수집 시각 미기록" : stampText) + (fileSource() === "mfds" ? " (수집 완료 시각, DB 기록)" : " (API 응답 확보 시각)") +
+      " · 갱신 안내: " + refreshText(anyRes || { source: fileSource() }) + " · 원천 자료 갱신일: 미제공 · 법령 개정·적용일: 미제공 · 데이터 확보·수집 시각은 법령 개정일이나 최신성 보장을 의미하지 않습니다. (KST)");
     setText($("regulatory-cond-market"), fileMarketLabel());
     setText($("regulatory-cond-doc-country"), fileState.doc && fileState.doc.market ? fileState.doc.market.text : "미확인");
     setText($("regulatory-cond-product"), fileState.doc && fileState.doc.use ? fileState.doc.use.text : "미입력");

@@ -89,7 +89,7 @@
 - `link_status`: `confirmed` / `ambiguous` / `none`. 확정 조건은 이름(표준명 또는 영문명) 정확 일치 식별자가 하나뿐이고 CAS 가 충돌하지 않을 때. CAS 만 일치하면 `ambiguous`.
 - `entries[].limit_missing`: ‘한도’인데 `LIMIT_COND` 가 비어 있음(화면 ‘상세 제한사항 미제공’). ‘금지’+null 은 `limit_missing=false` 이며 금지 항목으로 표시.
 - 시장 매핑: KR→한국, EU→EU(원본 ‘유럽’ 제외), US→미국, CN→중국, JP→일본, ASEAN→아세안.
-- `collected_at` 은 DB `runs.finished_at`(수집 완료 시각)이며 원천 갱신일이 아니다. `source_page` 는 공공데이터 안내 페이지(개별 법령 원문 링크 아님).
+- `collected_at` 과 `acquired_at` 은 DB `runs.finished_at`(수집 완료 시각)이며 원천 갱신일이 아니다(값이 없으면 `null` → 화면 ‘수집 시각 미기록’). `queried_at` 은 DB 를 읽은 시각. `refresh_policy` = "수동 재수집 (자동 갱신 없음)", `law_dates` = `null`. `source_page` 는 공공데이터 안내 페이지(개별 법령 원문 링크 아님)이며 그 페이지의 수정일을 갱신일로 쓰지 않는다.
 
 ```json
 {
@@ -172,7 +172,7 @@
 - `ingredient.regulation_status`(예: `Restricted`)는 성분 전체 속성이라 **선택 시장의 상태로 쓰지 않으며 응답에서 제외**한다.
 - `markets_outside_plan` 은 원문 값을 그대로 전달하지만 의미가 문서에 없어 화면에서 해석하지 않는다. `note_mentions_plan` 은 `result_note` 에 "outside your plan" 문구가 있는지 여부만 나타낸다(요금제 제한으로 단정하지 않음). 응답에 `note_mentions_plan`, `markets_outside_plan` 필드가 추가되었다.
 - `limit_condition`, `proviso`, `notice_ingr_name`은 가공 없이 원문 그대로 전달한다.
-- `source_updated_at`은 응답에 규제 자료 갱신일이 없어 항상 `null`(화면 '미제공'). `queried_at`은 서버가 호출한 시각.
+- `source_updated_at`은 응답에 규제 자료 갱신일이 없어 항상 `null`(화면 '미제공'). `queried_at`은 서버가 외부 API 응답을 받은 시각이며 `acquired_at`(데이터 확보 시각)과 같다. `law_dates` 는 항상 `null`(법령 개정·적용일 미제공). `refresh_policy` = "월 1회 (제공자 안내 기준)", `refresh_basis` = 제공자 공개 README “Update Frequency | Monthly”(2026-09-23 확인) — 마지막 갱신일은 제공되지 않으므로 화면은 역산하지 않는다.
 
 ## 2. 외부 API (K-Beauty Cosmetic Ingredients / RapidAPI)
 

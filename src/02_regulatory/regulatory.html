@@ -392,7 +392,12 @@
         <dl class="regulatory-meta mt-4">
           <dt>실제 조회 범위</dt><dd id="regulatory-single-scope">—</dd>
           <dt>조회 출처</dt><dd id="regulatory-single-source">—</dd>
+          <dt>데이터 확보 시각</dt><dd id="regulatory-single-acquired">—</dd>
+          <dt>갱신 안내</dt><dd id="regulatory-single-refresh">—</dd>
+          <dt>원천 자료 갱신일</dt><dd id="regulatory-single-srcdate">미제공</dd>
+          <dt>법령 개정·적용일</dt><dd id="regulatory-single-lawdate">미제공</dd>
         </dl>
+        <p class="text-caption text-secondary mt-2">데이터 확보·수집 시각은 법령 개정일이나 최신성 보장을 의미하지 않습니다. 시각만으로 출처 간 최신성·정확성을 비교하지 않습니다. 시간은 한국시간(KST)입니다.</p>
 
         <div class="regulatory-single__actions mt-4">
           <button type="button" class="btn btn-soft regulatory-single__detail-btn" data-modal-open="regulatory-detail-modal">규제 원문·출처 보기</button>
@@ -411,6 +416,8 @@
           </div>
         </div>
         <div class="card-body">
+          {# 출처·날짜 공통 정보 — 행마다 확보 시각이 다르면 범위로 표시하고 개별 시각은 상세에서 #}
+          <p class="text-caption text-secondary mb-4" id="regulatory-batch-freshness">—</p>
           <div class="grid grid-4">
             <div class="stat-tile"><p class="stat-tile__label">선택 국가/시장</p><p class="stat-tile__value" id="regulatory-cond-market">—</p></div>
             <div class="stat-tile"><p class="stat-tile__label">문서에 명시된 국가</p><p class="stat-tile__value" id="regulatory-cond-doc-country">—</p></div>
@@ -574,10 +581,14 @@
             <dt>수집 시각 (DB 기록)</dt><dd data-detail="collected-at">해당 없음</dd>
             <dt>출처</dt><dd class="regulatory-detail__raw" data-detail="source">미제공</dd>
             <dt>제공원 고지</dt><dd class="regulatory-detail__raw" data-detail="disclaimer">미제공</dd>
-            <dt>규제 자료 갱신일</dt><dd data-detail="source-updated">미제공</dd>
+            <dt>데이터 확보 시각</dt><dd data-detail="acquired-at">—</dd>
+            <dt>갱신 안내</dt><dd data-detail="refresh-policy">—</dd>
+            <dt>원천 자료 갱신일</dt><dd data-detail="source-updated">미제공</dd>
+            <dt>법령 개정·적용일</dt><dd data-detail="law-dates">미제공</dd>
             <dt>서비스 조회 시각</dt><dd data-detail="queried-at">—</dd>
             <dt>자체 검증일</dt><dd data-detail="verified-at">미실시</dd>
           </dl>
+          <p class="text-caption text-secondary mt-2">데이터 확보·수집 시각은 법령 개정일이나 최신성 보장을 의미하지 않습니다. 시간은 한국시간(KST)입니다.</p>
         </section>
       </div>
     </div>

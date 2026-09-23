@@ -39,6 +39,7 @@ MARKET_TO_COUNTRY = {
 COUNTRY_TO_MARKET = {c: m for m, cs in MARKET_TO_COUNTRY.items() for c in cs}
 MARKET_CODES = tuple(MARKET_TO_COUNTRY.keys())
 COMPLETED = ("completed", "completed_with_warnings")
+MFDS_REFRESH_POLICY = "수동 재수집 (자동 갱신 없음)"       # mfds_use_restriction.py collect 를 사람이 실행할 때만 갱신된다
 MAX_RELATED = 30
 CAS_RE = re.compile(r"\b\d{2,7}-\d{2}-\d\b")
 
@@ -285,7 +286,11 @@ def lookup(kr_name=None, inci_name=None, cas=None, market=None, api_code=None, p
         "source": "mfds",
         "source_label": SOURCE_LABEL,
         "source_page": SOURCE_PAGE,
-        "collected_at": run["finished_at"],               # DB 에 기록된 수집 완료 시각 (원천 갱신일 아님)
+        "collected_at": run["finished_at"],               # DB 에 기록된 수집 완료 시각 (원천 갱신일 아님). None 이면 화면 '수집 시각 미기록'
+        "acquired_at": run["finished_at"],                # 데이터 확보 시각 = 수집 완료 시각 (runs.finished_at). 파일 수정 시각·현재 시각을 쓰지 않는다
+        "refresh_policy": MFDS_REFRESH_POLICY,
+        "refresh_basis": "프로젝트에 자동 갱신 기능 없음. 재수집은 담당자가 스크립트로 실행",
+        "law_dates": None,                                 # 법령 개정·적용일: 응답에 없음 → 미제공
         "collection_run": {"run_id": rid, "status": run["status"], "records": run["records_saved"], "started_at": run["started_at"], "finished_at": run["finished_at"]},
         "ingredient": {"code": api_code, "kr_name": (kr_name or "").strip() or None, "inci_name": (inci_name or "").strip() or None, "cas_numbers": (cas or "").strip() or None},
         "country": {"requested": market, "resolved": " / ".join(countries), "code": market, "country_names": countries},
@@ -303,5 +308,5 @@ def lookup(kr_name=None, inci_name=None, cas=None, market=None, api_code=None, p
         "data_source": DATA_SOURCE_TEXT,
         "disclaimer": DISCLAIMER,
         "source_updated_at": None,                         # 원천 갱신일·법령 개정일은 응답에 없음 → 미제공
-        "queried_at": _now_iso(),
+        "queried_at": _now_iso(),                          # 서비스 조회 시각 = DB 를 읽은 시각 (확보 시각과 다름)
     }

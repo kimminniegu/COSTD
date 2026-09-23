@@ -948,3 +948,44 @@ class OcrGridImageRealTest(unittest.TestCase):
         self.assertEqual(len(merged), 1)                                        # 두 줄 셀이 중복 행이 되지 않음
         self.assertEqual(merged[0]["amount_raw"], "5.00")
         self.assertTrue(all(it["needs_review"] for it in r["items"]))
+
+
+# ---------------------------------------------------------------------------
+# 출처별 날짜·갱신 안내 (2026-09-23) — 저장 응답·픽스처 DB 로 검증
+# ---------------------------------------------------------------------------
+
+class FreshnessFieldsTest(unittest.TestCase):
+    def test_api_acquired_at_equals_queried_at_and_policy(self):
+        with mock.patch.object(svc, "_get", return_value=load_body("regulations_5489_EU.json")):
+            r = svc.get_regulations(5489, "EU")
+        self.assertEqual(r["acquired_at"], r["queried_at"])
+        self.assertRegex(r["queried_at"], r"[+-]\d\d:\d\d$")                  # 시간대 포함 → 화면에서 KST 변환 가능
+        self.assertEqual(r["refresh_policy"], "월 1회 (제공자 안내 기준)")
+        self.assertIn("Monthly", r["refresh_basis"])
+        self.assertIsNone(r["source_updated_at"]); self.assertIsNone(r["law_dates"])   # 미제공 — 만들어내지 않음
+
+    def test_mfds_acquired_at_from_run_metadata(self):
+        import tempfile, importlib.util
+        from pathlib import Path as _P
+        spec_m = importlib.util.spec_from_file_location("mfds_c", REG_DIR / "mfds_use_restriction.py"); mc = importlib.util.module_from_spec(spec_m); spec_m.loader.exec_module(mc)
+        spec_l = importlib.util.spec_from_file_location("mfds_l", REG_DIR / "regulatory_mfds_lookup.py"); lk = importlib.util.module_from_spec(spec_l); spec_l.loader.exec_module(lk)
+        tmp = _P(tempfile.mkdtemp()); db = tmp / "f.sqlite"
+        conn = mc.open_db(db)
+        with conn:
+            conn.execute("INSERT INTO runs (started_at, status, source_url, source_page, page_size, total_count_first, total_count_last, pages_done, records_saved, calls_made, finished_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                         ("2026-09-23T10:50:37+00:00", "completed", mc.public_url(), mc.SOURCE_PAGE, 100, 1, 1, 1, 1, 1, "2026-09-23T10:53:54+00:00"))
+            conn.execute("INSERT INTO records (run_id, page_no, row_index, fetched_at, REGULATE_TYPE, INGR_STD_NAME, INGR_ENG_NAME, CAS_NO, INGR_SYNONYM, COUNTRY_NAME, NOTICE_INGR_NAME, PROVIS_ATRCL, LIMIT_COND, raw_json) VALUES (1,1,0,'x','한도','레티놀','Retinol','68-26-8',NULL,'EU','Retinol',NULL,'* 【Restrictions】 x','{}')")
+        conn.close()
+        r = lk.lookup(kr_name="레티놀", inci_name="Retinol", market="EU", path=db)
+        self.assertEqual(r["acquired_at"], "2026-09-23T10:53:54+00:00")     # runs.finished_at 그대로 (파일 수정 시각·현재 시각 아님)
+        self.assertEqual(r["collected_at"], r["acquired_at"])
+        self.assertNotEqual(r["queried_at"], r["acquired_at"])
+        self.assertEqual(r["refresh_policy"], "수동 재수집 (자동 갱신 없음)")
+        self.assertIsNone(r["law_dates"]); self.assertIsNone(r["source_updated_at"])
+        # finished_at 이 없는 완료 실행 → 확보 시각 None (화면 '수집 시각 미기록')
+        conn = mc.open_db(db)
+        with conn:
+            conn.execute("UPDATE runs SET finished_at=NULL")
+        conn.close()
+        r2 = lk.lookup(kr_name="레티놀", inci_name="Retinol", market="EU", path=db)
+        self.assertIsNone(r2["acquired_at"])

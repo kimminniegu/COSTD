@@ -32,6 +32,10 @@ RESULT_STATUS_FOUND = ("listed",)
 RESULT_STATUS_NO_DATA = ("not_listed_in_country",)
 RESULT_STATUS_NOT_LISTED = ("not_listed",)
 
+# 갱신 주기 — 제공자 공개 저장소 README(github.com/han-tagg/Korean-cosmetic-ingredients-api) 의 "Update Frequency | Monthly" 만 근거로 한다.
+# 마지막 갱신일·데이터 스냅샷 날짜는 문서·응답 어디에도 없으므로 역산하거나 만들지 않는다 (source_updated_at 은 항상 None).
+API_REFRESH_POLICY = "월 1회 (제공자 안내 기준)"
+API_REFRESH_BASIS = "제공자 공개 README 'Update Frequency: Monthly' (2026-09-23 확인). 마지막 갱신일은 미제공"
 MAX_CANDIDATES = 10
 MIN_QUERY_LENGTH = 2   # API 문서 기준 검색어 최소 길이 (min 2 chars). 자동완성·직접 검색 공통
 CONNECT_TIMEOUT = 5
@@ -292,8 +296,17 @@ def normalize_regulation_response(body, code, country):
         "data_source": body.get("data_source"),          # 출처 (응답 단위 문자열)
         "disclaimer": body.get("disclaimer"),
         "source_updated_at": None,                       # 규제 자료 갱신일: 응답에 없음 → 미제공
-        "queried_at": _now_iso(),                        # 서비스 조회 시각 (실제 호출 시각)
+        "law_dates": None,                               # 법령 개정·적용일: 응답에 없음 → 미제공
+        "queried_at": _now_iso(),                        # 서비스 조회 시각 = 외부 API 응답을 실제로 받은 시각
+        "acquired_at": None,                             # 아래에서 queried_at 과 같은 값으로 채운다 (데이터 확보 시각)
+        "refresh_policy": API_REFRESH_POLICY,
+        "refresh_basis": API_REFRESH_BASIS,
     }
+
+
+def _stamp_acquired(result):
+    result["acquired_at"] = result["queried_at"]
+    return result
 
 
 def get_regulations(code, country):
@@ -304,4 +317,4 @@ def get_regulations(code, country):
     if not code_str.isdigit():
         raise ValueError("invalid ingredient code")
     body = _get("/v1/ingredient/%s/regulations" % code_str, {"country": country})
-    return normalize_regulation_response(body, int(code_str), country)
+    return _stamp_acquired(normalize_regulation_response(body, int(code_str), country))
