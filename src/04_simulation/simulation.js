@@ -286,9 +286,9 @@ $('copy-pitch-btn').addEventListener('click', () => {
   });
 });
 
-// Canvas: 사용자 제공 「시뮬레이션 아스트라 초안_20260922.html」의 원본 렌더링/시연 로직.
+// Canvas lighting layers retain the original viscosity-driven animation.
 const canvas=$('canvas'),ctx=canvas.getContext('2d');let width=0,height=0,phase=0,last=0,frame=0;
-// 원본의 560×420 기준 좌표를 균일 확대/축소합니다. drawScene/tick은 초안 그대로입니다.
+// Uniform logical coordinates preserve proportions on every viewport.
 function resize() {
   const bounds = canvas.getBoundingClientRect();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -302,26 +302,83 @@ function resize() {
     (bounds.height - height * scale) / 2 * dpr);
   drawScene();
 }
+// Layered transmission, edge depth and a soft key light for clear serum.
+function paintSerum(path, x, y, rx, ry) {
+ ctx.save();
+ ctx.shadowColor='rgba(30,90,130,.12)';ctx.shadowBlur=7;ctx.shadowOffsetY=3;
+ const body=ctx.createLinearGradient(x-rx,y-ry,x+rx,y+ry);
+ body.addColorStop(0,'rgba(56,149,209,.62)');
+ body.addColorStop(.22,'rgba(125,211,252,.48)');
+ body.addColorStop(.48,'rgba(224,247,255,.24)');
+ body.addColorStop(.75,'rgba(56,189,248,.53)');
+ body.addColorStop(1,'rgba(29,112,175,.72)');
+ ctx.fillStyle=body;ctx.fill(path);ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+ ctx.clip(path);
+ const light=ctx.createRadialGradient(x-rx*.32,y-ry*.4,0,x-rx*.32,y-ry*.4,rx*.9);
+ light.addColorStop(0,'rgba(255,255,255,.92)');light.addColorStop(.35,'rgba(255,255,255,.48)');light.addColorStop(1,'rgba(255,255,255,0)');
+ ctx.save();ctx.translate(x-rx*.32,y-ry*.4);ctx.scale(1,Math.max(.25,ry/rx*.5));
+ ctx.translate(-x+rx*.32,-y+ry*.4);ctx.fillStyle=light;ctx.fillRect(x-rx*3,y-rx*3,rx*6,rx*6);ctx.restore();
+ ctx.strokeStyle='rgba(239,251,255,.75)';ctx.lineWidth=1.2;ctx.stroke(path);
+ ctx.restore();
+}
 function drawScene(){
  if(!current||!width||!height)return;
- ctx.clearRect(0,0,width,height);const x=width/2,tip=height*.28,floor=height*.8;
- const thick=Math.min(1,current.v/50000),dropTime=.58+thick*.16,maxNeck=(floor-tip)*(.18+thick*.3);
- ctx.strokeStyle='rgba(62,100,136,.13)';ctx.lineWidth=1;
- for(let y=90;y<height-40;y+=32){ctx.beginPath();ctx.moveTo(20,y);ctx.lineTo(width-20,y);ctx.stroke();}
- for(let xx=32;xx<width;xx+=48){ctx.beginPath();ctx.moveTo(xx,75);ctx.lineTo(xx,height-40);ctx.stroke();}
- // 시료 노즐
- const nozzle=ctx.createLinearGradient(x-18,0,x+18,0);nozzle.addColorStop(0,'#27394e');nozzle.addColorStop(.5,'#96adc4');nozzle.addColorStop(1,'#283b50');ctx.fillStyle=nozzle;
- ctx.beginPath();ctx.moveTo(x-18,65);ctx.lineTo(x+18,65);ctx.lineTo(x+18,tip-20);ctx.lineTo(x+5,tip);ctx.lineTo(x-5,tip);ctx.lineTo(x-18,tip-20);ctx.closePath();ctx.fill();
- ctx.fillStyle='rgba(56,189,248,.6)';ctx.fillRect(x-7,75,14,Math.max(2,tip-95));
- // 같은 점도에서도 용기 선택으로 시료 색상이 바뀌지 않도록 시안 유지
- ctx.fillStyle='#38bdf8';ctx.shadowColor='#38bdf8';ctx.shadowBlur=12;ctx.beginPath();
- if(phase<dropTime){const t=phase/dropTime,neck=8+t*maxNeck,r=7+t*8;ctx.moveTo(x-4,tip);ctx.bezierCurveTo(x-2,tip+neck*.5,x-r,tip+neck-r,x-r,tip+neck);ctx.arc(x,tip+neck,r,Math.PI,0,true);ctx.bezierCurveTo(x+r,tip+neck-r,x+2,tip+neck*.5,x+4,tip);ctx.closePath();}
- else{const t=(phase-dropTime)/(1-dropTime),y=tip+maxNeck+(floor-tip-maxNeck-12)*t*t;ctx.ellipse(x,y,12-thick*3,12+thick*4,0,0,Math.PI*2);}ctx.fill();ctx.shadowBlur=0;
- // 시료 받침과 퍼짐: 고점도일수록 좁고 두껍게 표시
- ctx.strokeStyle='rgba(56,189,248,.3)';ctx.beginPath();ctx.ellipse(x,floor+8,width*.31,20,0,0,Math.PI*2);ctx.stroke();
- const spread=Math.min(width*.22,100)*(1-thick*.7);const liquid=ctx.createLinearGradient(0,floor-18,0,floor+15);liquid.addColorStop(0,'rgba(56,189,248,.65)');liquid.addColorStop(1,'rgba(56,189,248,.08)');ctx.fillStyle=liquid;ctx.beginPath();ctx.ellipse(x,floor,spread,5+thick*15,0,0,Math.PI*2);ctx.fill();
- if(phase>.86){const t=(phase-.86)/.14;ctx.strokeStyle=`rgba(56,189,248,${(1-t)*.6})`;ctx.beginPath();ctx.ellipse(x,floor+3,20+t*spread,4+t*8,0,0,Math.PI*2);ctx.stroke();}
- ctx.font='11px system-ui';ctx.textAlign='center';ctx.fillStyle='#8ba6bf';ctx.fillText('SAMPLE FLOW',x,floor+43);
+ ctx.clearRect(0,0,width,height);
+ const x=width/2,tip=130,floor=height*.8;
+ const thick=Math.min(1,current.v/50000),dropTime=.58+thick*.16;
+ const spread=100*(1-thick*.7),domeHeight=18+thick*30;
+ const maxNeck=(floor-tip-domeHeight)*(.18+thick*.3);
+ // Contact shadow has no guide outlines or opaque background.
+ ctx.save();ctx.translate(x,floor+8);ctx.scale(1,.18);
+ const shadow=ctx.createRadialGradient(0,0,spread*.12,0,0,spread*1.2);
+ shadow.addColorStop(0,'rgba(41,75,98,.19)');shadow.addColorStop(.65,'rgba(41,75,98,.06)');shadow.addColorStop(1,'rgba(41,75,98,0)');
+ ctx.fillStyle=shadow;ctx.fillRect(-spread*1.2,-spread*1.2,spread*2.4,spread*2.4);ctx.restore();
+ // A convex surface-tension profile, with a refracted lower meniscus.
+ const pool=new Path2D();
+ pool.moveTo(x-spread,floor);
+ pool.bezierCurveTo(x-spread*.9,floor-domeHeight*.7,x-spread*.45,floor-domeHeight,x,floor-domeHeight);
+ pool.bezierCurveTo(x+spread*.5,floor-domeHeight,x+spread*.92,floor-domeHeight*.64,x+spread,floor);
+ pool.bezierCurveTo(x+spread*.85,floor+14,x-spread*.82,floor+14,x-spread,floor);
+ pool.closePath();
+ paintSerum(pool,x,floor-domeHeight*.35,spread,domeHeight);
+ ctx.save();ctx.clip(pool);
+ const base=ctx.createLinearGradient(0,floor-3,0,floor+12);
+ base.addColorStop(0,'rgba(56,189,248,0)');base.addColorStop(.7,'rgba(30,117,174,.24)');base.addColorStop(1,'rgba(224,247,255,.8)');
+ ctx.fillStyle=base;ctx.fillRect(x-spread,floor-3,spread*2,16);
+ ctx.beginPath();ctx.ellipse(x-spread*.23,floor-domeHeight*.69,spread*.38,Math.max(2,domeHeight*.09),-.06,0,Math.PI*2);
+ ctx.fillStyle='rgba(255,255,255,.66)';ctx.fill();
+ ctx.beginPath();ctx.moveTo(x-spread*.8,floor+1);ctx.bezierCurveTo(x-spread*.35,floor+8,x+spread*.5,floor+8,x+spread*.86,floor-1);
+ ctx.strokeStyle='rgba(213,245,255,.88)';ctx.lineWidth=1.4;ctx.stroke();
+ if(phase>.9){
+ const t=(phase-.9)/.1;ctx.beginPath();ctx.ellipse(x,floor-domeHeight*.35,spread*(.15+t*.7),3+t*5,0,0,Math.PI*2);
+ ctx.strokeStyle=`rgba(255,255,255,${(1-t)*.5})`;ctx.lineWidth=1;ctx.stroke();
+ }
+ ctx.restore();
+ // The 98px nozzle is 1.86 times the reference length, with a smooth taper.
+ const nozzle=ctx.createLinearGradient(x-15,0,x+15,0);
+ nozzle.addColorStop(0,'#52677b');nozzle.addColorStop(.18,'#a5b7c6');nozzle.addColorStop(.38,'#edf4f8');nozzle.addColorStop(.54,'#b5c6d3');nozzle.addColorStop(.82,'#6d859b');nozzle.addColorStop(1,'#3e556c');
+ ctx.fillStyle=nozzle;ctx.beginPath();ctx.moveTo(x-15,32);ctx.lineTo(x+15,32);ctx.lineTo(x+15,76);
+ ctx.bezierCurveTo(x+15,96,x+5,108,x+4,tip);ctx.quadraticCurveTo(x,tip+2,x-4,tip);
+ ctx.bezierCurveTo(x-5,108,x-15,96,x-15,76);ctx.closePath();ctx.fill();
+ ctx.beginPath();ctx.moveTo(x-7,36);ctx.lineTo(x-7,76);ctx.bezierCurveTo(x-7,95,x-2,108,x-2,tip-5);
+ ctx.strokeStyle='rgba(255,255,255,.62)';ctx.lineWidth=1.2;ctx.stroke();
+ ctx.beginPath();ctx.ellipse(x,tip,3.7,1.5,0,0,Math.PI*2);ctx.fillStyle='rgba(47,117,153,.55)';ctx.fill();
+ // Preserve necking and gravity-driven motion; the landing follows the dome.
+ const drop=new Path2D();let cy,rx,ry;
+ if(phase<dropTime){
+ const t=phase/dropTime,neck=8+t*maxNeck,r=7+t*8;
+ cy=tip+neck;rx=r;ry=r;
+ drop.moveTo(x-3,tip);drop.bezierCurveTo(x-2,tip+neck*.5,x-r,cy-r,x-r,cy);
+ drop.arc(x,cy,r,Math.PI,0,true);drop.bezierCurveTo(x+r,cy-r,x+2,tip+neck*.5,x+3,tip);drop.closePath();
+ }else{
+ const t=(phase-dropTime)/(1-dropTime);
+ rx=12-thick*3;ry=12+thick*4;
+ cy=tip+maxNeck+(floor-domeHeight-tip-maxNeck)*t*t;
+ drop.ellipse(x,cy,rx,ry,0,0,Math.PI*2);
+ }
+ paintSerum(drop,x,cy,rx,ry);
+ ctx.save();ctx.clip(drop);ctx.beginPath();ctx.ellipse(x-rx*.32,cy-ry*.3,Math.max(1,rx*.17),ry*.38,.25,0,Math.PI*2);
+ ctx.fillStyle='rgba(255,255,255,.82)';ctx.fill();ctx.restore();
 }
 function tick(time){frame=0;if(paused||document.hidden){last=0;return;}const dt=last?Math.min((time-last)/1000,.05):0;last=time;phase=(phase+dt*(.9/(1+current.v/9000)+.08))%1;drawScene();frame=requestAnimationFrame(tick);}
 function start(){if(!paused&&!document.hidden&&!frame)frame=requestAnimationFrame(tick);}

@@ -4,7 +4,7 @@
 {% block page_css %}<link rel="stylesheet" href="{{ url_for('asset', filename='04_simulation/simulation.css') }}">{% endblock %}
 {% macro help(id, label, text, ingredient=false) %}
 <span class="simulation-help">
-  <button type="button" class="simulation-help-button" data-simulation-help="simulation-help-{{ id }}" aria-label="{{ label }} 설명" aria-expanded="false" aria-describedby="simulation-help-{{ id }}">!</button>
+  <button type="button" class="simulation-help-button" data-simulation-help="simulation-help-{{ id }}" aria-label="{{ label }} 설명" aria-expanded="false" aria-describedby="simulation-help-{{ id }}"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 9v5" stroke-linecap="round"/><circle cx="10" cy="6" r=".8" fill="currentColor" stroke="none"/></svg></button>
   <span class="simulation-tooltip" id="simulation-help-{{ id }}" role="tooltip" hidden><strong>{{ label }}</strong>{{ text }}{% if ingredient %}<small>분류 이해를 위한 예시이며, 현재 배합의 확정 전성분 목록은 아닙니다.</small>{% endif %}</span>
 </span>
 {% endmacro %}
