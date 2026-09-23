@@ -1,0 +1,4 @@
+/* 개발요청서 전용 CSS (담당자 E)
+   이 페이지에서만 필요한 스타일만 작성합니다.
+   Button / Card / Form 등 공통 요소는 src/common/style.css 를 사용하고 다시 정의하지 않습니다.
+   충돌 방지를 위해 class 이름은 "requisition-" 접두사를 사용합니다. */

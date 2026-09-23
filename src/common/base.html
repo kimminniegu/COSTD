@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<!--
+  COSMOA 공통 Layout (PM 관리) — Sidebar Navigation / Content / Footer
+  모든 페이지는 이 파일을 extends 합니다. 담당자는 이 파일을 수정하지 않습니다.
+  Desktop에는 상단 Header가 없고, Tablet/Mobile에서만 상단 Bar(.app-header)가 표시됩니다.
+  Desktop Sidebar는 접기/펼치기(264px ↔ 80px)가 가능하며, 상태는 localStorage에 저장됩니다.
+
+  페이지에서 사용할 수 있는 block
+    title      : 브라우저 탭 제목
+    page_css   : 페이지 전용 CSS <link>
+    content    : 페이지 본문
+    page_js    : 페이지 전용 JS <script>
+-->
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}{% endblock %} | COSMOA</title>
+  {# 저장된 Sidebar 접힘 상태를 CSS 로드 전에 적용해 화면 깜빡임을 막습니다 #}
+  <script>try{if(localStorage.getItem("cosmoa.sidebar")==="collapsed")document.documentElement.classList.add("is-sidebar-collapsed")}catch(e){}</script>
+  <link rel="preload" as="font" type="font/otf" crossorigin href="{{ url_for('asset', filename='common/fonts/nanum_square_neo_rg.otf') }}">
+  <link rel="preload" as="font" type="font/otf" crossorigin href="{{ url_for('asset', filename='common/fonts/nanum_square_neo_bd.otf') }}">
+  <link rel="stylesheet" href="{{ url_for('asset', filename='common/style.css') }}">
+  {% block page_css %}{% endblock %}
+</head>
+<body>
+  {% set ep = request.endpoint %}
+
+  {% macro brand() %}
+  <a class="app-brand" href="{{ url_for('home') }}" title="COSMOA 홈">
+    <span class="app-brand__logo">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12l5 5L20 6"></path></svg>
+    </span>
+    <span class="app-brand__text">
+      <span class="app-brand__name">COSMOA</span>
+      <span class="app-brand__sub">by COSTD</span>
+    </span>
+  </a>
+  {% endmacro %}
+
+  {# 메뉴 항목 — 접힘 상태에서는 아이콘만 보이고 data-label이 Tooltip으로 표시됩니다 #}
+  {% macro nav_link(endpoint, label) %}
+  <a class="app-nav__link{% if ep == endpoint %} is-active{% endif %}" href="{{ url_for(endpoint) }}" data-label="{{ label }}"{% if ep == endpoint %} aria-current="page"{% endif %}>
+    {{ caller() }}
+    <span class="app-nav__text">{{ label }}</span>
+  </a>
+  {% endmacro %}
+
+  <!-- Tablet / Mobile 전용 상단 Bar -->
+  <header class="app-header">
+    <button class="app-header__toggle" type="button" data-sidebar-toggle aria-label="메뉴 열기/닫기" aria-expanded="false" aria-controls="app-sidebar">
+      <span></span><span></span><span></span>
+    </button>
+    {{ brand() }}
+  </header>
+
+  <aside class="app-sidebar" id="app-sidebar">
+    <div class="app-sidebar__head">
+      {{ brand() }}
+      {# Desktop 전용 접기/펼치기 버튼 #}
+      <button class="app-sidebar__collapse" type="button" data-sidebar-collapse aria-label="메뉴 접기" aria-expanded="true" aria-controls="app-sidebar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>
+      </button>
+    </div>
+
+    {# Navigation — 메뉴 추가/변경은 PM만 수행 #}
+    <nav class="app-nav" aria-label="주요 메뉴">
+      <span class="app-nav__label">메뉴</span>
+
+      {% call nav_link('home', '홈') %}
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"></path></svg>
+      {% endcall %}
+      {% call nav_link('regulatory', '국가별 인허가 규제') %}
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"></path></svg>
+      {% endcall %}
+      {% call nav_link('margin', '원가·마진 시뮬레이션') %}
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"></rect><path d="M9 7h6M9 11h.01M12 11h.01M15 11h.01M9 15h.01M12 15h.01M15 15h.01"></path></svg>
+      {% endcall %}
+      {% call nav_link('simulation', 'AI 제형/샘플 시뮬레이션') %}
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path></svg>
+      {% endcall %}
+      {% call nav_link('dev_request', '개발요청서') %}
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6M8 13h8M8 17h5"></path></svg>
+      {% endcall %}
+    </nav>
+
+    {# 사용자 영역 — 로그인 기능 구현 후 실제 사용자 정보 / 로그아웃 연결 (PM) #}
+    <div class="app-user" title="[사용자명] · [소속]">
+      <span class="app-user__avatar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>
+      </span>
+      <span class="app-user__text">
+        <span class="app-user__name">[사용자명]</span>
+        <span class="app-user__team">[소속]</span>
+      </span>
+    </div>
+  </aside>
+  <div class="app-sidebar-backdrop" data-sidebar-close></div>
+
+  <div class="app-main">
+    <main class="container">
+      {% block content %}{% endblock %}
+    </main>
+    <footer class="app-footer">© COSTD · COSMOA</footer>
+  </div>
+
+  <script src="{{ url_for('asset', filename='common/common.js') }}"></script>
+  {% block page_js %}{% endblock %}
+</body>
+</html>

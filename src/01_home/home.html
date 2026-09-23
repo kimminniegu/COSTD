@@ -1,0 +1,93 @@
+{% extends "common/base.html" %}
+{# 담당자 A — Home / 기능 명세: src/01_home/home.md
+   "바로가기" Section의 페이지 연결(Navigation)은 PM 관리 영역입니다.
+   디자인 원본: docs/reference/main.dc.html #}
+
+{% block title %}홈{% endblock %}
+
+{% block page_css %}
+<link rel="stylesheet" href="{{ url_for('asset', filename='01_home/home.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <p class="page-eyebrow" id="home-today"></p>
+    <h1 class="page-title">[사용자명]님, 오늘의 수출 환경이에요</h1>
+  </div>
+</div>
+
+<!-- 환율 -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title">환율</h2>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      <div class="placeholder">
+        <p class="placeholder-title">환율</p>
+        <p>이 영역은 home.md를 기준으로 담당자가 구현합니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 트렌드 -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title">화장품 수출 트렌드</h2>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      <div class="placeholder">
+        <p class="placeholder-title">트렌드</p>
+        <p>이 영역은 home.md를 기준으로 담당자가 구현합니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- AI 챗봇 -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title">AI 챗봇</h2>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      <div class="placeholder">
+        <p class="placeholder-title">AI 챗봇</p>
+        <p>이 영역은 home.md를 기준으로 담당자가 구현합니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 바로가기 Hub (PM 관리: 링크 구조 변경 금지) -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title">바로가기</h2>
+  </div>
+  <div class="grid grid-4">
+    <a class="card home-shortcut" href="{{ url_for('regulatory') }}">
+      <span class="icon-tile"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"></path></svg></span>
+      <span class="home-shortcut__title">국가별 인허가 규제</span>
+    </a>
+    <a class="card home-shortcut" href="{{ url_for('margin') }}">
+      <span class="icon-tile"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"></rect><path d="M9 7h6M9 11h.01M12 11h.01M15 11h.01M9 15h.01M12 15h.01M15 15h.01"></path></svg></span>
+      <span class="home-shortcut__title">원가 경쟁력 및 마진 시뮬레이션</span>
+    </a>
+    <a class="card home-shortcut" href="{{ url_for('simulation') }}">
+      <span class="icon-tile"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"></path></svg></span>
+      <span class="home-shortcut__title">AI 제형/샘플 시뮬레이션</span>
+    </a>
+    <a class="card home-shortcut" href="{{ url_for('dev_request') }}">
+      <span class="icon-tile"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6M8 13h8M8 17h5"></path></svg></span>
+      <span class="home-shortcut__title">개발요청서</span>
+    </a>
+  </div>
+</section>
+{% endblock %}
+
+{% block page_js %}
+<script src="{{ url_for('asset', filename='01_home/home.js') }}"></script>
+{% endblock %}

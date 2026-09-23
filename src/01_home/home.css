@@ -1,0 +1,33 @@
+/* Home 전용 CSS (담당자 A)
+   이 페이지에서만 필요한 스타일만 작성합니다.
+   Button / Card / Form 등 공통 요소는 src/common/style.css 를 사용하고 다시 정의하지 않습니다.
+   충돌 방지를 위해 class 이름은 "home-" 접두사를 사용합니다. */
+
+/* 바로가기 Card (PM 관리 영역) */
+.home-shortcut { position: relative; gap: var(--space-5); min-height: 168px; padding: 28px; }
+.home-shortcut .icon-tile { transition: background var(--transition-base), color var(--transition-base), transform var(--transition-base); }
+.home-shortcut:hover .icon-tile { background: var(--color-primary-bright); color: var(--color-text-inverse); transform: scale(1.04); }
+.home-shortcut__title { margin-top: auto; padding-right: var(--space-6); font-size: 1.125rem; font-weight: var(--font-weight-bold); line-height: 1.4; letter-spacing: -0.4px; }
+
+/* 우측 상단 이동 화살표 — Hover 시 나타남 */
+.home-shortcut::after {
+  content: "";
+  position: absolute;
+  top: 28px;
+  right: 28px;
+  width: 20px;
+  height: 20px;
+  background: var(--color-text-placeholder);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 17L17 7M8 7h9v9'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 17L17 7M8 7h9v9'/%3E%3C/svg%3E") center / contain no-repeat;
+  opacity: 0.5;
+  transition: opacity var(--transition-base), transform var(--transition-base), background var(--transition-base);
+}
+.home-shortcut:hover::after { opacity: 1; background: var(--color-primary-bright); transform: translate(2px, -2px); }
+
+/* 본문 폭이 좁을 때(1열) 가로형으로 전환 — 공통 Grid와 같은 기준(@container page) */
+@container page (max-width: 560px) {
+  .home-shortcut { flex-direction: row; align-items: center; min-height: 0; padding: var(--space-5); }
+  .home-shortcut__title { margin-top: 0; }
+  .home-shortcut::after { top: 50%; right: var(--space-5); margin-top: -10px; }
+}
