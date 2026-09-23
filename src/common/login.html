@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+{# 로그인 화면 (PM 관리) — 디자인 원본: docs/reference/login.dc.html. 공통 Layout(base.html)을 쓰지 않는 독립 화면입니다. #}
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>로그인 | COSMOA</title>
+  <link rel="preload" as="font" type="font/otf" crossorigin href="{{ url_for('asset', filename='common/fonts/nanum_square_neo_rg.otf') }}">
+  <link rel="preload" as="font" type="font/otf" crossorigin href="{{ url_for('asset', filename='common/fonts/nanum_square_neo_eb.otf') }}">
+  <link rel="stylesheet" href="{{ url_for('asset', filename='common/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('asset', filename='common/login.css') }}">
+</head>
+<body class="login-body">
+  <div class="login">
+    <!-- 왼쪽: 소개 -->
+    <aside class="login-intro">
+      <a class="app-brand" href="{{ url_for('login') }}">
+        <span class="app-brand__logo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12l5 5L20 6"></path></svg>
+        </span>
+        <span class="app-brand__text">
+          <span class="app-brand__name">COSMOA</span>
+          <span class="app-brand__sub">by COSTD</span>
+        </span>
+      </a>
+
+      <div class="login-intro__body">
+        <h1 class="login-intro__title">해외영업에 필요한 모든 것,<br>한 화면에서.</h1>
+        <p class="login-intro__desc">환율과 수출 트렌드부터 국가별 규제, 원가 계산까지. 화장품 수출 실무를 돕는 업무 지원 플랫폼이에요.</p>
+        <ul class="login-features">
+          <li class="login-feature">
+            <span class="login-feature__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"></path></svg></span>
+            국가별 인허가 규제 확인
+          </li>
+          <li class="login-feature">
+            <span class="login-feature__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6M8 13h8M8 17h5"></path></svg></span>
+            개발요청서 생성 · 변환 · 번역
+          </li>
+          <li class="login-feature">
+            <span class="login-feature__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"></rect><path d="M9 7h6M9 11h.01M12 11h.01M15 11h.01M9 15h.01M12 15h.01M15 15h.01"></path></svg></span>
+            원가 경쟁력 · 마진 시뮬레이션
+          </li>
+          <li class="login-feature">
+            <span class="login-feature__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"></path></svg></span>
+            AI 제형 · 샘플 시뮬레이션
+          </li>
+        </ul>
+      </div>
+
+      <p class="login-intro__copy">© COSTD</p>
+    </aside>
+
+    <!-- 오른쪽: 로그인 폼 -->
+    <main class="login-panel">
+      <form class="login-form" method="post" action="{{ url_for('login') }}" novalidate>
+        <input type="hidden" name="next" value="{{ next or '' }}">
+        <div class="login-form__head">
+          <h2 class="login-form__title">로그인</h2>
+          <p class="login-form__desc">COSMOA 계정으로 로그인해 주세요</p>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-danger" role="alert">
+          <span class="alert-title">로그인할 수 없어요</span>
+          <span>{{ error }}</span>
+        </div>
+        {% endif %}
+
+        <div class="stack" style="gap: var(--space-5);">
+          <div class="form-group">
+            <label class="form-label" for="email">이메일</label>
+            <input class="form-control{% if error %} is-error{% endif %}" id="email" name="email" type="email" inputmode="email" autocomplete="username" placeholder="name@company.com" value="{{ email or '' }}" required autofocus>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="password">비밀번호</label>
+            <input class="form-control{% if error %} is-error{% endif %}" id="password" name="password" type="password" autocomplete="current-password" placeholder="비밀번호 입력" required>
+          </div>
+          <div class="login-form__row">
+            <label class="form-check"><input type="checkbox" name="remember" value="1"> 로그인 상태 유지</label>
+            <span class="text-caption" title="준비 중인 기능이에요">비밀번호 찾기</span>
+          </div>
+        </div>
+
+        <div class="stack" style="gap: var(--space-4);">
+          <button class="btn btn-primary btn-lg btn-block" type="submit">로그인</button>
+          <p class="login-form__foot">아직 계정이 없나요? <strong>PM에게 계정을 요청해 주세요</strong></p>
+          {% if demo_hint %}
+          <p class="login-form__hint">개발용 계정 · {{ demo_hint }}</p>
+          {% endif %}
+        </div>
+      </form>
+    </main>
+  </div>
+</body>
+</html>
