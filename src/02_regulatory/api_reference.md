@@ -55,15 +55,41 @@
 - `search_field`는 실제 호출한 엔드포인트(`kr` | `inci`), `match_mode`는 API 일치 방식(`starts_with`). 두 엔드포인트 모두 **시작 일치**라 중간 포함 입력(예: `티놀`)은 후보가 없다.
 - 한글 엔드포인트에 영문을 넣으면 0건(`test_data/search_kr_english_retinol.json`)이므로 언어별로 엔드포인트를 고른다. 혼합 입력(한글+영문)은 한글 엔드포인트로 보낸다.
 
-### GET `/api/regulatory/regulations?code=<성분코드>&country=<시장코드>`
+### GET `/api/regulatory/regulations?code=<성분코드>&country=<시장코드>&source=mfds|api`
 
-성분 코드 + 시장 코드로 규제 조회. 후보 선택만으로는 호출하지 않으며, 화면에서 성분이 확정된 뒤 검색 버튼을 눌렀을 때 호출한다.
+규제 조회. 화면에서 성분이 확정된 뒤 검색 버튼(직접 검색) 또는 ‘확정 성분 규제 조회’(일괄)에서 호출한다. **`source` 기본값 `mfds`.** 선택한 출처만 조회하며 실패해도 다른 출처로 바꾸지 않는다.
 
 | 항목 | 내용 |
 |---|---|
-| 파라미터 | `code` 숫자 필수, `country` ∈ `KR, EU, CN, US, JP, ASEAN` (대소문자 무시) |
-| 외부 호출 | `GET /v1/ingredient/{code}/regulations?country=<country>` 1회 |
-| 오류 | ingredients 와 동일 (400 / 502 / 503) |
+| 공통 | `country` ∈ `KR, EU, CN, US, JP, ASEAN`, `source` ∈ `mfds`(기본) / `api` |
+| `source=api` | `code` 숫자 필수. 외부 호출 `GET /v1/ingredient/{code}/regulations?country=` 1회. 응답에 `source: "api"` 추가. 오류 400/502/503 기존과 동일 |
+| `source=mfds` | `kr_name` / `inci_name` 중 하나 필수, `cas` 선택(쉼표·줄바꿈 구분 여러 개 가능), `code` 는 표시용. 외부 호출 없음 — `instance/regulatory/mfds_use_restriction.sqlite` 를 읽기 전용으로 조회 |
+| mfds 오류 | 400 `validation`(이름 없음·미연결 시장) / 503 `db_missing`(DB 파일 없음) / 503 `db_incomplete`(완료된 수집 실행 없음) / 503 `db_error`(열기·스키마 오류). `error.source = "mfds"` |
+
+`source=mfds` 응답 (기존 응답 형태 + 추가 필드):
+
+```json
+{
+  "ok": true, "source": "mfds", "source_label": "식약처 화장품 사용제한 원료정보 (공공데이터포털) 수집 DB",
+  "source_page": "https://www.data.go.kr/data/15111772/openapi.do", "collected_at": "2026-09-23T10:53:54+00:00",
+  "collection_run": {"run_id": 1, "status": "completed", "records": 31191},
+  "ingredient": {"code": 5489, "kr_name": "레티놀", "inci_name": "Retinol", "cas_numbers": "11103-57-4, 68-26-8"},
+  "country": {"requested": "EU", "resolved": "EU", "code": "EU", "country_names": ["EU"]},
+  "link_status": "confirmed", "link_basis": ["CAS", "영문명", "표준명"], "link_conflict": null, "link_candidates": [...],
+  "matched_identity": {"std_name": "레티놀", "eng_name": "Retinol"},
+  "lookup_status": "found", "result_status": "mfds_found", "result_note": null,
+  "entries": [{"country": "EU", "country_code": "EU", "regulate_type": "한도", "notice_ingr_name": "...", "proviso": null,
+               "limit_condition": "* 【Restrictions】...", "limit_missing": false, "source_type": "mfds", "std_name": "레티놀", "eng_name": "Retinol", "cas": "..."}],
+  "related": [{"std_name": "레티닐아세테이트", "eng_name": "Retinyl Acetate", "country": "EU", "regulate_type": "한도", "matched_in": "이명"}],
+  "markets_listed": ["EU", "캐나다"], "data_source": "...", "disclaimer": "...", "source_updated_at": null, "queried_at": "..."
+}
+```
+
+- `lookup_status`: `found`(조건별 레코드 모두 `entries`) / `not_listed`(이 출처에서 이름·CAS 정확 일치 없음 — 화면 ‘출처에서 일치 항목 없음’) / `link_required`(식별 불가 — `link_candidates` 표시, 자동 확정 없음).
+- `link_status`: `confirmed` / `ambiguous` / `none`. 확정 조건은 이름(표준명 또는 영문명) 정확 일치 식별자가 하나뿐이고 CAS 가 충돌하지 않을 때. CAS 만 일치하면 `ambiguous`.
+- `entries[].limit_missing`: ‘한도’인데 `LIMIT_COND` 가 비어 있음(화면 ‘상세 제한사항 미제공’). ‘금지’+null 은 `limit_missing=false` 이며 금지 항목으로 표시.
+- 시장 매핑: KR→한국, EU→EU(원본 ‘유럽’ 제외), US→미국, CN→중국, JP→일본, ASEAN→아세안.
+- `collected_at` 은 DB `runs.finished_at`(수집 완료 시각)이며 원천 갱신일이 아니다. `source_page` 는 공공데이터 안내 페이지(개별 법령 원문 링크 아님).
 
 ```json
 {

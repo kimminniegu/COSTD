@@ -96,6 +96,18 @@
             </div>
           </div>
 
+          {# 규제 정보 출처 — 선택한 출처만 조회하고 두 출처를 섞지 않는다 #}
+          <div class="grid grid-2-1 mt-4">
+            <div class="form-group">
+              <label class="form-label" for="regulatory-search-source">규제 정보 출처</label>
+              <select class="form-control" id="regulatory-search-source" name="source">
+                <option value="mfds" selected>식약처 수집 DB (기본)</option>
+                <option value="api">기존 API (RapidAPI)</option>
+              </select>
+              <p class="form-help">식약처 수집 DB 는 서버에 수집해 둔 자료를 읽고, 기존 API 는 외부 API 를 호출해요. 출처를 바꾸면 다시 조회해야 해요.</p>
+            </div>
+          </div>
+
           {# 직접 검색은 성분명 + 시장만 입력. 함량·제품 조건 입력은 파일 일괄 조회에서만 사용 (regulatory.md 5·6항) #}
           <div class="row mt-2">
             <button type="submit" class="btn btn-primary" id="regulatory-search-submit">규제 정보 검색</button>
@@ -140,6 +152,16 @@
               </select>
               <p class="form-help" id="regulatory-file-market-help">문서에 명시된 국가: <strong id="regulatory-file-doc-market">미확인</strong> <span class="text-caption">(문서 원문 그대로 표시해요. 시장은 직접 선택해 주세요)</span></p>
               <p class="form-error" id="regulatory-file-market-error" hidden>국가/시장을 선택해 주세요.</p>
+            </div>
+          </div>
+          <div class="grid grid-2-1 mt-4">
+            <div class="form-group">
+              <label class="form-label" for="regulatory-file-source">규제 정보 출처</label>
+              <select class="form-control" id="regulatory-file-source" name="source">
+                <option value="mfds" selected>식약처 수집 DB (기본)</option>
+                <option value="api">기존 API (RapidAPI)</option>
+              </select>
+              <p class="form-help">확정 성분의 규제를 조회할 때 쓰는 출처예요. 바꾸면 이전 결과는 ‘이전 조건’이 돼요.</p>
             </div>
           </div>
 
@@ -324,6 +346,15 @@
           </div>
         </div>
 
+        {# 성분 연결 확인 필요 (식약처 DB) — 이름·CAS 로 하나로 확정할 수 없을 때 후보만 보여주고 자동 확정하지 않는다 #}
+        <div class="alert alert-warning mt-4" id="regulatory-single-link" hidden>
+          <div>
+            <p class="alert-title">성분 연결 확인 필요</p>
+            <p id="regulatory-single-link-note">—</p>
+            <ul class="regulatory-notes" id="regulatory-single-link-candidates"></ul>
+          </div>
+        </div>
+
         {# 확인하지 않은 응답 상태값 — 임의 해석 없이 보류 #}
         <div class="alert alert-warning mt-4" id="regulatory-single-hold" hidden>
           <div>
@@ -349,8 +380,18 @@
           <div id="regulatory-single-conditions-body"></div>
         </div>
 
+        {# 관련 항목 (염류·유도체·성분군·이명 포함 일치) — 확정 규제와 분리, 적용 여부는 확인 필요 #}
+        <div class="regulatory-conditions mt-4" id="regulatory-single-related" hidden>
+          <div class="regulatory-conditions__header">
+            <p class="form-label">관련 항목 · 적용 여부 확인 필요</p>
+            <p class="text-caption text-secondary" id="regulatory-single-related-note"></p>
+          </div>
+          <ul class="regulatory-notes" id="regulatory-single-related-list"></ul>
+        </div>
+
         <dl class="regulatory-meta mt-4">
           <dt>실제 조회 범위</dt><dd id="regulatory-single-scope">—</dd>
+          <dt>조회 출처</dt><dd id="regulatory-single-source">—</dd>
         </dl>
 
         <div class="regulatory-single__actions mt-4">
@@ -522,11 +563,15 @@
             <dt>단서 조항</dt><dd class="regulatory-detail__raw" data-detail="lookup-proviso">—</dd>
             <dt>실제 조회 범위</dt><dd data-detail="lookup-scope">—</dd>
             <dt>API 안내 문구</dt><dd data-detail="lookup-note">—</dd>
+            <dt>성분 연결 근거</dt><dd data-detail="link-basis">해당 없음</dd>
+            <dt>관련 항목 (확인 필요)</dt><dd class="regulatory-detail__raw" data-detail="related">없음</dd>
           </dl>
         </section>
         <section>
           <p class="form-label">출처 · 날짜</p>
           <dl class="regulatory-detail">
+            <dt>조회 출처</dt><dd data-detail="lookup-source">—</dd>
+            <dt>수집 시각 (DB 기록)</dt><dd data-detail="collected-at">해당 없음</dd>
             <dt>출처</dt><dd class="regulatory-detail__raw" data-detail="source">미제공</dd>
             <dt>제공원 고지</dt><dd class="regulatory-detail__raw" data-detail="disclaimer">미제공</dd>
             <dt>규제 자료 갱신일</dt><dd data-detail="source-updated">미제공</dd>

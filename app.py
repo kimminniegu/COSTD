@@ -231,6 +231,13 @@ _regulatory_extract_spec = _regulatory_importlib.spec_from_file_location(
 regulatory_extract = _regulatory_importlib.module_from_spec(_regulatory_extract_spec)
 _regulatory_extract_spec.loader.exec_module(regulatory_extract)
 
+# 식약처 수집 DB 읽기 전용 조회 모듈 (수집은 별도 스크립트. 서버 시작·조회 때 수집하지 않는다)
+_regulatory_mfds_spec = _regulatory_importlib.spec_from_file_location(
+    "regulatory_mfds_lookup", SRC_DIR / "02_regulatory" / "regulatory_mfds_lookup.py"
+)
+regulatory_mfds = _regulatory_importlib.module_from_spec(_regulatory_mfds_spec)
+_regulatory_mfds_spec.loader.exec_module(regulatory_mfds)
+
 
 def _regulatory_error(exc):
     """RegulatoryApiError → JSON 오류 응답. 설정 오류 503, 그 외 외부 API 오류 502."""
@@ -258,18 +265,36 @@ def regulatory_ingredients():
 @app.route("/api/regulatory/regulations")
 @login_required
 def regulatory_regulations():
-    """성분 코드 + 시장 코드로 규제 조회. ?code=5489&country=EU"""
-    code = (_regulatory_request.args.get("code") or "").strip()
-    country = (_regulatory_request.args.get("country") or "").strip().upper()
-    if not code.isdigit():
-        return _regulatory_jsonify({"ok": False, "error": {"kind": "validation", "message": "성분을 먼저 선택해 주세요."}}), 400
+    """규제 조회. ?code=5489&country=EU&source=mfds|api (기본 mfds)
+    - source=mfds : 식약처 수집 DB (읽기 전용). 성분 식별은 kr_name / inci_name / cas 로 하며 code 는 표시용으로만 전달한다.
+    - source=api  : 기존 RapidAPI. 선택한 출처만 조회하고 실패해도 다른 출처로 바꾸지 않는다."""
+    args = _regulatory_request.args
+    code = (args.get("code") or "").strip()
+    country = (args.get("country") or "").strip().upper()
+    source = (args.get("source") or "mfds").strip().lower()
+    if source not in ("mfds", "api"):
+        return _regulatory_jsonify({"ok": False, "error": {"kind": "validation", "message": "규제 정보 출처는 mfds 또는 api 여야 해요."}}), 400
     if country not in regulatory_service.MARKET_CODES:
         return _regulatory_jsonify({"ok": False, "error": {"kind": "validation", "message": "국가/시장을 선택해 주세요."}}), 400
+    if source == "mfds":
+        kr_name = (args.get("kr_name") or "").strip()
+        inci_name = (args.get("inci_name") or "").strip()
+        cas = (args.get("cas") or "").strip()
+        try:
+            result = regulatory_mfds.lookup(kr_name=kr_name, inci_name=inci_name, cas=cas, market=country, api_code=code or None)
+        except regulatory_mfds.MfdsLookupError as exc:
+            return _regulatory_jsonify({"ok": False, "error": exc.to_dict()}), exc.http_status
+        result["ok"] = True
+        return _regulatory_jsonify(result)
+    if not code.isdigit():
+        return _regulatory_jsonify({"ok": False, "error": {"kind": "validation", "message": "성분을 먼저 선택해 주세요."}}), 400
     try:
         result = regulatory_service.get_regulations(code, country)
     except regulatory_service.RegulatoryApiError as exc:
         return _regulatory_error(exc)
     result["ok"] = True
+    result["source"] = "api"
+    result["source_label"] = "기존 API (RapidAPI K-Beauty Cosmetic Ingredients)"
     return _regulatory_jsonify(result)
 
 

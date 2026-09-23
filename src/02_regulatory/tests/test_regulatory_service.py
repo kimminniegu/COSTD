@@ -245,13 +245,13 @@ class RouteTest(unittest.TestCase):
         self.assertEqual(body["candidates"][0]["code"], 5489)
 
     def test_regulations_validation(self):
-        self.assertEqual(self.client.get("/api/regulatory/regulations?code=&country=EU").status_code, 400)
-        self.assertEqual(self.client.get("/api/regulatory/regulations?code=5489&country=XX").status_code, 400)
-        self.assertEqual(self.client.get("/api/regulatory/regulations?code=5489").status_code, 400)
+        self.assertEqual(self.client.get("/api/regulatory/regulations?code=&country=EU&source=api").status_code, 400)
+        self.assertEqual(self.client.get("/api/regulatory/regulations?code=5489&country=XX&source=api").status_code, 400)
+        self.assertEqual(self.client.get("/api/regulatory/regulations?code=5489&source=api").status_code, 400)
 
     def test_regulations_eu_found(self):
         with mock.patch.object(svc, "_get", return_value=load_body("regulations_5489_EU.json")) as get:
-            res = self.client.get("/api/regulatory/regulations?code=5489&country=eu")
+            res = self.client.get("/api/regulatory/regulations?code=5489&country=eu&source=api")
             get.assert_called_once_with("/v1/ingredient/5489/regulations", {"country": "EU"})
         body = res.get_json()
         self.assertEqual(res.status_code, 200)
@@ -260,7 +260,7 @@ class RouteTest(unittest.TestCase):
 
     def test_regulations_us_no_data(self):
         with mock.patch.object(svc, "_get", return_value=load_body("regulations_5489_US.json")):
-            res = self.client.get("/api/regulatory/regulations?code=5489&country=US")
+            res = self.client.get("/api/regulatory/regulations?code=5489&country=US&source=api")
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.get_json()["lookup_status"], "no_data")
 
@@ -273,7 +273,7 @@ class RouteTest(unittest.TestCase):
     def test_api_error_is_502(self):
         err = svc.RegulatoryApiError("timeout", "규제 API 응답이 지연되고 있어요.")
         with mock.patch.object(svc, "_get", side_effect=err):
-            res = self.client.get("/api/regulatory/regulations?code=5489&country=EU")
+            res = self.client.get("/api/regulatory/regulations?code=5489&country=EU&source=api")
         self.assertEqual(res.status_code, 502)
         self.assertEqual(res.get_json()["error"]["kind"], "timeout")
 
@@ -662,7 +662,7 @@ class LookupStatusDiagnosisTest(unittest.TestCase):
         flask_app.app.config["TESTING"] = True
         client = flask_app.app.test_client(); _login(client)
         with mock.patch.object(svc, "_get", return_value=load_body("regulations_1941_EU_not_listed.json")) as get:
-            res = client.get("/api/regulatory/regulations?code=1941&country=EU")
+            res = client.get("/api/regulatory/regulations?code=1941&country=EU&source=api")
             get.assert_called_once_with("/v1/ingredient/1941/regulations", {"country": "EU"})
         body = res.get_json()
         self.assertEqual(body["lookup_status"], "not_listed")
@@ -673,7 +673,7 @@ class LookupStatusDiagnosisTest(unittest.TestCase):
         flask_app.app.config["TESTING"] = True
         client = flask_app.app.test_client(); _login(client)
         with mock.patch.dict(os.environ, FAKE_ENV), mock.patch.object(svc.requests, "get", return_value=FakeResponse(403, {"message": "not subscribed"})):
-            res = client.get("/api/regulatory/regulations?code=5489&country=EU")
+            res = client.get("/api/regulatory/regulations?code=5489&country=EU&source=api")
         self.assertEqual(res.status_code, 502)
         self.assertEqual(res.get_json()["error"]["kind"], "access")
         self.assertNotIn("RAPIDAPI", res.get_data(as_text=True))
