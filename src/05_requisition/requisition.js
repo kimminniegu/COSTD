@@ -505,29 +505,59 @@
         if (provenance?.review_status === "not_applicable") return "해당 없음";
         return fieldValue(data, key) || (provenance?.review_status === "needs_review" ? "확인 필요" : "미입력");
       };
-      const rows = [...Object.keys(labels).map((key) => [labels[key], pdfValue(key)]),
-        ["벤치마크 제품명", data.benchmark_product_name || "미입력"]];
-      if (data.buyer_prohibited_ingredients.length || data.regulatory_restricted_ingredients.length) {
-        rows[5][1] = [
+      const prohibitedIngredients = [
           data.buyer_prohibited_ingredients.length ? "바이어 지정: " + data.buyer_prohibited_ingredients.join(", ") : "",
           data.regulatory_restricted_ingredients.length ? "규제 검토 대상: " + data.regulatory_restricted_ingredients.join(", ") : ""
-        ].filter(Boolean).join("\n");
-      }
-      const printHtml = '<main><h1>개발요청서</h1>' + sections.map(([title, fields], index) => '<section><h2>' + escape(title) + '</h2><dl>' +
-        fields.map(([key, label]) => '<div><dt>' + escape(label) + '</dt><dd>' + escape(key === "buyer_prohibited_ingredients" ? rows[5][1] : pdfValue(key)) + '</dd></div>').join('') +
-        (index === 0 ? '<div><dt>벤치마크 제품명</dt><dd>' + escape(data.benchmark_product_name || "미입력") + '</dd></div>' : '') + '</dl></section>').join('') +
-        '<section><h2>06 참고자료</h2>' + (referenceMarkup(data, true) || '<p>등록된 참고자료 없음</p>') + '</section>' +
-        '<footer>v' + data.version + " · " + datePart + "<br>수출 대상국의 규제 확인이 필요해요.</footer></main>";
-      const pdfRoot = document.createElement("div");
-      pdfRoot.innerHTML = printHtml;
-      pdfRoot.style.cssText = "position:fixed;left:-100000px;top:0;width:180mm;padding:0;background:#fff;color:#202733;font-family:Arial,sans-serif";
-      pdfRoot.querySelector("main").style.cssText = "width:180mm;margin:0 auto";
-      pdfRoot.querySelector("h1").style.cssText = "font-size:22px;text-align:center;margin:0 0 24px";
-      pdfRoot.querySelectorAll("dl").forEach((list) => { list.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:2px solid #6b7280;margin:0"; });
-      pdfRoot.querySelectorAll("dl div").forEach((row, index) => { row.style.cssText = "display:grid;grid-template-columns:30mm minmax(0,1fr);border-bottom:1px solid #d4d7dc;break-inside:avoid"; if (index % 2 === 0) row.style.borderRight = "1px solid #d4d7dc"; if (index === rows.length - 1) { row.style.gridColumn = "1 / -1"; row.style.borderRight = "0"; } });
-      pdfRoot.querySelectorAll("dt").forEach((label) => { label.style.cssText = "display:block;margin:0;padding:4mm 3mm;background:#eceef1;border-right:1px solid #d4d7dc;font-size:10pt;font-weight:700"; });
-      pdfRoot.querySelectorAll("dd").forEach((value) => { value.style.cssText = "margin:0;padding:4mm 3mm;min-width:0;font-size:10pt;overflow-wrap:anywhere;white-space:pre-wrap"; });
-      pdfRoot.querySelector("footer").style.cssText = "font-size:9pt;margin-top:24px;color:#64748b";
+        ].filter(Boolean).join("\n") || pdfValue("buyer_prohibited_ingredients");
+      const issuedDate = [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join(".");
+      const row = (label, value) => '<tr><th scope="row">' + escape(label) + '</th><td>' + escape(value) + '</td></tr>';
+      const printHtml = '<main><header class="document-header"><div class="brand">COSTD <span>COSMOA</span></div>' +
+        '<p class="document-type">연구소 전달용</p><h1>제품 개발 요청서</h1><p class="subtitle">PRODUCT DEVELOPMENT REQUEST</p></header>' +
+        '<table class="document-meta"><caption>문서 정보</caption><tbody>' +
+        '<tr><th scope="row">문서 ID</th><td colspan="3">' + escape(data.document_id || "미지정") + '</td></tr>' +
+        '<tr><th scope="row">출력일</th><td>' + issuedDate + '</td><th scope="row">문서 버전</th><td>v' + escape(data.version) + '</td></tr>' +
+        '<tr><th scope="row">수신</th><td>연구소</td><th scope="row">작성 방식</th><td>' + escape(methods[data.creation_method] || "미지정") + '</td></tr></tbody></table>' +
+        sections.map(([title, fields], index) => '<section><h2>' + escape(title) + '</h2><table class="requirements"><colgroup><col class="label-column"><col></colgroup><thead><tr><th scope="col">항목</th><th scope="col">요청 내용</th></tr></thead><tbody>' +
+          fields.map(([key, label]) => row(label, key === "buyer_prohibited_ingredients" ? prohibitedIngredients : pdfValue(key))).join('') +
+          (index === 0 ? row("벤치마크 제품명", data.benchmark_product_name || "미입력") : '') + '</tbody></table></section>').join('') +
+        '<section class="references"><h2>06 참고자료</h2>' + (referenceMarkup(data, true) || '<p class="empty-reference">등록된 참고자료 없음</p>') + '</section>' +
+        '<section class="review-signoff"><h2>연구소 검토</h2><table class="requirements"><colgroup><col class="label-column"><col></colgroup><tbody>' +
+        row("검토 담당자 / 검토일", "담당자:                         검토일:          년       월       일") +
+        '<tr><th scope="row">검토 의견</th><td class="review-space"></td></tr></tbody></table></section>' +
+        '<footer><strong>COSTD · COSMOA</strong><span>수출 대상국별 규제 적합성은 별도 확인이 필요합니다.</span></footer></main>';
+      const printStyles = `
+        @page { size: A4; margin: 14mm 14mm 16mm; }
+        * { box-sizing: border-box; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        body { margin: 0; color: #202733; background: #fff; font: 9pt/1.55 "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; }
+        .document-header { position: relative; border-top: 3px solid #24364b; padding: 5mm 0 6mm; }
+        .brand { font-size: 15pt; font-weight: 800; letter-spacing: 1px; }
+        .brand span { margin-left: 2mm; font-size: 8pt; font-weight: 400; color: #596574; }
+        .document-type { position: absolute; top: 5mm; right: 0; margin: 0; font-size: 9pt; }
+        h1 { margin: 4mm 0 1mm; text-align: center; font-size: 24pt; letter-spacing: 3px; }
+        .subtitle { margin: 0; text-align: center; font-size: 8pt; letter-spacing: 2px; color: #596574; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+        th, td { border: 1px solid #9ca6b1; padding: 2.5mm 3mm; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+        th { background: #eef1f4; font-weight: 700; }
+        td { white-space: pre-wrap; }
+        .document-meta { margin-bottom: 6mm; }
+        .document-meta th { width: 26mm; }
+        .label-column { width: 36mm; }
+        section { margin-top: 5mm; }
+        h2 { margin: 0 0 2mm; padding: 0 0 2mm; border-bottom: 2px solid #24364b; font-size: 11pt; break-after: avoid; }
+        thead { display: table-header-group; }
+        thead th { background: #dfe5eb; font-size: 8pt; }
+        tr { break-inside: avoid; }
+        p { orphans: 3; widows: 3; }
+        .requisition-reference { margin: 0 0 3mm; padding: 3mm; border: 1px solid #9ca6b1; break-inside: avoid; }
+        .requisition-reference img { display: block; margin: 0 auto 2mm; object-fit: contain; }
+        figcaption { font-size: 8pt; overflow-wrap: anywhere; }
+        .empty-reference { border: 1px solid #9ca6b1; padding: 3mm; margin: 0; color: #596574; }
+        .review-signoff { break-inside: avoid; }
+        .review-space { height: 22mm; }
+        footer { margin-top: 6mm; padding-top: 3mm; border-top: 1px solid #24364b; font-size: 8pt; color: #596574; }
+        footer span { float: right; }
+      `;
       if (printFrame) printFrame.remove();
       const frame = document.createElement("iframe");
       printFrame = frame;
@@ -535,8 +565,7 @@
       frame.title = "개발요청서 PDF 저장";
       const loaded = new Promise((resolve) => { frame.onload = resolve; });
       frame.srcdoc = '<!doctype html><html lang="' + escape(data.target_language) + '"><head><meta charset="utf-8"><title>' + escape(filename) +
-        '</title><style>@page{size:A4;margin:12mm}body{margin:0;color:#202733;font-family:Arial,sans-serif}*{box-sizing:border-box;print-color-adjust:exact}h2{font-size:14pt;break-after:avoid}figure{break-inside:avoid}img{object-fit:contain}</style></head><body>' +
-        pdfRoot.querySelector("main").outerHTML + '</body></html>';
+        '</title><style>' + printStyles + '</style></head><body>' + printHtml + '</body></html>';
       document.body.append(frame);
       await loaded;
       await frame.contentDocument.fonts.ready;

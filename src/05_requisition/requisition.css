@@ -4,7 +4,15 @@
 .requisition-mode-card .tabs { display: flex; }
 .requisition-mode-card .tab { flex: 1; }
 .requisition-section-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 12px 20px 0; }
-.requisition-section-tabs .tab { flex: 1 1 auto; white-space: nowrap; text-align: center; }
+.requisition-section-tabs .tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-height: 40px;
+  white-space: nowrap;
+  text-align: center;
+}
 .requisition-section-tabs .tab:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
 .requisition-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: var(--space-6); align-items: start; }
 .requisition-layout > *, .requisition-fields > * { min-width: 0; }

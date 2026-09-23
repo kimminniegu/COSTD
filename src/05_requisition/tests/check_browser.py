@@ -91,6 +91,13 @@ try {
   const frame = document.querySelector('.requisition-print-frame');
   assert(frame && frame.srcdoc.includes('Texture v2'), 'PDF latest values');
   assert(frame.srcdoc.includes('06 참고자료'), 'PDF sections');
+  const pdf = new DOMParser().parseFromString(frame.srcdoc, 'text/html');
+  assert(pdf.querySelector('h1').textContent === '제품 개발 요청서', 'formal document title');
+  assert(pdf.querySelector('.document-meta').textContent.includes('연구소'), 'research recipient');
+  assert(pdf.querySelectorAll('table.requirements thead').length === 5, 'all requirement tables included');
+  assert(pdf.querySelector('.review-signoff').textContent.includes('검토 담당자'), 'research review area');
+  assert(pdf.querySelector('footer').textContent.includes('COSTD'), 'company footer');
+  assert(pdf.querySelector('.requirements').textContent.includes('Browser customer'), 'customer retained in formal PDF');
   assert(!/전달 대상|미생물|클레임/.test(frame.srcdoc), 'excluded fields absent from PDF');
   by('new').click();
   window.fetch = async () => ({ok: true, json: async () => ({document: window.fixtureDocument})});
