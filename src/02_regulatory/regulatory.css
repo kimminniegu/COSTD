@@ -103,6 +103,18 @@
 .regulatory-review-table th,
 .regulatory-review-table td { vertical-align: top; }
 .regulatory-review-table .form-control-sm { min-width: 140px; }
+.regulatory-review-table .regulatory-col-check { width: 56px; }
+.regulatory-review-table .regulatory-col-action { width: 64px; }
+.regulatory-review-table td:last-child { white-space: nowrap; }
+.regulatory-review-origin {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-caption);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+.regulatory-review-reason { margin: var(--space-1) 0 0; font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+.regulatory-notes { margin: var(--space-2) 0 0; padding-left: var(--space-5); }
+.regulatory-notes li + li { margin-top: var(--space-1); }
 
 /* 직접 검색 결과 카드 ---------------------------------------------------- */
 .regulatory-single__badge { display: flex; align-items: center; min-height: 26px; }

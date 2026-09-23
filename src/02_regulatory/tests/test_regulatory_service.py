@@ -374,3 +374,236 @@ class BilingualRouteTest(unittest.TestCase):
         html = self.client.get("/regulatory").get_data(as_text=True)
         self.assertIn("영문 INCI", html)
         self.assertNotIn("<<<<<<<", html)
+
+
+# ---------------------------------------------------------------------------
+# 5단계: 파일 업로드 → 성분 추출 (텍스트 PDF · .xlsx). 외부 호출 없음. 규제 API 호출 없음.
+# ---------------------------------------------------------------------------
+
+import io as _io
+import tempfile as _tempfile
+import glob as _glob
+
+rx = flask_app.regulatory_extract
+SAMPLES = REG_DIR / "samples"
+
+
+def _xlsx_bytes(sheets):
+    """{시트명: [행, ...]} → .xlsx 바이트 (테스트 전용, 파일로 남기지 않음)"""
+    from openpyxl import Workbook
+    wb = Workbook()
+    first = True
+    for name, rows in sheets.items():
+        ws = wb.active if first else wb.create_sheet()
+        ws.title = name
+        first = False
+        for r in rows:
+            ws.append(r)
+    buf = _io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _pdf_blank_bytes(encrypt=None):
+    from pypdf import PdfWriter
+    w = PdfWriter()
+    w.add_blank_page(width=200, height=200)
+    if encrypt:
+        w.encrypt(encrypt)
+    buf = _io.BytesIO()
+    w.write(buf)
+    return buf.getvalue()
+
+
+def _temp_leftovers():
+    return _glob.glob(os.path.join(_tempfile.gettempdir(), "cosmoa-reg-*"))
+
+
+class ExtractPdfTest(unittest.TestCase):
+    def test_sample_brief_extracts_only_ingredient_table(self):
+        with open(SAMPLES / "EU-SER-041_development_brief.pdf", "rb") as f:
+            r = rx.extract_upload("brief.pdf", f)
+        self.assertEqual(r["status"], "extracted")
+        names = [it["name_raw"] for it in r["items"]]
+        self.assertEqual(names, ["Niacinamide", "Glycerin", "Panthenol", "Sodium Hyaluronate",
+                                 "Phenoxyethanol", "Ethylhexylglycerin", "Aqua"])
+        amounts = [it["amount_raw"] for it in r["items"]]
+        self.assertEqual(amounts, ["4.0%", "5.0%", "0.5%", "0.10%", "0.80%", "0.30%", "q.s. to 100%"])
+        self.assertTrue(all(it["location"] == "2쪽" for it in r["items"]))
+        self.assertEqual(r["review_count"], 0)
+        # 설명 문장·절 제목·헤더 줄이 성분으로 들어오지 않는다
+        for bad in ("INCI name", "Application", "Directions for use", "Partial development brief", "DO NOT USE", "Buyer / contact"):
+            self.assertNotIn(bad, names)
+        self.assertNotIn("Partial development brief", " ".join(names))
+        # 문서 국가·사용 조건은 원문 그대로, 시장 코드로 바꾸지 않음
+        self.assertEqual(r["document_market"]["text"], "European Union: France and Germany")
+        self.assertTrue(r["document_use"]["text"].startswith("Leave-on"))
+        self.assertNotIn("market_code", r)
+        self.assertEqual(r["file"]["kind"], "pdf")
+        self.assertEqual(_temp_leftovers(), [])
+
+    def test_scanned_like_pdf_is_unsupported_not_success(self):
+        with self.assertRaises(rx.ExtractError) as ctx:
+            rx.extract_upload("scan.pdf", _io.BytesIO(_pdf_blank_bytes()))
+        self.assertEqual(ctx.exception.kind, "unsupported")
+        self.assertEqual(ctx.exception.http_status, 415)
+        self.assertIn("텍스트 PDF와 Excel", ctx.exception.message)
+        self.assertEqual(_temp_leftovers(), [])
+
+    def test_encrypted_pdf_is_unreadable(self):
+        with self.assertRaises(rx.ExtractError) as ctx:
+            rx.extract_upload("locked.pdf", _io.BytesIO(_pdf_blank_bytes(encrypt="secret")))
+        self.assertEqual(ctx.exception.kind, "unreadable")
+        self.assertEqual(_temp_leftovers(), [])
+
+    def test_wrong_content_for_extension(self):
+        with self.assertRaises(rx.ExtractError) as ctx:
+            rx.extract_upload("fake.pdf", _io.BytesIO(b"this is not a pdf at all, just text"))
+        self.assertEqual(ctx.exception.kind, "unreadable")
+        with self.assertRaises(rx.ExtractError) as ctx2:
+            rx.extract_upload("fake.xlsx", _io.BytesIO(b"%PDF-1.4 pretending"))
+        self.assertEqual(ctx2.exception.kind, "unreadable")
+        self.assertEqual(_temp_leftovers(), [])
+
+    def test_page_limit(self):
+        from pypdf import PdfWriter
+        w = PdfWriter()
+        for _ in range(rx.MAX_PDF_PAGES + 1):
+            w.add_blank_page(width=100, height=100)
+        buf = _io.BytesIO(); w.write(buf)
+        with self.assertRaises(rx.ExtractError) as ctx:
+            rx.extract_upload("big.pdf", _io.BytesIO(buf.getvalue()))
+        self.assertEqual(ctx.exception.kind, "limit")
+
+
+class ExtractXlsxTest(unittest.TestCase):
+    def test_single_sheet_korean_header_amount_and_review_flags(self):
+        data = _xlsx_bytes({"요청성분": [
+            ["가상 성분표 (데모)"],
+            ["대상 국가", "미국"],
+            ["No", "성분명", "함량(%)", "비고"],
+            [1, "나이아신아마이드", 4, "필수"],
+            [2, "판테놀", "0.5", "선택"],
+            [3, "정제수", "q.s.", "잔량"],
+            [4, "이 성분은 바이어가 나중에 확정할 예정이며 현재는 미정입니다.", None, "메모"],
+            [5, "향료", "미정", None],
+            [6, None, None, "빈 행은 건너뜀"],
+        ]})
+        r = rx.extract_upload("demo.xlsx", _io.BytesIO(data))
+        self.assertEqual(r["status"], "extracted")
+        self.assertEqual([it["name_raw"] for it in r["items"]],
+                         ["나이아신아마이드", "판테놀", "정제수", "이 성분은 바이어가 나중에 확정할 예정이며 현재는 미정입니다.", "향료"])
+        self.assertEqual([it["amount_raw"] for it in r["items"]], ["4", "0.5", "q.s.", None, "미정"])
+        self.assertEqual(r["items"][0]["amount_unit_hint"], "%")          # 열 제목의 단위만 힌트로
+        self.assertEqual(r["items"][0]["location"], "요청성분!B4")
+        self.assertFalse(r["items"][0]["needs_review"])
+        self.assertTrue(r["items"][3]["needs_review"])                     # 문장
+        self.assertTrue(r["items"][4]["needs_review"])                     # 함량 형식
+        self.assertIsNone(r["items"][3]["amount_raw"])                     # 미기재는 0 이 아님
+        self.assertEqual(r["review_count"], 2)
+        self.assertEqual(r["document_market"]["text"], "미국")
+        self.assertEqual(_temp_leftovers(), [])
+
+    def test_multi_sheet_requires_selection_then_extracts_selected(self):
+        sheets = {
+            "Cover": [["FICTIONAL"], ["This sheet only has descriptions. Ingredient table is on the next sheet."]],
+            "Ingredients": [["INCI name", "Requested level", "Role"], ["Niacinamide", "4.0%", "Required"], ["Aqua", "q.s. to 100%", "Balance"]],
+            "Packaging": [["Item", "Spec"], ["Bottle", "30 mL"]],
+        }
+        data = _xlsx_bytes(sheets)
+        r = rx.extract_upload("multi.xlsx", _io.BytesIO(data))
+        self.assertEqual(r["status"], "sheet_required")
+        self.assertEqual(r["sheets"], ["Cover", "Ingredients", "Packaging"])
+        self.assertEqual(r["items"], [])
+        r2 = rx.extract_upload("multi.xlsx", _io.BytesIO(data), sheet="Ingredients")
+        self.assertEqual(r2["status"], "extracted")
+        self.assertEqual([it["name_raw"] for it in r2["items"]], ["Niacinamide", "Aqua"])
+        self.assertEqual(r2["scope"]["selected_sheet"], "Ingredients")
+        # 설명만 있는 시트: 문장 속 'Ingredient' 를 헤더로 오인하지 않고 '추출 결과 없음'
+        r3 = rx.extract_upload("multi.xlsx", _io.BytesIO(data), sheet="Cover")
+        self.assertEqual(r3["status"], "empty")
+        self.assertEqual(r3["items"], [])
+        self.assertTrue(any("찾지 못했" in n for n in r3["notes"]))
+        # 표 제목이 성분 표가 아닌 시트도 결과 없음
+        r4 = rx.extract_upload("multi.xlsx", _io.BytesIO(data), sheet="Packaging")
+        self.assertEqual(r4["status"], "empty")
+        with self.assertRaises(rx.ExtractError) as ctx:
+            rx.extract_upload("multi.xlsx", _io.BytesIO(data), sheet="Nope")
+        self.assertEqual(ctx.exception.kind, "validation")
+        self.assertEqual(_temp_leftovers(), [])
+
+    def test_name_only_table_needs_strict_header(self):
+        # 함량 열이 없어도 제목이 정확히 'INCI' 류이면 표로 인정, 함량은 None
+        data = _xlsx_bytes({"S": [["INCI name", "Note"], ["Glycerin", "humectant"], ["Aqua", "solvent"]]})
+        r = rx.extract_upload("names.xlsx", _io.BytesIO(data))
+        self.assertEqual([it["name_raw"] for it in r["items"]], ["Glycerin", "Aqua"])
+        self.assertTrue(all(it["amount_raw"] is None for it in r["items"]))
+        # 'ingredients' 가 문장 속에 있는 두 칸 행은 헤더가 아님
+        data2 = _xlsx_bytes({"S": [["We list ingredients below for reference only.", "x"], ["Glycerin", "5%"]]})
+        r2 = rx.extract_upload("prose.xlsx", _io.BytesIO(data2))
+        self.assertEqual(r2["status"], "empty")
+
+    def test_item_cap(self):
+        rows = [["성분명", "함량"]] + [["성분%d" % i, "1%"] for i in range(rx.MAX_ITEMS + 5)]
+        r = rx.extract_upload("many.xlsx", _io.BytesIO(_xlsx_bytes({"S": rows})))
+        self.assertEqual(len(r["items"]), rx.MAX_ITEMS)
+        self.assertTrue(any("앞 %d개" % rx.MAX_ITEMS in n for n in r["notes"]))
+
+
+class ExtractRouteTest(unittest.TestCase):
+    def setUp(self):
+        flask_app.app.config["TESTING"] = True
+        self.client = flask_app.app.test_client()
+
+    def _post(self, filename, data, sheet=None):
+        form = {"file": (_io.BytesIO(data), filename)}
+        if sheet:
+            form["sheet"] = sheet
+        return self.client.post("/api/regulatory/extract", data=form, content_type="multipart/form-data")
+
+    def test_no_file(self):
+        res = self.client.post("/api/regulatory/extract", data={}, content_type="multipart/form-data")
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.get_json()["error"]["kind"], "validation")
+
+    def test_image_is_415_with_guidance(self):
+        res = self._post("photo.png", b"\x89PNG\r\n\x1a\n" + b"0" * 100)
+        self.assertEqual(res.status_code, 415)
+        body = res.get_json()
+        self.assertFalse(body["ok"])
+        self.assertEqual(body["error"]["kind"], "unsupported")
+        self.assertIn("텍스트 PDF와 Excel", body["error"]["message"])
+
+    def test_pdf_route_ok_and_no_regulation_api_call(self):
+        with open(SAMPLES / "EU-SER-041_development_brief.pdf", "rb") as f:
+            data = f.read()
+        with mock.patch.object(svc, "_get") as get:
+            res = self._post("brief.pdf", data)
+            get.assert_not_called()
+        self.assertEqual(res.status_code, 200)
+        body = res.get_json()
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["status"], "extracted")
+        self.assertEqual(len(body["items"]), 7)
+        self.assertNotIn("RAPIDAPI", res.get_data(as_text=True))
+        self.assertEqual(_temp_leftovers(), [])
+
+    def test_xlsx_route_sheet_flow(self):
+        data = _xlsx_bytes({"A": [["x"]], "B": [["성분명", "함량"], ["글리세린", "5%"]]})
+        res = self._post("two.xlsx", data)
+        self.assertEqual(res.get_json()["status"], "sheet_required")
+        res2 = self._post("two.xlsx", data, sheet="B")
+        self.assertEqual(res2.get_json()["items"][0]["name_raw"], "글리세린")
+        self.assertEqual(_temp_leftovers(), [])
+
+    def test_too_large_is_400_limit(self):
+        big = b"%PDF-1.4\n" + b"0" * (rx.MAX_FILE_BYTES + 1024)
+        res = self._post("big.pdf", big)
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.get_json()["error"]["kind"], "limit")
+        self.assertEqual(_temp_leftovers(), [])
+
+    def test_page_has_file_tab_elements(self):
+        html = self.client.get("/regulatory").get_data(as_text=True)
+        for marker in ("regulatory-file-form", "regulatory-review-body", "regulatory-review-add", "regulatory-file-result-error", "regulatory-file-empty"):
+            self.assertIn(marker, html, marker)

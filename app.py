@@ -92,6 +92,13 @@ _regulatory_spec = _regulatory_importlib.spec_from_file_location(
 regulatory_service = _regulatory_importlib.module_from_spec(_regulatory_spec)
 _regulatory_spec.loader.exec_module(regulatory_service)
 
+# 파일 추출(텍스트 PDF · .xlsx) 모듈. 규제 API 는 호출하지 않는다.
+_regulatory_extract_spec = _regulatory_importlib.spec_from_file_location(
+    "regulatory_extract", SRC_DIR / "02_regulatory" / "regulatory_extract.py"
+)
+regulatory_extract = _regulatory_importlib.module_from_spec(_regulatory_extract_spec)
+_regulatory_extract_spec.loader.exec_module(regulatory_extract)
+
 
 def _regulatory_error(exc):
     """RegulatoryApiError → JSON 오류 응답. 설정 오류 503, 그 외 외부 API 오류 502."""
@@ -128,6 +135,23 @@ def regulatory_regulations():
         result = regulatory_service.get_regulations(code, country)
     except regulatory_service.RegulatoryApiError as exc:
         return _regulatory_error(exc)
+    result["ok"] = True
+    return _regulatory_jsonify(result)
+
+
+@app.route("/api/regulatory/extract", methods=["POST"])
+def regulatory_extract_route():
+    """업로드 문서에서 성분명·함량 추출. multipart: file (PDF·.xlsx), sheet (Excel 시트명, 선택).
+    여러 시트면 status="sheet_required" 와 시트 목록을 돌려주고, 같은 파일을 sheet 와 함께 다시 보내면 추출한다.
+    임시 파일은 요청 안에서 삭제되며 규제 API 는 호출하지 않는다. 계약: src/02_regulatory/api_reference.md"""
+    upload = _regulatory_request.files.get("file")
+    if upload is None or not (upload.filename or "").strip():
+        return _regulatory_jsonify({"ok": False, "error": {"kind": "validation", "message": "파일을 선택해 주세요."}}), 400
+    sheet = (_regulatory_request.form.get("sheet") or "").strip() or None
+    try:
+        result = regulatory_extract.extract_upload(upload.filename, upload.stream, sheet)
+    except regulatory_extract.ExtractError as exc:
+        return _regulatory_jsonify({"ok": False, "error": exc.to_dict()}), exc.http_status
     result["ok"] = True
     return _regulatory_jsonify(result)
 

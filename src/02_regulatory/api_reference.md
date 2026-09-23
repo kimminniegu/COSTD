@@ -3,7 +3,7 @@
 담당자 B. `/api/regulatory/` Route 계약과 외부 K뷰티 API 호출 방식을 기록한다.
 기능 요구사항은 `regulatory.md`가 우선이며, 이 문서는 구현된 계약과 실제 확인한 API 응답만 다룬다.
 
-- 처리 모듈: `src/02_regulatory/regulatory_service.py` (app.py [B] 영역에서 파일 경로로 로드)
+- 처리 모듈: `src/02_regulatory/regulatory_service.py`(규제 API), `src/02_regulatory/regulatory_extract.py`(파일 추출) — app.py [B] 영역에서 파일 경로로 로드
 - 실제 호출 기록: `src/02_regulatory/test_data/*.json` (인증 정보 제거, 응답 본문·HTTP 상태·호출 제한 헤더만)
 - 테스트: `python -m unittest discover -s src/02_regulatory/tests -v` (외부 호출 없음)
 
@@ -92,6 +92,44 @@
 }
 ```
 
+### POST `/api/regulatory/extract` (multipart/form-data)
+
+업로드 문서에서 성분명·함량을 추출한다. **규제 API 를 호출하지 않고 API 성분 매칭도 하지 않는다.** 서버는 파일을 OS 임시 경로에서 처리하고 요청이 끝나면 삭제한다.
+
+| 항목 | 내용 |
+|---|---|
+| 필드 | `file` 필수 (PDF 또는 .xlsx 1개), `sheet` 선택 (Excel 시트명) |
+| 제한 | 10 MB 이하 · PDF 20쪽 이하 · Excel 시트 20개 이하 · 시트당 앞 2,000행 · 성분 행 200개 |
+| 성공 200 | `status`: `extracted`(성분 있음) / `empty`(성분 표 없음) / `sheet_required`(시트 선택 필요) |
+| 검증 실패 400 | `error.kind = validation`(파일 없음·빈 파일·알 수 없는 확장자·없는 시트) / `limit`(용량·쪽수·시트 수 초과) |
+| 형식 미지원 415 | `error.kind = unsupported` — 이미지·스캔 PDF·.xls·.csv 등. 메시지: "현재 텍스트 PDF와 Excel(.xlsx)만 지원합니다…" |
+| 읽기 실패 422 | `error.kind = unreadable` — 손상·암호 PDF, 확장자와 내용 불일치 |
+
+```json
+{
+  "ok": true,
+  "status": "extracted",
+  "file": {"name": "brief.pdf", "kind": "pdf", "size": 8458},
+  "scope": {"pages": 3, "processed": "1~3쪽"},
+  "items": [
+    {"id": "r1", "name_raw": "Niacinamide", "amount_raw": "4.0%", "amount_unit_hint": null,
+     "role_raw": "Required finished-product target", "location": "2쪽", "needs_review": false, "review_reasons": []}
+  ],
+  "review_count": 0,
+  "notes": [],
+  "document_market": {"text": "European Union: France and Germany", "location": "1쪽"},
+  "document_use": {"text": "Leave-on; adult facial skin. ...", "location": "2쪽"},
+  "extracted_at": "2026-09-23T14:30:00+09:00"
+}
+```
+
+- 여러 시트인 Excel 은 `sheet` 없이 보내면 `{"status": "sheet_required", "sheets": ["Cover", "Ingredients", ...], "items": []}` 를 돌려준다. 화면은 시트를 고른 뒤 **같은 파일을 `sheet` 와 함께 다시** 보낸다. Excel 응답의 `scope` 는 `{"sheets", "selected_sheet", "scanned_rows"}`.
+- 추출 규칙: `INCI name / Ingredient / 성분명 / 원료명` 등 제목이 있는 표만 읽는다(제목 행은 2칸 이상, 함량·역할 열이 함께 있거나 제목이 정확히 성분 제목일 때). 제목이 없으면 `status = empty` 로 돌려주고 성분을 만들지 않는다.
+- `amount_raw` 는 문서 원문 그대로(수치·범위·단위·`q.s.`). 없으면 `null`. Excel 에서 열 제목에만 단위가 있으면 `amount_unit_hint`(예: `"%"`)로 따로 준다.
+- `needs_review` 사유: 문장처럼 보이는 이름(7단어 이상·문장 부호), 80자 초과, 함량 형식 불일치(원문 유지), 빈 이름, 함량 열이 있는 표에서 함량 칸을 못 찾은 행.
+- `document_market` / `document_use` 는 `Distribution countries`·`대상 국가`·`Application`·`제품 유형` 같은 라벨 행의 **원문 텍스트**다. 시장 코드로 바꾸거나 자동 선택하지 않는다.
+- `location`: PDF 는 `N쪽`, Excel 은 `시트명!B7` 형식.
+
 **`lookup_status` 판정 규칙** (응답의 `data`와 `result_status`만 사용)
 
 | 값 | 조건 | 화면 조회 상태 |
@@ -157,6 +195,7 @@
    - 규제 항목(`entries`)이 여러 건이면 항목별 제목(순번·유형·국가)으로 구분하고, `proviso` 가 있으면 '단서 조항 (원문)' 블록으로 붙인다.
    - 문장은 재배치만 하며 번역·요약·환산·재해석을 하지 않고, 성분별 규칙을 두지 않는다. 원문 전체·출처·고시 성분명·응답 상태값은 상세 Modal 에 그대로 둔다.
 5. '이전 조건의 결과' 안내는 표시 중인 결과의 조건 키(성분 code·시장)와 현재 입력이 다를 때만 보이고, 같은 조건으로 돌아오면 사라진다. 검색어를 수정하면 확정된 성분은 해제된다.
-6. 파일 일괄 조회 결과(후속 단계)는 조회 조건·요약 수치·간결한 표(성분명·조회 상태·규제 유형·검토 상태·상세)로 구성한다. 함량 추출·수정·검토 상태는 파일 조회 요구사항으로 유지한다. 일부 실패 안내와 '실패 항목 재시도'는 실제 실패 건이 있을 때만 표시한다.
+6. **파일 탭 (현재 구현)**: 파일·시장 선택 → ‘파일 분석’ → 화면에서 확장자·용량을 먼저 확인(이미지 등은 업로드 없이 미지원 안내) → `POST /api/regulatory/extract` → `sheet_required` 면 시트 선택 블록 → 선택 후 재전송 → 추출값 확인·수정 표(조회 포함 체크 · 원문 성분명→수정 · 함량 원문→수정(미기재 표시) · 원문 위치 · 상태(추출됨/확인 필요/수정됨/직접 입력) · 삭제, ‘행 추가’). 처리 중·실패(사유·종류)·추출 결과 없음을 한 블록씩만 표시한다. 편집값은 `fileState.items` 에만 있고 서버로 보내지 않는다.
+7. 파일 일괄 조회 결과(후속 단계)는 조회 조건·요약 수치·간결한 표(성분명·조회 상태·규제 유형·검토 상태·상세)로 구성한다. 함량 추출·수정·검토 상태는 파일 조회 요구사항으로 유지한다. 일부 실패 안내와 '실패 항목 재시도'는 실제 실패 건이 있을 때만 표시한다. ‘확인한 성분으로 규제 조회’ 버튼은 현재 준비 중 안내만 한다.
 
 **공통 CSS 관련 PM 협의 사항**: `src/common/style.css`에 `[hidden] { display: none }` 규칙이 없어 `.loading`, `.state`, `.badge`, `.alert`처럼 class로 `display`를 지정하는 요소는 `hidden` 속성이 무시된다(로딩·오류·후보 상태가 동시에 보이던 원인). 공통 파일은 수정하지 않고 `regulatory.css`에서 이 페이지 영역(`#regulatory-panel-search`, `#regulatory-panel-file`, `#regulatory-results`, `#regulatory-detail-modal`)에만 `[hidden] { display: none !important }`를 적용했다. 공통 CSS에 같은 규칙을 추가하면 페이지 규칙은 제거해도 된다.

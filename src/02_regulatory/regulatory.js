@@ -14,7 +14,12 @@
      여러 후보면 목록을 열어 사용자 선택을 받습니다 (명세 7항 6). 임의로 첫 후보를 확정하지 않습니다
    - 결과 카드: 성분명·영문명·시장, 조회 상태, 규제 유형(원문), 규제 조건(원문을 항목별로 나눌 수 있으면 나눠서, 아니면 원문 그대로)
    - 규제 데이터 미확인(no_data) / 판단 보류(hold) / API 오류를 서로 다른 상태로 표시합니다. 적합성·안전성 판정은 하지 않습니다.
-   미구현(후속): 중간 포함 검색(API 부분 검색 미사용), 파일 업로드·추출·일괄 조회(함량 추출·수정 포함). */
+   파일로 일괄 조회 (이번 단계: 업로드 → 시트 선택 → 성분 추출 → 확인·수정)
+   - POST /api/regulatory/extract 로 텍스트 PDF·.xlsx 를 보내 성분명·함량(문서에 있을 때만)을 받아 표로 표시합니다
+   - 여러 시트면 서버가 sheet_required 를 돌려주고, 시트를 고르면 같은 파일을 sheet 와 함께 다시 보냅니다
+   - 표에서 성분명·함량 수정, 행 추가·삭제, 조회 포함 체크. 원문값은 별도로 남겨 둡니다
+   - 처리 중 / 완료 / 실패(형식 미지원·읽기 실패·제한 초과) / 추출 결과 없음을 구분합니다
+   미구현(후속): 중간 포함 검색, 스캔 PDF·이미지 OCR, 파일 성분의 API 매칭·규제 일괄 조회. */
 (function () {
   "use strict";
 
@@ -60,6 +65,22 @@
      실패는 { kind, message, http_status? } 객체로 통일합니다. 서버 응답의 error 는 비밀값을 담지 않습니다. */
   function apiGet(url) {
     return fetch(url, { headers: { Accept: "application/json" } }).then(function (res) {
+      return res.json().catch(function () { return null; }).then(function (body) {
+        if (!body || typeof body !== "object") {
+          throw { kind: "invalid_response", message: "서버 응답을 해석하지 못했어요. 잠시 후 다시 시도해 주세요." };
+        }
+        if (!res.ok || body.ok === false) {
+          throw body.error || { kind: "http", message: "요청에 실패했어요 (HTTP " + res.status + ")." };
+        }
+        return body;
+      });
+    }, function () {
+      throw { kind: "network", message: "서버에 연결하지 못했어요. 네트워크 상태를 확인해 주세요." };
+    });
+  }
+
+  function apiPost(url, formData) {
+    return fetch(url, { method: "POST", body: formData, headers: { Accept: "application/json" } }).then(function (res) {
       return res.json().catch(function () { return null; }).then(function (body) {
         if (!body || typeof body !== "object") {
           throw { kind: "invalid_response", message: "서버 응답을 해석하지 못했어요. 잠시 후 다시 시도해 주세요." };
@@ -674,20 +695,64 @@
   }
 
   /* ==========================================================================
-     파일 탭 — 화면 골격만 (업로드·추출·함량 확인·일괄 조회는 후속 단계)
+     파일로 일괄 조회 — 업로드 → (시트 선택) → 성분 추출 → 확인·수정   (규제 일괄 조회는 다음 단계, 호출하지 않음)
      ========================================================================== */
   var fileForm = $("regulatory-file-form");
   var fileInput = $("regulatory-file-input");
   var dropzone = $("regulatory-file-dropzone");
+  var fileSubmit = $("regulatory-file-submit");
+  var fileSubmitLabel = fileSubmit ? fileSubmit.textContent : "";
+  var reviewBody = $("regulatory-review-body");
+
+  var FILE_OK_EXT = /\.(pdf|xlsx)$/i;
+  var FILE_NOT_YET_EXT = /\.(jpe?g|png|gif|webp|tiff?|xls|csv|docx?|hwp|txt)$/i;
+  var FILE_MAX_BYTES = 10 * 1024 * 1024;
+  var UNSUPPORTED_MESSAGE = "현재 텍스트 PDF와 Excel(.xlsx)만 지원합니다. 스캔 PDF·이미지 인식(OCR)은 준비 중이에요.";
+  var ERROR_KIND_LABEL = { validation: "입력 확인", limit: "제한 초과", unsupported: "형식 미지원", unreadable: "읽기 실패", network: "연결 실패", http: "서버 오류", invalid_response: "응답 오류" };
+
+  // items: 서버 추출값(name_raw/amount_raw/location/needs_review/review_reasons) + 화면 편집값(name/amount/include/user_added)
+  var fileState = { seq: 0, items: [], nextId: 1, sheets: [], selectedSheet: null, lastFile: null, emptyResult: false };
+
+  function currentFile() { return fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null; }
+
+  function setFileBusy(on, label) {
+    if (!fileSubmit) return;
+    fileSubmit.disabled = on;
+    fileSubmit.innerHTML = "";
+    if (on) {
+      fileSubmit.appendChild(el("span", "spinner spinner-sm"));
+      fileSubmit.appendChild(document.createTextNode(" " + (label || "처리 중")));
+    } else {
+      fileSubmit.textContent = fileSubmitLabel;
+    }
+    var confirmBtn = $("regulatory-sheet-confirm");
+    if (confirmBtn) confirmBtn.disabled = on;
+  }
+
+  function showFileError(err) {
+    var box = $("regulatory-file-result-error");
+    if (!box) return;
+    var kind = (err && err.kind) || "unknown";
+    setText($("regulatory-file-error-title"), kind === "unsupported" ? "아직 지원하지 않는 파일이에요" : "파일을 처리하지 못했어요");
+    setText($("regulatory-file-error-message"), (err && err.message) || "잠시 후 다시 시도해 주세요.");
+    setText($("regulatory-file-error-kind"), "오류 종류: " + (ERROR_KIND_LABEL[kind] || kind) + " · 파일을 바꾸거나 수정한 뒤 다시 분석해 주세요.");
+    show(box, true);
+  }
+
+  function hideFileError() { show($("regulatory-file-result-error"), false); }
 
   if (fileInput) {
     fileInput.addEventListener("change", function () {
-      var name = fileInput.files && fileInput.files[0] ? fileInput.files[0].name : "";
+      var f = currentFile();
       var label = $("regulatory-file-name");
-      if (label) label.textContent = name ? "선택한 파일: " + name : "";
-      show(label, !!name);
+      if (label) label.textContent = f ? "선택한 파일: " + f.name + " (" + Math.ceil(f.size / 1024) + " KB)" : "";
+      show(label, !!f);
       if (dropzone) dropzone.classList.remove("is-error");
       show($("regulatory-file-error"), false);
+      hideFileError();
+      // 파일이 바뀌면 이전 시트 목록·추출 결과는 무효
+      fileState.sheets = []; fileState.selectedSheet = null;
+      if (fileState.lastFile && f !== fileState.lastFile) setFileStep("upload");
     });
   }
 
@@ -706,47 +771,224 @@
     });
   }
 
-  if (fileForm) {
-    fileForm.addEventListener("submit", function (e) {
-      e.preventDefault();
-      var market = $("regulatory-file-market");
-      var fileEmpty = !(fileInput && fileInput.files && fileInput.files.length);
-      var marketEmpty = !market.value;
+  /* 업로드 전 확인: 확장자·용량. 서버도 같은 검증을 다시 한다 */
+  function validateFileForm() {
+    var f = currentFile();
+    var market = $("regulatory-file-market");
+    var fileEmpty = !f;
+    var marketEmpty = !market || !market.value;
+    if (dropzone) dropzone.classList.toggle("is-error", fileEmpty);
+    show($("regulatory-file-error"), fileEmpty);
+    if (market) market.classList.toggle("is-error", marketEmpty);
+    show($("regulatory-file-market-error"), marketEmpty);
+    if (fileEmpty || marketEmpty) return false;
+    if (FILE_NOT_YET_EXT.test(f.name) || !FILE_OK_EXT.test(f.name)) {
+      showFileError({ kind: "unsupported", message: UNSUPPORTED_MESSAGE });
+      return false;
+    }
+    if (f.size > FILE_MAX_BYTES) {
+      showFileError({ kind: "limit", message: "파일이 너무 커요. 10 MB 이하 파일을 올려 주세요." });
+      return false;
+    }
+    return true;
+  }
 
-      if (dropzone) dropzone.classList.toggle("is-error", fileEmpty);
-      show($("regulatory-file-error"), fileEmpty);
-      market.classList.toggle("is-error", marketEmpty);
-      show($("regulatory-file-market-error"), marketEmpty);
-
-      if (fileEmpty || marketEmpty) return;
-      notReady("파일 추출");
+  /* 서버로 전송 → 상태별 처리. sheet 를 주면 그 시트만 추출 */
+  function startExtract(sheet) {
+    var f = currentFile();
+    if (!f) return;
+    hideFileError();
+    var seq = ++fileState.seq;
+    var fd = new FormData();
+    fd.append("file", f, f.name);
+    if (sheet) fd.append("sheet", sheet);
+    setFileBusy(true, sheet ? "시트 추출 중" : "파일 분석 중");
+    setFileStep("loading");
+    setText($("regulatory-file-loading-label"), sheet ? "선택한 시트에서 성분을 추출하는 중이에요" : "파일을 확인하고 성분을 추출하는 중이에요");
+    apiPost("/api/regulatory/extract", fd).then(function (body) {
+      if (seq !== fileState.seq) return;              // 그 사이 다른 파일·시트로 다시 보냈으면 무시
+      setFileBusy(false);
+      fileState.lastFile = f;
+      if (body.status === "sheet_required") { renderSheets(body.sheets || []); return; }
+      renderReview(body);
+    }).catch(function (err) {
+      if (seq !== fileState.seq) return;
+      setFileBusy(false);
+      setFileStep("upload");
+      showFileError(err);
     });
   }
 
-  ["regulatory-sheet-confirm", "regulatory-review-submit", "regulatory-retry-failed"].forEach(function (id) {
+  if (fileForm) {
+    fileForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (!validateFileForm()) return;
+      startExtract(null);
+    });
+  }
+
+  /* 시트 선택 */
+  function renderSheets(sheets) {
+    fileState.sheets = sheets;
+    var select = $("regulatory-sheet-select");
+    if (select) {
+      select.innerHTML = "";
+      var first = el("option", null, "선택하세요"); first.value = ""; select.appendChild(first);
+      sheets.forEach(function (name) { var o = el("option", null, name); o.value = name; select.appendChild(o); });
+      select.classList.remove("is-error");
+    }
+    setFileStep("sheet");
+  }
+
+  var sheetConfirm = $("regulatory-sheet-confirm");
+  if (sheetConfirm) {
+    sheetConfirm.addEventListener("click", function () {
+      var select = $("regulatory-sheet-select");
+      var name = select ? select.value : "";
+      if (!name) { if (select) select.classList.add("is-error"); return; }
+      fileState.selectedSheet = name;
+      startExtract(name);
+    });
+  }
+
+  /* 추출 결과 → 편집 가능한 표 */
+  function renderReview(result) {
+    fileState.items = (result.items || []).map(function (it) {
+      return {
+        id: it.id, name_raw: it.name_raw || "", amount_raw: it.amount_raw, amount_unit_hint: it.amount_unit_hint || null,
+        role_raw: it.role_raw || null, location: it.location || "—",
+        needs_review: !!it.needs_review, review_reasons: it.review_reasons || [],
+        name: it.name_raw || "", amount: it.amount_raw || "", include: true, user_added: false, edited: false,
+      };
+    });
+    fileState.nextId = 1;
+
+    var scopeText = "";
+    var sc = result.scope || {};
+    if (result.file && result.file.kind === "pdf") scopeText = "처리 범위: " + (sc.processed || (sc.pages + "쪽"));
+    else if (result.file && result.file.kind === "xlsx") scopeText = "처리 범위: 시트 ‘" + (sc.selected_sheet || "") + "’ (" + (sc.scanned_rows || 0) + "행 확인" + (sc.sheets > 1 ? ", 전체 " + sc.sheets + "개 시트 중" : "") + ")";
+    setText($("regulatory-review-scope"), scopeText + (result.extracted_at ? " · 추출 시각 " + formatTime(result.extracted_at) : ""));
+
+    var docMarket = $("regulatory-file-doc-market");
+    if (docMarket) docMarket.textContent = result.document_market && result.document_market.text ? result.document_market.text + " (" + result.document_market.location + ")" : "미확인";
+
+    var notesList = $("regulatory-review-notes");
+    var notes = (result.notes || []).slice();
+    if (result.document_use && result.document_use.text) notes.push("문서에 적힌 제품 유형·사용 조건: " + result.document_use.text + " (" + result.document_use.location + ")");
+    if (notesList) { notesList.innerHTML = ""; notes.forEach(function (n) { notesList.appendChild(el("li", null, n)); }); }
+    show($("regulatory-review-partial"), notes.length > 0);
+
+    fileState.emptyResult = result.status === "empty";
+    if (reviewBody) { reviewBody.innerHTML = ""; fileState.items.forEach(function (it) { reviewBody.appendChild(rowElement(it)); }); }
+    setFileStep("review");
+    updateReviewCount();
+  }
+
+  function statusBadge(it) {
+    if (it.user_added) return badge("직접 입력", "warning");
+    if (it.edited) return badge("수정됨", "");
+    if (it.needs_review) return badge("확인 필요", "warning");
+    return badge("추출됨", "");
+  }
+
+  function rowElement(it) {
+    var tr = el("tr");
+    tr.setAttribute("data-row-id", it.id);
+
+    var tdCheck = el("td");
+    var check = el("input"); check.type = "checkbox"; check.checked = it.include; check.setAttribute("aria-label", "조회 포함");
+    check.addEventListener("change", function () { it.include = check.checked; updateReviewCount(); });
+    var checkWrap = el("label", "form-check"); checkWrap.appendChild(check); tdCheck.appendChild(checkWrap);
+    tr.appendChild(tdCheck);
+
+    var tdName = el("td");
+    tdName.appendChild(el("p", "regulatory-review-origin", "원문: " + (it.user_added ? "(직접 입력)" : (it.name_raw || "(비어 있음)"))));
+    var nameInput = el("input", "form-control form-control-sm"); nameInput.type = "text"; nameInput.value = it.name;
+    nameInput.placeholder = "성분명 (한글 또는 INCI)"; nameInput.setAttribute("aria-label", "성분명 수정");
+    nameInput.addEventListener("input", function () { it.name = nameInput.value; if (!it.user_added && nameInput.value.trim() !== it.name_raw) it.edited = true; else it.edited = false; replaceChildren(statusCell, statusBadge(it)); updateReviewCount(); });
+    tdName.appendChild(nameInput);
+    tr.appendChild(tdName);
+
+    var tdAmount = el("td");
+    var originText = it.user_added ? "(직접 입력)" : (it.amount_raw == null ? "미기재" : it.amount_raw + (it.amount_unit_hint && !/[%％]|ppm|mg|g\//i.test(it.amount_raw) ? " (열 제목 단위: " + it.amount_unit_hint + ")" : ""));
+    tdAmount.appendChild(el("p", "regulatory-review-origin", "원문: " + originText));
+    var amountInput = el("input", "form-control form-control-sm"); amountInput.type = "text"; amountInput.value = it.amount;
+    amountInput.placeholder = it.amount_raw == null ? "미기재 (비워 두면 미기재)" : "원문 유지"; amountInput.setAttribute("aria-label", "함량 수정");
+    amountInput.addEventListener("input", function () { it.amount = amountInput.value; if (!it.user_added && amountInput.value.trim() !== (it.amount_raw || "")) it.edited = true; else it.edited = (it.name.trim() !== it.name_raw); replaceChildren(statusCell, statusBadge(it)); });
+    tdAmount.appendChild(amountInput);
+    tr.appendChild(tdAmount);
+
+    var tdLoc = el("td", "text-caption text-secondary", it.location);
+    if (it.role_raw) tdLoc.appendChild(el("p", "regulatory-review-reason", "문서 비고: " + it.role_raw));
+    tr.appendChild(tdLoc);
+
+    var statusCell = el("td");
+    statusCell.appendChild(statusBadge(it));
+    if (it.review_reasons.length) statusCell.appendChild(el("p", "regulatory-review-reason", it.review_reasons.join(" ")));
+    tr.appendChild(statusCell);
+
+    var tdAct = el("td", "regulatory-col-action");
+    var del = el("button", "btn btn-secondary btn-sm", "삭제"); del.type = "button"; del.setAttribute("aria-label", "행 삭제");
+    del.addEventListener("click", function () {
+      fileState.items = fileState.items.filter(function (x) { return x !== it; });
+      if (tr.parentNode) tr.parentNode.removeChild(tr);
+      updateReviewCount();
+    });
+    tdAct.appendChild(del);
+    tr.appendChild(tdAct);
+    return tr;
+  }
+
+  function updateReviewCount() {
+    var total = fileState.items.length;
+    var included = fileState.items.filter(function (x) { return x.include; }).length;
+    var review = fileState.items.filter(function (x) { return x.needs_review && !x.edited; }).length;
+    setText($("regulatory-review-count"), total + "행 · 조회 포함 " + included + " · 확인 필요 " + review);
+    // 서버가 '성분 표 없음'을 돌려준 경우에만 Empty State. 행을 직접 추가하면 숨기고, 모두 지우면 다시 보인다
+    show($("regulatory-file-empty"), fileState.emptyResult && total === 0);
+  }
+
+  var addRowBtn = $("regulatory-review-add");
+  if (addRowBtn) {
+    addRowBtn.addEventListener("click", function () {
+      var it = { id: "u" + (fileState.nextId++), name_raw: "", amount_raw: null, amount_unit_hint: null, role_raw: null, location: "직접 입력",
+                 needs_review: true, review_reasons: ["직접 입력한 행이에요. 성분명을 확인해 주세요."], name: "", amount: "", include: true, user_added: true, edited: false };
+      fileState.items.push(it);
+      if (reviewBody) { var tr = rowElement(it); reviewBody.appendChild(tr); var inp = tr.querySelector("input[type=text]"); if (inp) inp.focus(); }
+      updateReviewCount();
+    });
+  }
+
+  /* 규제 일괄 조회 — 다음 단계. 여기서는 준비 중 안내만 (API 호출 없음) */
+  ["regulatory-review-submit", "regulatory-retry-failed"].forEach(function (id) {
     var btn = $(id);
-    if (btn) btn.addEventListener("click", function () { notReady("파일 일괄 규제 조회"); });
+    if (btn) btn.addEventListener("click", function () { notReady("파일 성분의 규제 일괄 조회"); });
   });
 
   var reupload = $("regulatory-review-reupload");
   if (reupload) {
     reupload.addEventListener("click", function () {
+      fileState.seq++;                                  // 진행 중 응답 무시
+      fileState.items = []; fileState.sheets = []; fileState.selectedSheet = null; fileState.lastFile = null; fileState.emptyResult = false;
+      if (reviewBody) reviewBody.innerHTML = "";
+      hideFileError();
       setFileStep("upload");
       if (fileInput) fileInput.value = "";
       show($("regulatory-file-name"), false);
+      var docMarket = $("regulatory-file-doc-market"); if (docMarket) docMarket.textContent = "미확인";
+      if (fileInput) fileInput.focus();
     });
   }
 
-  // 파일 단계: upload | loading | sheet | review | review-partial
+  // 파일 단계: upload | loading | sheet | review — 한 블록만 표시. 4·5 단계 표시는 다음 단계에서 활성화
   function setFileStep(st) {
     show($("regulatory-file-loading"), st === "loading");
     show($("regulatory-sheet-block"), st === "sheet");
-    var review = st === "review" || st === "review-partial";
-    show($("regulatory-review-block"), review);
-    show($("regulatory-review-partial"), st === "review-partial");
-    show($("regulatory-excluded-block"), review);
+    show($("regulatory-review-block"), st === "review");
+    if (st !== "review") { show($("regulatory-review-partial"), false); show($("regulatory-file-empty"), false); }
+    show($("regulatory-excluded-block"), false);        // 사용 제외 성분 목록은 다음 단계
 
-    var stepKey = { upload: "upload", loading: "upload", sheet: "sheet", review: "review", "review-partial": "review" }[st] || "upload";
+    var stepKey = { upload: "upload", loading: "upload", sheet: "sheet", review: "review" }[st] || "upload";
     var order = ["upload", "sheet", "review", "lookup", "result"];
     var idx = order.indexOf(stepKey);
     document.querySelectorAll(".regulatory-steps__item").forEach(function (li) {
