@@ -15,6 +15,7 @@
     <p class="page-description">원가부터 수출 단가, 견적서 발행까지 한 번에 계산해요.</p>
   </div>
   <div class="page-actions">
+    <button type="button" class="btn btn-surface" id="margin-reset-btn">초기화</button>
     <a class="btn btn-surface" href="{{ url_for('home') }}">← 홈으로</a>
   </div>
 </div>
@@ -342,6 +343,23 @@
     </div>
     <div class="modal-footer">
       <button type="button" class="btn btn-secondary" data-modal-close>닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 확인 Modal — 초기화 등 (margin.md §2.6). window.confirm() 대신 사용 -->
+<div class="modal-backdrop" id="margin-confirm-modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="margin-confirm-title">
+    <div class="modal-header">
+      <h2 class="modal-title" id="margin-confirm-title">입력값 초기화</h2>
+      <button type="button" class="modal-close" data-modal-close aria-label="닫기">×</button>
+    </div>
+    <div class="modal-body">
+      <p id="margin-confirm-message">현재 입력값이 사라져요. 계속할까요?</p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-modal-close>취소</button>
+      <button type="button" class="btn btn-primary" id="margin-confirm-ok-btn">확인</button>
     </div>
   </div>
 </div>

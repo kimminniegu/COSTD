@@ -9,6 +9,7 @@
 | 1.0 | 2026-09-23 | 3대 서브 탭(수량별 단가 / 수출 조건·환율·역제안 / PI·협상 히스토리) 전체 명세 작성 | C |
 | 1.1 | 2026-09-23 | API 접두사를 README 규칙 9에 맞춰 `/api/margin/` → `/api/margin-calculator/`로 변경 | C |
 | 1.2 | 2026-09-23 | MOQ 1,500ea 고정(읽기 전용, 서버 `MOQ_FIXED`), 수량 구간 사용자 정의 Chip 입력 규칙 확정(§2.3, §3.1.3, §4.2.1, §7.1) | C |
+| 1.3 | 2026-09-23 | Tab 1 원/ea 금액 소수 2자리 표시(§4.0), chart 응답에 `unit_margin` 추가(§6.4.3), 목표 마진·방어선 범위 오류 코드 `INVALID_MARGIN`으로 통일 | C |
 
 **문서 표기 규칙**
 
@@ -660,7 +661,7 @@ INCOTERMS = {
   | 원화 공급단가(제안가) | `KRW_PRICE_ROUND_UNIT`(10원) 단위 **올림**(`ROUND_CEILING`) — 반올림으로 목표 마진이 깎이는 것을 방지 |
   | 외화 단가 | 통화별 단가 소수 자리로 **올림** |
   | 외화 금액(단가 × 수량) | 통화별 금액 소수 자리로 **반올림**(`ROUND_HALF_UP`) |
-  | 원가·마진액(원) | 내부는 무한 정밀도, 응답은 소수 2자리 반올림, 화면은 정수(원) 표시 |
+  | 원가·마진액(원) | 내부는 무한 정밀도, 응답은 소수 2자리 반올림. 화면: 원/ea 단위(총 제조원가·영업 마진액·원가 구성)는 소수 2자리(Golden Case 검산용), 총액·공급단가는 정수(원) |
   | 비율(%) | 응답 소수 2자리 반올림, 화면 소수 1~2자리 |
 - **마진율 정의**: 이 페이지의 모든 "마진율"은 **판매가 대비 이익률(Gross Margin on Price)** 입니다. `마진율 = (가격 − 원가) / 가격`. 원가 대비 이익률(Markup)은 쓰지 않습니다.
 
@@ -1207,7 +1208,8 @@ get_fx_rates(currencies, force=False)
       }
     ],
     "chart": { "labels": ["1,500", "3,000", "5,000", "10,000"], "unit_cost": [2129.0, 1852.39, 1726.69, 1601.2],
-               "supply_price": [3050, 2650, 2470, 2290], "margin_rate": [30.2, 30.1, 30.09, 30.08] },
+               "supply_price": [3050, 2650, 2470, 2290], "unit_margin": [921.0, 797.61, 743.31, 688.8],
+               "margin_rate": [30.2, 30.1, 30.09, 30.08], "status": ["ok", "ok", "ok", "ok"], "qty": [1500, 3000, 5000, 10000] },
     "summary": { "has_negative": false, "has_below_defense": false }
   },
   "warnings": []
@@ -1522,9 +1524,9 @@ service.py
 ├─ Tab 1
 │   ├─ get_discount_rates(qty: int) -> dict[str, Decimal]
 │   ├─ calc_unit_cost(cost: dict, qty: int) -> dict               # breakdown + unit_cost
-│   ├─ calc_supply_price(unit_cost, target_margin, override=None) -> dict
+│   ├─ calc_supply_price(unit_cost, target_margin, override=None, qty=1) -> dict   # 제안가·마진액·총마진·마진율·총매출
 │   ├─ classify_margin(rate, target, minimum) -> str              # §4.2.5
-│   ├─ normalize_tiers(tiers, moq) -> list[int]
+│   ├─ normalize_tiers(tiers, moq, errors=None) -> list[int]   # errors 생략 시 즉시 MarginValidationError
 │   ├─ validate_tier_request(payload) -> dict                     # 정규화된 입력
 │   └─ calculate_tiers(payload) -> dict                           # API 진입점
 ├─ Tab 2 물류

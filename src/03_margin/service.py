@@ -3,7 +3,7 @@
 기능 명세: src/03_margin/margin.md
 - app.py 의 Route 는 입력 추출 → 이 모듈 호출 → 응답 반환만 합니다.
 - 금액 계산은 모두 Decimal 로 하고, 응답 직전에만 float 로 변환합니다. (margin.md §4.0)
-- 현재 구현 범위: §3.2 Master Data 전체 + GET master (§8.2 0~1단계), Tab 1 수량별 단가 계산 (2단계)
+- 현재 구현 범위: §3.2 Master Data 전체 + GET master (§8.2 0~1단계), Tab 1 수량별 단가·마진 계산 (2단계)
 """
 
 from datetime import datetime, timedelta, timezone
@@ -337,7 +337,8 @@ def _parse_decimal(value):
     return result if result.is_finite() else None
 
 
-def to_decimal(value, field, errors, *, label, min_value=None, max_value=None, required=True, default=None):
+def to_decimal(value, field, errors, *, label, min_value=None, max_value=None, required=True, default=None,
+               range_code="OUT_OF_RANGE"):
     """숫자 입력 검증 후 Decimal 반환. 오류는 errors 에 수집하고 None 반환."""
     if value is None or value == "":
         if default is not None:
@@ -350,7 +351,7 @@ def to_decimal(value, field, errors, *, label, min_value=None, max_value=None, r
         errors.add("OUT_OF_RANGE", field, f"{label}은(는) 숫자로 입력해 주세요")
         return None
     if (min_value is not None and number < min_value) or (max_value is not None and number > max_value):
-        errors.add("OUT_OF_RANGE", field, f"{label}은(는) {_fmt(min_value)}~{_fmt(max_value)} 사이로 입력해 주세요")
+        errors.add(range_code, field, f"{label}은(는) {_fmt(min_value)}~{_fmt(max_value)} 사이로 입력해 주세요")
         return None
     return number
 
@@ -521,11 +522,23 @@ def calc_unit_cost(cost, qty):
     }
 
 
-def calc_supply_price(unit_cost, target_margin, override=None):
-    """제안 공급단가 P(q) (10원 올림) 및 수동 단가 적용. 수식 §4.2.3"""
+def calc_supply_price(unit_cost, target_margin, override=None, qty=1):
+    """제안 공급단가 P(q)(10원 올림)·수동 단가 적용과 마진 지표. 수식 §4.2.3
+
+    margin_rate 는 판매가 대비 이익률(소수)입니다: (P − C) / P
+    """
     suggested = ceil_to(unit_cost / (1 - pct(target_margin)), KRW_PRICE_ROUND_UNIT)
     price = override if override is not None else suggested
-    return {"suggested": suggested, "price": price, "is_overridden": override is not None}
+    unit_margin = price - unit_cost
+    return {
+        "suggested": suggested,
+        "price": price,
+        "is_overridden": override is not None,
+        "unit_margin": unit_margin,              # G(q)  원/ea
+        "total_margin": unit_margin * qty,       # G_total(q)
+        "margin_rate": unit_margin / price,      # g(q)
+        "total_sales": price * qty,              # S(q)
+    }
 
 
 def classify_margin(rate, target, minimum):
@@ -539,8 +552,16 @@ def classify_margin(rate, target, minimum):
     return "ok"
 
 
-def normalize_tiers(tiers, moq, errors):
-    """tiers 검증 → MOQ 포함·중복 제거·오름차순 정렬. 규칙 §3.1.3, §7.1"""
+def normalize_tiers(tiers, moq, errors=None):
+    """tiers 검증 → MOQ 포함·중복 제거·오름차순 정렬. 규칙 §3.1.3, §7.1
+
+    errors 를 주면 오류를 모으기만 하고, 생략하면 오류 시 MarginValidationError 를 던집니다.
+    """
+    if errors is None:
+        errors = _Errors()
+        result = normalize_tiers(tiers, moq, errors)
+        errors.raise_if_any()
+        return result
     if tiers is None:
         tiers = []
     if not isinstance(tiers, list):
@@ -597,9 +618,11 @@ def validate_tier_request(payload):
         errors.add("ZERO_COST", "cost", "원가를 1개 이상 입력해 주세요")
 
     target = to_decimal(payload.get("target_margin"), "target_margin", errors, label="목표 마진율",
-                        min_value=Decimal(0), max_value=MAX_TARGET_MARGIN, default=DEFAULT_TARGET_MARGIN)
+                        min_value=Decimal(0), max_value=MAX_TARGET_MARGIN, default=DEFAULT_TARGET_MARGIN,
+                        range_code="INVALID_MARGIN")
     minimum = to_decimal(payload.get("min_margin"), "min_margin", errors, label="마진 방어선",
-                         min_value=Decimal(0), max_value=MAX_TARGET_MARGIN, default=DEFAULT_MIN_MARGIN)
+                         min_value=Decimal(0), max_value=MAX_TARGET_MARGIN, default=DEFAULT_MIN_MARGIN,
+                         range_code="INVALID_MARGIN")
     if target is not None and minimum is not None and minimum > target:
         errors.add("INVALID_MARGIN", "min_margin", "방어선은 목표 마진보다 클 수 없어요")
 
@@ -648,10 +671,8 @@ def calculate_tiers(payload):
     rows = []
     for qty in req["tiers"]:
         c = calc_unit_cost(req["cost"], qty)
-        p = calc_supply_price(c["unit_cost"], target, req["price_overrides"].get(qty))
-        unit_cost, price = c["unit_cost"], p["price"]
-        unit_margin = price - unit_cost
-        rate = unit_margin / price
+        p = calc_supply_price(c["unit_cost"], target, req["price_overrides"].get(qty), qty)
+        unit_cost, price, rate = c["unit_cost"], p["price"], p["margin_rate"]
         status = classify_margin(rate, target_f, minimum_f)
         if p["is_overridden"] and status == "negative":
             warnings.append({"code": "OVERRIDE_NEGATIVE_MARGIN", "qty": qty,
@@ -668,10 +689,10 @@ def calculate_tiers(payload):
             "suggested_price": out(p["suggested"]),
             "supply_price": out(price),
             "is_overridden": p["is_overridden"],
-            "unit_margin": out(unit_margin),
-            "total_margin": out(unit_margin * qty),
+            "unit_margin": out(p["unit_margin"]),
+            "total_margin": out(p["total_margin"]),
             "margin_rate": out(rate * 100),
-            "total_sales": out(price * qty),
+            "total_sales": out(p["total_sales"]),
             "cost_saving_vs_moq": out((moq_cost["unit_cost"] - unit_cost) / moq_cost["unit_cost"] * 100),
             "price_cut_vs_moq": out((moq_price - price) / moq_price * 100),
             "status": status,
@@ -688,6 +709,7 @@ def calculate_tiers(payload):
             "qty": [row["qty"] for row in rows],
             "unit_cost": [row["unit_cost"] for row in rows],
             "supply_price": [row["supply_price"] for row in rows],
+            "unit_margin": [row["unit_margin"] for row in rows],
             "margin_rate": [row["margin_rate"] for row in rows],
             "status": [row["status"] for row in rows],
         },

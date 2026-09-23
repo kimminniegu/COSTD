@@ -1,7 +1,7 @@
 /* 원가 경쟁력 및 마진 시뮬레이션 전용 JavaScript (담당자 C)
    이 페이지에서만 필요한 로직만 작성합니다.
    다른 페이지의 JS를 수정하거나 의존하지 않습니다. 공통 동작은 src/common/common.js 참고.
-   기능 명세: src/03_margin/margin.md — 현재 구현 범위: Tab 1 (§2.3, §3.1.3, §4.2, §5, §7.1) */
+   기능 명세: src/03_margin/margin.md — 현재 구현 범위: Tab 1 (§2.1~2.3, §3.1, §4.2, §5, §7.1, §7.2, §8.3) */
 (function () {
   "use strict";
 
@@ -54,6 +54,7 @@
   var fmt = {
     int: function (v) { return Math.round(v).toLocaleString("ko-KR"); },
     krw: function (v) { return Math.round(v).toLocaleString("ko-KR") + "원"; },
+    won2: function (v) { return Number(v).toLocaleString("ko-KR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
     qty: function (v) { return Number(v).toLocaleString("ko-KR") + "ea"; },
     pct: function (v) { return Number(v).toFixed(2) + "%"; },
   };
@@ -458,7 +459,7 @@
       discountCell.appendChild(bracket);
       tr.appendChild(discountCell);
 
-      tr.appendChild(cell(fmt.int(row.unit_cost), true));
+      tr.appendChild(cell(fmt.won2(row.unit_cost), true));
 
       var priceCell = cell(undefined, true);
       var priceInput = document.createElement("input");
@@ -476,7 +477,7 @@
       priceCell.appendChild(priceInput);
       tr.appendChild(priceCell);
 
-      tr.appendChild(cell(fmt.int(row.unit_margin), true));
+      tr.appendChild(cell(fmt.won2(row.unit_margin), true));
       tr.appendChild(cell(fmt.int(row.total_margin), true));
       tr.appendChild(cell(fmt.pct(row.margin_rate), true));
 
@@ -588,15 +589,29 @@
 
   var lastChartWidth = 0;
 
+  /* 현재 state 로 차트 갱신 (빈 상태 전환 포함) */
   function renderChart() {
     var container = $("margin-tier-chart");
-    var result = state.tier.result;
+    var chartData = state.tier.result ? state.tier.result.chart : null;
+    $("margin-tier-chart-empty").hidden = Boolean(chartData);
+    container.hidden = !chartData;
     container.textContent = "";
-    $("margin-tier-chart-empty").hidden = Boolean(result);
-    container.hidden = !result;
-    if (!result) return;
+    if (chartData) renderTierChart(container, chartData, state.selection.qty);
+  }
 
-    var rows = result.rows;
+  /* calculate-tiers 응답의 chart 데이터로 SVG 차트를 그립니다. 외부 라이브러리 없이 createElementNS 사용 */
+  function renderTierChart(container, chartData, selectedQty) {
+    container.textContent = "";
+    var rows = chartData.qty.map(function (qty, i) {
+      return {
+        qty: qty,
+        unit_cost: chartData.unit_cost[i],
+        supply_price: chartData.supply_price[i],
+        unit_margin: chartData.unit_margin[i],
+        margin_rate: chartData.margin_rate[i],
+        status: chartData.status[i],
+      };
+    });
     var width = Math.max(container.clientWidth, 320);
     lastChartWidth = width;
     var height = 300;
@@ -629,7 +644,7 @@
     tooltip.hidden = true;
 
     rows.forEach(function (row, i) {
-      var hit = svg("rect", { class: "margin-chart__hit" + (row.qty === state.selection.qty ? " is-active" : ""), x: pad.left + band * i, y: pad.top, width: band, height: plotH, rx: 8 }, root);
+      var hit = svg("rect", { class: "margin-chart__hit" + (row.qty === selectedQty ? " is-active" : ""), x: pad.left + band * i, y: pad.top, width: band, height: plotH, rx: 8 }, root);
       hit.addEventListener("mouseenter", function () { showTooltip(tooltip, row, x(i), y(Math.max(row.unit_cost, row.supply_price))); });
       hit.addEventListener("mouseleave", function () { tooltip.hidden = true; });
       hit.addEventListener("click", function () { selectTier(row.qty); });
@@ -645,7 +660,7 @@
     svg("polyline", { class: "margin-chart__line", points: points }, root);
 
     rows.forEach(function (row, i) {
-      var selected = row.qty === state.selection.qty;
+      var selected = row.qty === selectedQty;
       svg("circle", { class: "margin-chart__point" + (selected ? " is-selected" : ""), cx: x(i), cy: y(row.supply_price), r: selected ? 7 : 5 }, root);
       var modifier = row.status === "negative" ? " margin-chart__label--negative"
         : row.status === "below_defense" ? " margin-chart__label--below-defense" : "";
@@ -663,9 +678,9 @@
     title.textContent = fmt.qty(row.qty);
     tooltip.appendChild(title);
     [
-      "총 제조원가 " + fmt.krw(row.unit_cost),
+      "총 제조원가 " + fmt.won2(row.unit_cost) + "원",
       "제안 공급단가 " + fmt.krw(row.supply_price),
-      "영업 마진액 " + fmt.krw(row.unit_margin) + "/ea",
+      "영업 마진액 " + fmt.won2(row.unit_margin) + "원/ea",
       "영업 마진율 " + fmt.pct(row.margin_rate),
     ].forEach(function (text) {
       var line = document.createElement("span");
@@ -712,11 +727,11 @@
       tbody.appendChild(tr);
     };
     COST_FIELDS.forEach(function (f) {
-      addRow(f.label, fmt.krw(base[f.key]), row.discounts[f.key] + "%", fmt.krw(row.breakdown[f.key]));
+      addRow(f.label, fmt.krw(base[f.key]), row.discounts[f.key] + "%", fmt.won2(row.breakdown[f.key]) + "원");
     });
-    addRow("로스(①②③ × " + loss + "%)", "—", "—", fmt.krw(row.breakdown.loss));
-    addRow("고정비 분산", fmt.krw(fixed) + " ÷ " + fmt.int(row.qty), "—", fmt.krw(row.breakdown.fixed));
-    addRow("총 제조원가", "", "", fmt.krw(row.unit_cost), true);
+    addRow("로스(①②③ × " + loss + "%)", "—", "—", fmt.won2(row.breakdown.loss) + "원");
+    addRow("고정비 분산", fmt.krw(fixed) + " ÷ " + fmt.int(row.qty), "—", fmt.won2(row.breakdown.fixed) + "원");
+    addRow("총 제조원가", "", "", fmt.won2(row.unit_cost) + "원", true);
     window.Common.openModal("margin-cost-breakdown-modal");
   }
 
@@ -775,6 +790,14 @@
 
     $("margin-go-export-btn").addEventListener("click", function () { $("margin-tab-btn-export").click(); });
 
+    $("margin-reset-btn").addEventListener("click", function () {
+      if (state.master) window.Common.openModal("margin-confirm-modal");
+    });
+    $("margin-confirm-ok-btn").addEventListener("click", function () {
+      window.Common.closeModal("margin-confirm-modal");
+      resetAll();
+    });
+
     if ("ResizeObserver" in window) {
       var frame = null;
       new ResizeObserver(function () {
@@ -785,6 +808,50 @@
         });
       }).observe($("margin-tier-chart-card"));
     }
+  }
+
+  /* 입력값 초기화 (§5.3) — 확인 Modal 에서 [확인] 시 실행 */
+  function resetAll() {
+    if (state.controller) state.controller.abort();
+    state.requestSeq += 1; // 진행 중이던 응답 무시
+    var d = state.master.defaults;
+
+    $("margin-product-name").value = "";
+    $("margin-product-volume").value = "50";
+    $("margin-product-category").selectedIndex = 0;
+    COST_FIELDS.forEach(function (f) { $(f.id).value = ""; });
+    $("margin-fixed-cost").value = d.fixed_cost;
+    $("margin-loss-rate").value = d.loss_rate;
+    $("margin-target-margin").value = d.target_margin;
+    $("margin-min-margin").value = d.min_margin;
+    $("margin-tier-input").value = "";
+
+    state.tier.tiers = d.tiers.filter(function (q) { return q > d.moq; }).sort(function (a, b) { return a - b; });
+    state.tier.priceOverrides = {};
+    state.tier.result = null;
+    state.tier.status = "idle";
+    state.selection.qty = null;
+
+    clearFieldErrors();
+    showTierError("");
+    setStatusBadge(null);
+    $("margin-tier-tbody").textContent = "";
+    $("margin-tier-table-wrap").hidden = true;
+    $("margin-tier-note").hidden = true;
+    $("margin-tier-alert").hidden = true;
+    $("margin-tier-empty").hidden = false;
+    $("margin-tier-result-subtitle").textContent = "목표 마진 " + d.target_margin + "% · 10원 단위 올림";
+    document.querySelectorAll("#margin-summary-bar .stat-tile__value").forEach(function (el) { el.textContent = "—"; });
+
+    $("margin-go-export-btn").disabled = true;
+    var exportTab = $("margin-tab-btn-export");
+    exportTab.disabled = true;
+    exportTab.title = "먼저 수량 구간을 선택해 주세요";
+    $("margin-tab-btn-tier").click();
+
+    renderChips();
+    renderCostPreview();
+    renderChart();
   }
 
   /* 초기화 --------------------------------------------------------------------- */
