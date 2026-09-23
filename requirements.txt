@@ -1,5 +1,6 @@
 Flask>=3.0,<4.0
 python-dotenv>=1.0
+xhtml2pdf>=0.2.11
 requests>=2.31
 openpyxl>=3.1
 pypdf>=6.0
