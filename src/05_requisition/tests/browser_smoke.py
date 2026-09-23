@@ -116,7 +116,7 @@ def main():
                     break
                 time.sleep(0.1)
             assert js('document.querySelector(".requisition-print-frame").contentDocument.body.textContent.includes("최종 제품명")')
-            assert "_v2" in js('document.querySelector(".requisition-print-frame").contentDocument.title')
+            assert "_v2" not in js('document.querySelector(".requisition-print-frame").contentDocument.title')
             screenshot = profile / "requisition-desktop.png"
             screenshot.write_bytes(base64.b64decode(command("Page.captureScreenshot", {"format": "png"})["data"]))
             command("Emulation.setDeviceMetricsOverride", {"width": 390, "height": 844, "deviceScaleFactor": 1, "mobile": True})

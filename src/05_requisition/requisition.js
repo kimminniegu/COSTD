@@ -503,7 +503,7 @@
       const data = clone(saved);
       const date = new Date(), datePart = [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("");
       const safePart = (value) => String(value || "Unknown").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "").replace(/\s+/g, "").slice(0, 70);
-      const filename = "DevelopmentRequest_" + safePart(data.customer) + "_" + safePart(data.product_name) + "_" + datePart + "_v" + data.version;
+      const filename = "DevelopmentRequest_" + safePart(data.customer) + "_" + safePart(data.product_name) + "_" + datePart;
       const pdfValue = (key) => {
         const provenance = data.field_provenance.find((item) => item.field_key === key);
         if (provenance?.review_status === "not_applicable") return "해당 없음";
@@ -519,15 +519,12 @@
         '<p class="document-type">연구소 전달용</p><h1>제품 개발 요청서</h1><p class="subtitle">PRODUCT DEVELOPMENT REQUEST</p></header>' +
         '<table class="document-meta"><caption>문서 정보</caption><tbody>' +
         '<tr><th scope="row">문서 ID</th><td colspan="3">' + escape(data.document_id || "미지정") + '</td></tr>' +
-        '<tr><th scope="row">출력일</th><td>' + issuedDate + '</td><th scope="row">문서 버전</th><td>v' + escape(data.version) + '</td></tr>' +
+        '<tr><th scope="row">출력일</th><td colspan="3">' + issuedDate + '</td></tr>' +
         '<tr><th scope="row">수신</th><td>연구소</td><th scope="row">작성 방식</th><td>' + escape(methods[data.creation_method] || "미지정") + '</td></tr></tbody></table>' +
         sections.map(([title, fields], index) => '<section><h2>' + escape(title) + '</h2><table class="requirements"><colgroup><col class="label-column"><col></colgroup><thead><tr><th scope="col">항목</th><th scope="col">요청 내용</th></tr></thead><tbody>' +
           fields.map(([key, label]) => row(label, key === "buyer_prohibited_ingredients" ? prohibitedIngredients : pdfValue(key))).join('') +
           '</tbody></table></section>').join('') +
         '<section class="references"><h2>05 참고자료</h2>' + (referenceMarkup(data, true) || '<p class="empty-reference">등록된 참고자료 없음</p>') + '</section>' +
-        '<section class="review-signoff"><h2>연구소 검토</h2><table class="requirements"><colgroup><col class="label-column"><col></colgroup><tbody>' +
-        row("검토 담당자 / 검토일", "담당자:                         검토일:          년       월       일") +
-        '<tr><th scope="row">검토 의견</th><td class="review-space"></td></tr></tbody></table></section>' +
         '<footer><strong>COSTD · COSMOA</strong><span>수출 대상국별 규제 적합성은 별도 확인이 필요합니다.</span></footer></main>';
       const printStyles = `
         @page { size: A4; margin: 14mm 14mm 16mm; }

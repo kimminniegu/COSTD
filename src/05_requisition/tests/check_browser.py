@@ -112,7 +112,7 @@ try {
   assert(pdf.querySelector('h1').textContent === '제품 개발 요청서', 'formal document title');
   assert(pdf.querySelector('.document-meta').textContent.includes('연구소'), 'research recipient');
   assert(pdf.querySelectorAll('table.requirements thead').length === 4, 'all requirement tables included');
-  assert(pdf.querySelector('.review-signoff').textContent.includes('검토 담당자'), 'research review area');
+  assert(!pdf.querySelector('.review-signoff'), 'research review area removed');
   assert(pdf.querySelector('footer').textContent.includes('COSTD'), 'company footer');
   assert(pdf.querySelector('.requirements').textContent.includes('Browser customer'), 'customer retained in formal PDF');
   assert(pdf.body.textContent.includes('신규 샘플'), 'sample type included in PDF');
