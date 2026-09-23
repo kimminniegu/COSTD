@@ -174,7 +174,6 @@
     renderReferences();
     $("panel-title").textContent = editing() ? "작성 상태" : "문서 정보";
     $("form-help").textContent = editing() ? "* 표시된 항목은 필수 입력이에요." : "개발에 필요한 핵심 정보를 확인해요.";
-    $("version").textContent = "v" + data.version;
     $("benchmark").innerHTML = '<label class="form-label"' + (editing() ? ' for="requisition-input-benchmark_product_name"' : "") + '>벤치마크 제품명</label>' +
       '<div class="requisition-field-content">' + (editing() ? input("benchmark_product_name", "참고할 제품명 (선택)") : '<p class="requisition-field-value">' + escape(data.benchmark_product_name || "미입력") + "</p>") + '</div>';
     $("secondary").textContent = state === "result" ? "수정" : state === "edit" ? "수정 취소" : "작성 취소";
@@ -234,7 +233,7 @@
   function renderReferences() {
     $("references").innerHTML = '<div class="requisition-reference-grid">' + referenceMarkup(current()) + '</div>' +
       (originalFile ? '<button type="button" class="btn btn-secondary" data-original-file>원본 RFP 다운로드</button>' : '') +
-      (editing() ? '<label class="form-label">참고자료 추가<input class="form-control" type="file" id="requisition-reference-input" multiple accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.xlsx"></label><p class="form-help">이미지는 PDF에 포함되고, 문서는 파일명으로 표시돼요. 파일당 5MB, 전체 20MB까지 추가할 수 있어요.</p>' : !(current().reference_files || []).length ? '<p class="text-caption">등록된 참고자료가 없어요.</p>' : '');
+      (editing() ? '<div class="requisition-reference-upload"><div><p class="form-label">참고자료 추가</p><p class="form-help">PNG, JPG, WEBP, PDF, DOCX, XLSX · 파일당 5MB · 전체 20MB</p></div><input class="requisition-file-input" type="file" id="requisition-reference-input" multiple accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.xlsx"><label class="btn btn-soft" for="requisition-reference-input"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/></svg>파일 선택</label></div><p class="form-help requisition-reference-help">선택한 이미지는 PDF에 함께 표시되고, 문서는 파일명으로 표시돼요.</p>' : !(current().reference_files || []).length ? '<div class="requisition-reference-empty"><p>등록된 참고자료가 없어요.</p></div>' : '');
   }
   $("document").addEventListener("change", async (event) => {
     if (!editing()) return;

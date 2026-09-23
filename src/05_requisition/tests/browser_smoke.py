@@ -105,7 +105,7 @@ def main():
             click("secondary")
             fill("product_name", "최종 제품명")
             click("primary")
-            assert js('document.getElementById("requisition-version").textContent') == "v2"
+            assert js('document.getElementById("requisition-version") === null')
             # 인쇄 대화상자를 대신해 생성된 실제 iframe 문서의 최종값을 검증합니다.
             js('window.printWatch = new MutationObserver(() => {const f=document.querySelector(".requisition-print-frame");if(f){f.contentWindow.print=()=>{};}});printWatch.observe(document.body,{childList:true});')
             click("primary")

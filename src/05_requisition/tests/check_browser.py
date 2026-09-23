@@ -79,7 +79,7 @@ try {
   assert(by('fields').textContent.includes('Texture v1'), 'edit cancellation');
   by('secondary').click(); enter('product_development.texture', 'Texture v2');
   submit();
-  assert(by('version').textContent === 'v2', 'nested edit increments version');
+  assert(!by('version'), 'version badge removed');
   assert(by('fields').textContent.includes('Texture v2'), 'nested edit saved');
   // Suppress the native dialog while exercising the actual PDF DOM generation.
   const append = document.body.append.bind(document.body);
