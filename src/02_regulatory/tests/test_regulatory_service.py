@@ -32,6 +32,12 @@ def load_body(name):
         return json.load(f)["body"]
 
 
+def _login(client):
+    """PM 로그인 기능(src/common/auth.py) 추가 후 페이지 Route 가 @login_required 라서 테스트 세션에 사용자를 넣는다. (DB·비밀번호 불필요)"""
+    with client.session_transaction() as sess:
+        sess["user"] = {"id": 0, "email": "test@example.invalid", "name": "테스트", "team": "B"}
+
+
 class FakeResponse:
     def __init__(self, status_code=200, body=None, text=""):
         self.status_code = status_code
@@ -207,6 +213,7 @@ class RouteTest(unittest.TestCase):
     def setUp(self):
         flask_app.app.config["TESTING"] = True
         self.client = flask_app.app.test_client()
+        _login(self.client)
 
     def test_page_and_assets_load(self):
         for path in ("/regulatory", "/assets/02_regulatory/regulatory.css", "/assets/02_regulatory/regulatory.js"):
@@ -344,6 +351,7 @@ class BilingualRouteTest(unittest.TestCase):
     def setUp(self):
         flask_app.app.config["TESTING"] = True
         self.client = flask_app.app.test_client()
+        _login(self.client)
 
     def test_route_rejects_single_char_without_external_call(self):
         with mock.patch.object(svc, "_get") as get:
@@ -554,6 +562,7 @@ class ExtractRouteTest(unittest.TestCase):
     def setUp(self):
         flask_app.app.config["TESTING"] = True
         self.client = flask_app.app.test_client()
+        _login(self.client)
 
     def _post(self, filename, data, sheet=None):
         form = {"file": (_io.BytesIO(data), filename)}

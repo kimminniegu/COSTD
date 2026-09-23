@@ -1,34 +1,57 @@
 """Flask Entry Point.
 
-현재 단계에서는 페이지 이동을 위한 기본 Route만 정의합니다.
-API 처리, AI 기능, 계산 로직, 파일 분석 등은 각 담당자가
-자신의 MD 파일(src/<폴더>/<이름>.md)을 기준으로 이후 추가합니다.
+페이지 이동을 위한 기본 Route와 로그인/세션, 홈 화면 API를 정의합니다.
+각 기능 페이지의 API 처리, AI 기능, 계산 로직 등은 담당자가
+자신의 MD 파일(src/<폴더>/<이름>.md)을 기준으로 아래 담당자별 영역에 추가합니다.
 
 규칙
-- 아래 "페이지 Route"는 PM 관리 영역입니다. 삭제하거나 URL을 변경하지 마세요.
+- "페이지 Route"와 "로그인" 영역은 PM 관리 영역입니다. 삭제하거나 URL을 변경하지 마세요.
 - 새 Route는 파일 하단의 담당자별 영역에 추가하고, 기존 URL과 충돌하지 않게 합니다.
+- 페이지 Route에는 @login_required 를 붙입니다. (로그인하지 않으면 /login 으로 이동)
 - API Key는 코드에 직접 쓰지 말고 os.getenv()로 불러옵니다.
+- Python 모듈은 담당자 폴더(src/<폴더>/)에 두고 importlib 로 불러옵니다. (폴더명이 숫자로 시작해 import 문을 쓸 수 없음)
 """
 
+import importlib
+import logging
 import os
+from datetime import timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
+from datetime import datetime
 
 from dotenv import load_dotenv
-from flask import Flask, abort, render_template, send_from_directory
+from flask import Flask, abort, jsonify, redirect, render_template, request, send_from_directory, url_for
+from markupsafe import Markup, escape
 
 BASE_DIR = Path(__file__).resolve().parent
 SRC_DIR = BASE_DIR / "src"
+INSTANCE_DIR = BASE_DIR / "instance"          # SQLite 등 로컬 데이터 (Git 제외)
+DB_PATH = INSTANCE_DIR / "cosmoa.db"
 
 # 개발 서버 재시작 때 이전 프로세스에서 상속된 키 대신 수정한 .env를 반영합니다.
 load_dotenv(BASE_DIR / ".env", override=True)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 # 일반적인 templates/ 대신 src/ 전체를 템플릿 폴더로 사용합니다.
 # 템플릿 이름은 src/ 기준 상대 경로입니다. 예: "02_regulatory/regulatory.html"
 # 기본 static 폴더는 사용하지 않고, 아래 asset() Route가 src/ 안의 CSS·JS를 제공합니다.
 app = Flask(__name__, template_folder=str(SRC_DIR), static_folder=None)
-app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "dev-only-change-me")
+app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or "dev-only-change-me"   # .env 에 빈 값이어도 개발용 기본값 사용
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)   # "로그인 상태 유지" 체크 시
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
-# src/ 안에서 브라우저에 제공해도 되는 파일 확장자 (HTML 템플릿, MD 명세서는 제외)
+# 공통 모듈 (PM) / 홈 데이터 모듈 (A)
+auth = importlib.import_module("src.common.auth")
+home_data = importlib.import_module("src.01_home.home_data")
+auth.init(DB_PATH)
+home_data.init(DB_PATH)
+login_required = auth.login_required
+
+KST = ZoneInfo("Asia/Seoul")
+
+# src/ 안에서 브라우저에 제공해도 되는 파일 확장자 (HTML 템플릿, MD 명세서, Python 모듈은 제외)
 ASSET_EXTENSIONS = {
     ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico",
     ".woff", ".woff2", ".ttf", ".otf", ".json",
@@ -43,31 +66,88 @@ def asset(filename):
     return send_from_directory(SRC_DIR, filename)
 
 
+@app.context_processor
+def inject_user():
+    """모든 템플릿에서 current_user 사용 가능 (Sidebar 사용자 영역)"""
+    return {"current_user": auth.current_user()}
+
+
+# ---------------------------------------------------------------------------
+# 로그인 (PM 관리) — 화면: src/common/login.html, 로직: src/common/auth.py
+# ---------------------------------------------------------------------------
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if auth.current_user():
+        return redirect(url_for("home"))
+    error, email = None, ""
+    next_url = auth.safe_next(request.values.get("next"))
+    if request.method == "POST":
+        email = request.form.get("email", "").strip()
+        password = request.form.get("password", "")
+        user = auth.authenticate(email, password) if email and password else None
+        if user:
+            auth.login_user(user, remember=request.form.get("remember") == "1")
+            return redirect(next_url or url_for("home"))
+        error = "이메일 또는 비밀번호를 다시 확인해 주세요."
+    demo_hint = None
+    if app.debug:  # 개발 중에만 데모 계정 안내 표시
+        demo_hint = f"{os.getenv('COSMOA_DEMO_EMAIL', 'demo@costd.kr')} / {os.getenv('COSMOA_DEMO_PASSWORD', 'cosmoa1234')}"
+    return render_template("common/login.html", error=error, email=email, next=next_url, demo_hint=demo_hint), (401 if error else 200)
+
+
+@app.route("/logout")
+def logout():
+    auth.logout_user()
+    return redirect(url_for("login"))
+
+
 # ---------------------------------------------------------------------------
 # 페이지 Route (PM 관리) — 삭제 / URL 변경 금지
 # ---------------------------------------------------------------------------
 
+def _greeting(now: datetime) -> str:
+    if now.hour < 12:
+        return "좋은 아침이에요"
+    if now.hour < 18:
+        return "좋은 오후예요"
+    return "좋은 저녁이에요"
+
+
 @app.route("/")
+@login_required
 def home():
-    return render_template("01_home/home.html")
+    now = datetime.now(KST)
+    weekday = "월화수목금토일"[now.weekday()]
+    return render_template(
+        "01_home/home.html",
+        user=auth.current_user(),
+        today_text=f"{now.month}월 {now.day}일 {weekday}요일",
+        greeting=_greeting(now),
+        data=home_data.get_dashboard(),
+    )
 
 
 @app.route("/regulatory")
+@login_required
 def regulatory():
     return render_template("02_regulatory/regulatory.html")
 
 
 @app.route("/margin-calculator")
+@login_required
 def margin():
     return render_template("03_margin/margin.html")
 
 
 @app.route("/ai-formulation")
+@login_required
 def simulation():
     return render_template("04_simulation/simulation.html")
 
 
 @app.route("/dev-request")
+@login_required
 def dev_request():
     return render_template("05_requisition/requisition.html")
 
@@ -77,7 +157,59 @@ def dev_request():
 # 자신의 영역에만 추가하세요. URL은 자신의 페이지 경로를 접두사로 사용합니다.
 # ---------------------------------------------------------------------------
 
-# [A] Home — 접두사: /api/home/...
+# [A] Home — 접두사: /api/home/...  (명세: src/01_home/home.md 9-1)
+
+@app.template_filter("home_highlight")
+def home_highlight(text, q):
+    """검색어와 일치하는 부분을 <mark>로 감쌉니다 (제목은 먼저 escape 해서 안전하게)"""
+    out = str(escape(text))
+    for term in sorted({t for t in (q or "").split() if t}, key=len, reverse=True)[:5]:
+        t = str(escape(term))
+        low, lt, res, i = out.lower(), t.lower(), [], 0
+        while (j := low.find(lt, i)) != -1:
+            res += [out[i:j], "<mark>", out[j:j + len(t)], "</mark>"]
+            i = j + len(t)
+        out = "".join(res) + out[i:]
+    return Markup(out)
+
+
+def _arg(name, allowed=None):
+    v = (request.args.get(name) or "").strip()[:60]
+    return v if (not allowed or v in allowed) else ""
+
+
+@app.route("/news")
+@login_required
+def home_news():
+    """뉴스 더보기 — ?q=검색어 &source=매체 (스크롤 허용)"""
+    home_data.kick_refresh(("news",))
+    sources = home_data.NEWS_SOURCES + [home_data.WEB_SOURCE]
+    news = home_data.get_news(limit=80, per_source=None, q=_arg("q"), source=_arg("source", sources), external=True)
+    return render_template("01_home/news.html", news=news)
+
+
+@app.route("/regulations")
+@login_required
+def home_regulations():
+    """규제 더보기 — ?q=검색어 &country=국가 (스크롤 허용)"""
+    home_data.kick_refresh(("regulations",))
+    regs = home_data.get_regulations(limit=80, q=_arg("q"), country=_arg("country", home_data.REG_COUNTRIES))
+    return render_template("01_home/regulations.html", regs=regs)
+
+
+@app.route("/api/home/data")
+@login_required
+def home_api_data():
+    """홈 화면 전체 데이터 (갱신 중이면 화면이 몇 초 뒤 다시 호출)"""
+    return jsonify(home_data.get_dashboard())
+
+
+@app.route("/api/home/regulations")
+@login_required
+def home_api_regulations():
+    """규제 새 소식 — ?since=<ISO 시각> 이후 게시된 것만 (화면에서 10분마다 호출)"""
+    home_data.kick_refresh(("regulations",))
+    return jsonify(home_data.get_regulations(since=request.args.get("since")))
 
 
 # [B] 국가별 인허가 규제 — 접두사: /api/regulatory/...
@@ -107,6 +239,7 @@ def _regulatory_error(exc):
 
 
 @app.route("/api/regulatory/ingredients")
+@login_required
 def regulatory_ingredients():
     """한글명·영문 INCI명 후보 검색. ?q=성분명 → 후보 최대 10개 (규제 조회는 하지 않음). 자동완성도 같은 Route 사용."""
     q = (_regulatory_request.args.get("q") or "").strip()
@@ -123,6 +256,7 @@ def regulatory_ingredients():
 
 
 @app.route("/api/regulatory/regulations")
+@login_required
 def regulatory_regulations():
     """성분 코드 + 시장 코드로 규제 조회. ?code=5489&country=EU"""
     code = (_regulatory_request.args.get("code") or "").strip()
@@ -140,6 +274,7 @@ def regulatory_regulations():
 
 
 @app.route("/api/regulatory/extract", methods=["POST"])
+@login_required
 def regulatory_extract_route():
     """업로드 문서에서 성분명·함량 추출. multipart: file (PDF·.xlsx), sheet (Excel 시트명, 선택).
     여러 시트면 status="sheet_required" 와 시트 목록을 돌려주고, 같은 파일을 sheet 와 함께 다시 보내면 추출한다.
