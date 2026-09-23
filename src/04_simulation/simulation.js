@@ -441,7 +441,8 @@ function startRoll(duration, sliders, onDone) {
   roll = { from: { ...shown }, t: 0 };
   if (sliders) SLIDERS.forEach(id => { $(id).step = 'any'; });
   const step = now => {
-    const t = duration ? Math.min(1, (now - start) / duration) : 1;
+    // rAF 타임스탬프는 start보다 앞설 수 있으므로 0~1로 고정합니다.
+    const t = duration ? Math.min(1, Math.max(0, (now - start) / duration)) : 1;
     const eased = 1 - Math.pow(1 - t, 3);
     if (sliders) SLIDERS.forEach((id, i) => { $(id).value = from[i] + (sliders[i] - from[i]) * eased; });
     if (t < 1) {
@@ -572,7 +573,7 @@ function drawScene(){
  ctx.clearRect(0,0,width,height);
  const x=width/2,tip=130,floor=height*.8;
  // 제곱근 스케일: 저점도는 얇고 넓게, 초고점도는 좁고 두터운 돔. 30,000 cPs 이상은 팁에서 떨어지지 않습니다.
- const thick=Math.min(1,Math.sqrt(current.v/50000)),dropTime=.58+thick*.16,hanging=current.v>=30000;
+ const thick=Math.min(1,Math.sqrt(Math.max(0,current.v)/50000)),dropTime=.58+thick*.16,hanging=current.v>=30000;
  const spread=110*(1-thick*.65),domeHeight=3+thick*45;
  const maxNeck=(floor-tip-domeHeight)*(.18+thick*.3);
  // Faint reference scales are illustrative, not a calibrated measurement.

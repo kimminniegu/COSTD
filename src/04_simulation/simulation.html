@@ -72,7 +72,7 @@
   </div>
   <div class="card simulation-bottom-grid" aria-label="패키징 검토 및 제안 리포트">
     <section class="simulation-packaging" aria-label="용기 적합성 확인">
-      <div class="card-header"><h2 class="card-title">용기 적합성 확인</h2><select class="form-control form-control-sm" id="simulation-pack" aria-label="타깃 용기"><option value="dropper">스포이드</option><option value="pump">디스펜서 펌프</option><option value="airless">에어리스 펌프</option><option value="jar">크림 자</option></select></div>
+      <div class="card-header"><h2 class="card-title">용기 적합성 확인</h2><select class="form-control form-control-sm" id="simulation-pack" aria-label="타깃 용기"><option value="dropper">스포이드 (Dropper Pipette)</option><option value="onetouch">원터치 디스펜서 보틀 (One-Touch Dispenser)</option><option value="mist">파인 미스트 스프레이 (Fine Mist Spray)</option><option value="pump">디스펜서 펌프 (Standard Dispenser Pump)</option><option value="airless">에어리스 펌프 (Airless Pump)</option><option value="jar">크림 자 (Cream Jar)</option></select></div>
       <div class="card-body">
         <div id="simulation-status-card" class="simulation-status-card" role="status" aria-live="polite" data-state="optimal">
           <div class="simulation-score-column">
@@ -102,38 +102,27 @@
   <div class="modal modal-lg simulation-brief-modal" role="dialog" aria-modal="true" aria-labelledby="simulation-brief-title" data-step="select">
     <div class="modal-header">
       <div>
-        <h2 class="modal-title" id="simulation-brief-title">개발요청서 분석/적용</h2>
+        <h2 class="modal-title" id="simulation-brief-title">개발요청서 업로드 및 AI 분석</h2>
         <p class="text-caption simulation-brief-subtitle">바이어 개발의뢰서에서 목표 제형 스펙을 추출해 배합·물성·용기 적합도를 동기화합니다.</p>
       </div>
       <button type="button" class="modal-close" data-modal-close aria-label="닫기">×</button>
     </div>
     <div class="modal-body">
-      <div class="simulation-brief-layout" data-step-panel="select">
-        <section class="simulation-brief-section" aria-labelledby="simulation-brief-upload-title">
-          <h3 class="simulation-brief-heading" id="simulation-brief-upload-title">신규 파일 업로드</h3>
-          <label class="simulation-brief-drop" id="simulation-brief-drop">
-            <input type="file" id="simulation-brief-file" accept=".pdf,.doc,.docx">
-            <span class="simulation-brief-drop-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18.5H6.5a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.6 8.1a4.25 4.25 0 0 1-.1 8.5V16.6"/><path d="M12 20.5v-8M8.75 15.25 12 12l3.25 3.25"/></svg></span>
-            <strong>바이어 개발의뢰서 파일(PDF, Word)을<br>드래그하거나 클릭하여 업로드</strong>
-            <span>PDF · DOC · DOCX / 최대 20MB</span>
-          </label>
-          <p class="simulation-brief-error" id="simulation-brief-error" role="alert" hidden></p>
-        </section>
-        <section class="simulation-brief-section" aria-labelledby="simulation-brief-inbox-title">
-          <div class="simulation-brief-heading-row">
-            <h3 class="simulation-brief-heading" id="simulation-brief-inbox-title">R&amp;D 수신함 <small>Inbox</small></h3>
-            <span class="simulation-brief-count">최근 접수 <b id="simulation-brief-inbox-count"></b></span>
-          </div>
-          <ul class="simulation-inbox" id="simulation-brief-inbox"></ul>
-          <p class="simulation-brief-hint">카드를 업로드 영역으로 끌어다 놓아도 분석할 수 있습니다.</p>
-        </section>
+      <div class="simulation-brief-upload" data-step-panel="select">
+        <label class="simulation-brief-drop" id="simulation-brief-drop">
+          <input type="file" id="simulation-brief-file" accept=".pdf,.doc,.docx">
+          <span class="simulation-brief-drop-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18.5H6.5a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.6 8.1a4.25 4.25 0 0 1-.1 8.5V16.6"/><path d="M12 20.5v-8M8.75 15.25 12 12l3.25 3.25"/></svg></span>
+          <strong>바이어 개발의뢰서 파일(PDF, DOCX)을 드래그하거나<br>클릭하여 내 컴퓨터에서 업로드하세요</strong>
+          <span>PDF · DOC · DOCX / 최대 20MB</span>
+        </label>
+        <p class="simulation-brief-error" id="simulation-brief-error" role="alert" hidden></p>
       </div>
       <section class="simulation-brief-analyzing" data-step-panel="analyzing" aria-live="polite">
         <div class="simulation-brief-file-row"><span class="simulation-brief-file-icon" id="simulation-brief-file-icon" aria-hidden="true">PDF</span><strong class="simulation-brief-filename" data-brief-filename></strong></div>
-        <div class="simulation-brief-loader"><span class="spinner spinner-sm" aria-hidden="true"></span><p>AI 문서 파싱 및 요구 제형 스펙 추출 중...</p></div>
+        <div class="simulation-brief-loader"><span class="spinner spinner-sm" aria-hidden="true"></span><p>AI 제형 분석 중... <small>(목표 점도, 유효성분 비율 도출)</small></p></div>
         <div class="simulation-brief-progress" aria-hidden="true"><span id="simulation-brief-progress"></span></div>
         <ul class="simulation-brief-checks" id="simulation-brief-checks">
-          <li>타깃 사용감 추출</li><li>배합 요건 파싱</li><li>용기 적합도 산출</li>
+          <li>목표 점도 도출</li><li>유효성분 비율 도출</li><li>용기 적합도 산출</li>
         </ul>
       </section>
     </div>
