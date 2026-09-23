@@ -31,29 +31,23 @@
       <div class="card-body">
         <div class="margin-group">
           <div class="margin-group__head">
-            <h3 class="margin-group__title">기준 환율</h3>
-            <span class="text-caption">USD/KRW</span>
-          </div>
-          {{ field('fx', 1400, '원', '기준환율', 10) }}
-        </div>
-
-        <div class="margin-group">
-          <div class="margin-group__head">
             <h3 class="margin-group__title">원가와 1차 마진</h3>
             <div class="tabs margin-seg" id="margin-seg-minput" role="tablist" aria-label="1차 마진 입력 방식">
               <button type="button" class="tab is-active" data-k="item" role="tab" aria-selected="true">항목별</button>
               <button type="button" class="tab" data-k="all" role="tab" aria-selected="false">일괄</button>
             </div>
           </div>
-          <div class="margin-cost-row margin-cost-row--head"><span></span><span class="form-label">원가 (개당)</span><span class="form-label">마진율</span></div>
+          <div class="margin-cost-row"><span></span><span class="form-label">원가 (개당)</span><span class="form-label">마진율</span></div>
           <div class="margin-cost-row"><span class="margin-cost-row__name">원재료</span>{{ field('raw', 850, '원', '원재료 원가') }}<div class="margin-item-rate">{{ field('r-raw', 20, '%', '원재료 마진율', 0.5) }}</div></div>
           <div class="margin-cost-row"><span class="margin-cost-row__name">임가공</span>{{ field('proc', 400, '원', '임가공 원가') }}<div class="margin-item-rate">{{ field('r-proc', 10, '%', '임가공 마진율', 0.5) }}</div></div>
           <div class="margin-cost-row"><span class="margin-cost-row__name">부자재</span>{{ field('pack', 650, '원', '부자재 원가') }}<div class="margin-item-rate">{{ field('r-pack', 15, '%', '부자재 마진율', 0.5) }}</div></div>
           <div class="margin-cost-row" id="margin-all-row" style="display:none"><span class="margin-cost-row__name">1차 마진</span><span class="text-caption">세 항목에 같은 마진율</span>{{ field('m1', 15, '%', '일괄 1차 마진율', 0.5) }}</div>
-          <div class="margin-inline">
-            <label class="form-check"><input type="checkbox" id="margin-sagup"> 부자재 사급 (마진 0%)</label>
-            <div class="margin-inline margin-inline--tight"><span class="text-caption">로스율</span><div class="margin-w-sm">{{ field('loss', 0, '%', '로스율', 0.5) }}</div></div>
+          <div class="margin-cost-row">
+            <span class="margin-cost-row__name">로스율</span>
+            <span class="text-caption">원가 세 항목에 적용</span>
+            {{ field('loss', 0, '%', '로스율', 0.5) }}
           </div>
+          <label class="form-check margin-check-sm"><input type="checkbox" id="margin-sagup"> 부자재 사급 (부자재 마진 0%)</label>
         </div>
 
         <div class="margin-group">
@@ -92,8 +86,8 @@
             <h3 class="margin-group__title">수량 할인 구간</h3>
             <button type="button" class="btn btn-secondary btn-sm" id="margin-add-tier">구간 추가</button>
           </div>
-          <div class="margin-tier-row margin-tier-row--head"><span class="form-label">이 수량 이상</span><span class="form-label">할인율</span></div>
-          <div id="margin-tiers"></div>
+          <div class="margin-tier-row"><span class="form-label">이 수량 이상</span><span class="form-label">할인율</span></div>
+          <div class="margin-tiers" id="margin-tiers"></div>
         </div>
         <p class="form-error" id="margin-err" role="alert"></p>
       </div>
@@ -102,12 +96,16 @@
     <!-- 결과 영역 -->
     <div class="margin-results">
       <div class="card card-sm">
-        <div class="card-body">
+        <div class="card-body margin-toolbar">
           <div class="tabs" role="tablist" aria-label="시뮬레이션 화면">
             <button type="button" class="tab is-active" data-tab-target="margin-view-forward" role="tab" aria-selected="true">견적 계산</button>
             <button type="button" class="tab" data-tab-target="margin-view-reverse" role="tab" aria-selected="false">역제안 분석</button>
             <button type="button" class="tab" data-tab-target="margin-view-tier" role="tab" aria-selected="false">수량별 단가</button>
             <button type="button" class="tab" data-tab-target="margin-view-fx" role="tab" aria-selected="false">환율 영향</button>
+          </div>
+          <div class="margin-fxbox">
+            <span class="margin-fxbox__label"><b>기준 환율</b><span class="text-caption">USD/KRW</span></span>
+            <div class="margin-fxbox__field">{{ field('fx', 1400, '원', '기준환율', 10) }}</div>
           </div>
         </div>
       </div>

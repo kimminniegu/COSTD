@@ -15,6 +15,9 @@
   --margin-zone-bad-soft: var(--color-danger-soft);
 }
 
+/* 페이지 머리 ↔ 본문 간격 (공통 72px은 입력형 화면에 넓어서 이 페이지만 줄임) */
+.margin-page .page-header { margin-bottom: var(--space-8); }
+
 /* Layout: 좌측 입력 Card + 우측 결과 */
 .margin-layout {
   display: grid;
@@ -32,23 +35,31 @@
 }
 .margin-results { min-width: 0; }
 .margin-results > .tab-panel { padding-top: var(--layout-card-gap); }
+
+/* 상단 Tab + 기준 환율 */
+.margin-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.margin-fxbox { display: flex; align-items: center; gap: var(--space-3); }
+.margin-fxbox__label { display: flex; flex-direction: column; line-height: 1.3; text-align: right; font-size: var(--font-size-label); }
+.margin-fxbox__field { width: 132px; }
 .margin-stack { display: flex; flex-direction: column; gap: var(--layout-card-gap); }
 .margin-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--layout-card-gap); }
 
 /* 입력 그룹 */
-.margin-group { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-6); }
-.margin-group__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-1); }
+.margin-inputs > .card-body { padding: var(--space-6); }
+.margin-group { display: flex; flex-direction: column; gap: var(--space-2); }
+.margin-group + .margin-group { margin-top: var(--space-5); padding-top: var(--space-5); border-top: var(--border-default); }
+.margin-group__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: 32px; }
 .margin-group__title { font-size: var(--font-size-sub); }
 .margin-seg .tab { padding: var(--space-1) var(--space-3); font-size: var(--font-size-caption); }
 .margin-cost-row { display: grid; grid-template-columns: 52px minmax(0, 1fr) 96px; gap: var(--space-2); align-items: center; }
-.margin-cost-row--head { margin-bottom: calc(var(--space-1) * -1); }
 .margin-cost-row__name { font-size: var(--font-size-label); color: var(--color-text-body); }
 .margin-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
 .margin-inline { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); flex-wrap: wrap; }
 .margin-inline--tight { justify-content: flex-start; }
 .margin-w-sm { width: 96px; }
-.margin-tier-row { display: grid; grid-template-columns: 1fr 1fr 44px; gap: var(--space-2); align-items: center; margin-bottom: var(--space-2); }
-.margin-tier-row--head { margin-bottom: 0; }
+.margin-tiers { display: flex; flex-direction: column; gap: var(--space-2); }
+.margin-tier-row { display: grid; grid-template-columns: 1fr 1fr 44px; gap: var(--space-2); align-items: center; }
+.margin-check-sm { margin-top: var(--space-1); font-size: var(--font-size-label); }
 .margin-tier-row .btn-icon { width: 44px; height: 44px; }
 
 /* 단위가 붙는 작은 숫자 입력 */
@@ -68,7 +79,7 @@
 .margin-page input[type="range"] { width: 100%; accent-color: var(--color-primary-bright); }
 
 /* 견적 계산 — 대표 단가 / 구성 막대 */
-.margin-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-5); }
+.margin-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-4); }
 .margin-hero__sub { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-1); font-size: var(--font-size-label); color: var(--color-text-secondary); text-align: right; }
 .margin-bar { display: flex; height: 40px; overflow: hidden; border-radius: var(--radius-sm); background: var(--color-background); }
 .margin-bar > div {
@@ -101,7 +112,7 @@
 .margin-legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin-top: var(--space-3); font-size: var(--font-size-caption); color: var(--color-text-secondary); }
 .margin-legend--zone { margin-top: 0; }
 .margin-swatch { display: inline-block; width: 10px; height: 10px; margin-right: var(--space-1); border-radius: 3px; vertical-align: -1px; }
-.margin-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); margin-top: var(--space-5); }
+.margin-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); margin-top: var(--space-4); }
 .margin-stats .is-low { color: var(--color-danger); }
 
 /* 상세 Tab 안 */
@@ -135,7 +146,8 @@
 .margin-adj-foot { margin-top: var(--space-4); }
 .margin-badge-caution { background: var(--margin-zone-caution-soft); color: var(--color-warning); box-shadow: inset 0 0 0 1px var(--margin-zone-caution); }
 .margin-card-error { padding: 0 var(--layout-card-padding) var(--space-4); }
-.margin-card-error:empty { display: none; }
+.margin-page .form-error:empty { display: none; }
+#margin-err { margin-top: var(--space-4); }
 
 /* 상단 입력 + 판정 (역제안 / 수량별 / 환율) */
 .margin-head { display: grid; gap: var(--space-4); align-items: stretch; }

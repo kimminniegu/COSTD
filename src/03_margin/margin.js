@@ -574,7 +574,7 @@
 
   /* 입력 Card 전체 + 탭별 입력 (할인 구간 입력은 drawTiers 에서 따로 연결) */
   $("inputs").querySelectorAll("input, select").forEach((e) => e.addEventListener("input", render));
-  ["target", "item-floor", "abs-c", "abs-l", "fx-contract", "fx-use-quote"].forEach((id) => $(id).addEventListener("input", render));
+  ["fx", "target", "item-floor", "abs-c", "abs-l", "fx-contract", "fx-use-quote"].forEach((id) => $(id).addEventListener("input", render));
 
   drawTiers();
   render();
