@@ -29,7 +29,7 @@ MIME_TYPES = {
     ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
 }
-STRING_FIELDS = ["customer", "product_name", "sample_request_type", "product_type", "product_type_custom", "target_price_tier", "benchmark_product_name"]
+STRING_FIELDS = ["customer", "request_source", "product_name", "sample_request_type", "product_type", "product_type_custom", "target_price_tier", "benchmark_product_name"]
 ARRAY_FIELDS = ["export_countries", "buyer_prohibited_ingredients", "regulatory_restricted_ingredients"]
 DATA_FIELDS = list(FIELDS)
 
@@ -82,8 +82,9 @@ def extraction_schema():
                            else {"type": "string"})
     properties["product_type"]["enum"] = [""] + PRODUCT_TYPES
     properties["sample_request_type"]["enum"] = ["", "신규 샘플", "개선 샘플"]
+    properties["request_source"]["enum"] = ["", "고객사 요청", "자사기획"]
     properties["target_price_tier"]["enum"] = ["", "low", "mid", "high"]
-    properties["usage"]["properties"]["application_type"]["enum"] = ["", "Leave-on", "Rinse-off", "기타", "확인 필요"]
+    properties["product_development"]["properties"]["application_type"]["enum"] = ["", "Leave-on", "Rinse-off", "기타", "확인 필요"]
     # Excluded information is kept separately, never rendered by the public field allowlist.
     properties["raw_extracted_data"] = {
         "type": "object", "additionalProperties": False, "properties": {
@@ -135,6 +136,7 @@ Translate extracted free-text values to the requested target language; preserve 
 product_type must use the Korean enum. If uncertain, leave empty; use 기타 with product_type_custom only when the source explicitly identifies another type.
 target_price_tier: use low/mid/high ONLY when the source explicitly names a qualitative tier.
 sample_request_type: use 신규 샘플 or 개선 샘플 only when the source explicitly identifies whether this is a new or improvement sample.
+request_source: use 고객사 요청 or 자사기획 only when the source explicitly identifies the request origin.
 Never infer a tier from numeric target cost, currency, brand, or product category. No numeric cost mapping rules are available.
 export_countries: only explicitly named distribution/export countries, never infer them from language, buyer address or distribution centre.
 buyer_prohibited_ingredients: only explicit DO NOT USE/exclusion instructions from the buyer.
@@ -144,7 +146,7 @@ Map Formula fields to product_development: Product Description, Formula Guidelin
 Appearance/Sensory, Viscosity, Base Fragrance/Flavor, Base Finish, Base Coverage, Color/Shade Benchmark(s).
 Map other explicit formulation or product development requests that do not fit those fields to product_development.other_requirements.
 Map Necessary Ingredients and Additional Ideal Ingredients to ingredients.necessary and ingredients.ideal.
-Map Application (leave on/rinse off), Directions for Use, Additional Comments to usage.
+Map Application (leave on/rinse off) to product_development.application_type.
 Map ONLY Stability from Quality Testing to quality; required is true/false/null.
 Preserve stated stability duration and responsibility. Never assign an unstated owner.
 Keep missing quality requirement null. No regulatory research or approval claims.
@@ -234,6 +236,8 @@ def normalize_result(raw, filename, customer, source_language, target_language, 
         document["product_type"] = ""
     if document["sample_request_type"] not in {"신규 샘플", "개선 샘플"}:
         document["sample_request_type"] = ""
+    if document["request_source"] not in {"고객사 요청", "자사기획"}:
+        document["request_source"] = ""
     if document["product_type"] != "기타":
         document["product_type_custom"] = ""
     if document["target_price_tier"] not in {"low", "mid", "high"}:

@@ -48,7 +48,7 @@ class RequisitionTest(unittest.TestCase):
             "product_development.texture": "가벼운 파우더",
             "product_development.other_requirements": "충진 시 기포 최소화",
             "ingredients.necessary": ["Silica"],
-            "usage.application_type": "Leave-on",
+            "product_development.application_type": "Leave-on",
             "quality.stability.required": False,
             "quality.stability.duration": "12주",
         }
@@ -67,7 +67,7 @@ class RequisitionTest(unittest.TestCase):
             self.assertEqual(service.get_value(document, key), value)
         self.assertNotIn("micro", document["quality"])
         self.assertEqual(document["raw_extracted_data"], result["raw_extracted_data"])
-        self.assertNotIn("SECRET_QUANTITY", json.dumps({key: document[key] for key in ("product_development", "quality", "usage")}))
+        self.assertNotIn("SECRET_QUANTITY", json.dumps({key: document[key] for key in ("product_development", "quality")}))
         public_document = {key: value for key, value in document.items() if key != "raw_extracted_data"}
         self.assertNotIn("PRIVATE_MICRO_OWNER", json.dumps(public_document))
         self.assertNotIn("PRIVATE_CLAIM_TEST", json.dumps(public_document))

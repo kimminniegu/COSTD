@@ -26,12 +26,14 @@
 .requisition-reference { margin: 0; padding: var(--space-4); border: var(--border-default); border-radius: var(--radius-lg); background: var(--color-surface-muted); overflow-wrap: anywhere; }
 .requisition-reference img { object-fit: contain; }
 .requisition-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); }
-.requisition-paper { min-height: auto; border-radius: var(--radius-2xl); overflow: hidden; }
+.requisition-paper { min-height: auto; border-radius: var(--radius-2xl); overflow: visible; }
 .requisition-paper > .card-header { padding: var(--space-8); }
 .requisition-paper > .card-body { padding: var(--space-6) var(--space-8) var(--space-8); }
 .requisition-fields > .form-group { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; margin: 0; }
 .requisition-fields > .form-group > .form-label { margin: 0; color: var(--color-text-body); font-size: var(--font-size-label); font-weight: var(--font-weight-bold); }
 .requisition-field-content { min-width: 0; }
+.requisition-fields > #requisition-field-export_countries { position: relative; z-index: 5; }
+.requisition-fields > #requisition-field-export_countries .requisition-country-list { z-index: 30; }
 .requisition-field-value { margin: 0; padding: var(--space-4); min-height: 56px; border: 1px solid transparent; border-radius: var(--radius-md); background: var(--color-background); line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
 .requisition-paper .form-control { border-radius: var(--radius-md); }
 .requisition-paper .form-help { margin-top: 8px; }
@@ -59,7 +61,6 @@
 .requisition-summary dd { margin: 0; font-weight: var(--font-weight-bold); text-align: right; }
 .requisition-panel-section { padding-top: var(--space-6); border-top: var(--border-default); overflow-wrap: anywhere; }
 .requisition-panel-actions { display: grid; gap: var(--space-3); }
-.requisition-pdf-actions { display: grid; gap: var(--space-2); }
 .requisition-loading { min-height: 410px; text-align: center; }
 .requisition-chip-entry { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
 .requisition-chip-entry input { min-width: 0; flex: 1; }

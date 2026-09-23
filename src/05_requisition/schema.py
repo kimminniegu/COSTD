@@ -2,14 +2,14 @@
 
 SECTIONS = [
     ("01 기본정보", [
-        ("customer", "고객사", "text"), ("product_name", "품명(가칭)", "text"),
+        ("customer", "고객사", "text"), ("request_source", "요청 구분", "request_source"), ("product_name", "품명(가칭)", "text"),
         ("sample_request_type", "샘플 구분", "sample_type"),
         ("product_type", "제품 유형", "type"), ("target_price_tier", "목표 가격대", "tier"),
         ("export_countries", "수출 대상국", "list"),
-        ("buyer_prohibited_ingredients", "수출 금지 원료", "list"),
     ]),
     ("02 제품 개발 요구사항", [
         ("benchmark_product_name", "벤치마크 제품명", "text"),
+        ("product_development.application_type", "사용 타입", "application"),
         ("product_development.product_description", "제품 설명", "textarea"),
         ("product_development.formula_guidelines", "처방 가이드", "textarea"),
         ("product_development.texture", "제형 / 텍스처", "textarea"),
@@ -22,13 +22,9 @@ SECTIONS = [
         ("product_development.other_requirements", "기타 요구사항", "textarea"),
     ]),
     ("03 원료 요구사항", [
+        ("buyer_prohibited_ingredients", "수출 금지 원료", "list"),
         ("ingredients.necessary", "필수 적용 원료", "list"),
         ("ingredients.ideal", "선호 원료", "list"),
-    ]),
-    ("04 사용 정보", [
-        ("usage.application_type", "사용 타입", "application"),
-        ("usage.directions_for_use", "사용 방법", "textarea"),
-        ("usage.additional_comments", "추가 참고사항", "textarea"),
     ]),
     ("05 품질 확인사항", [
         ("quality.stability.required", "안정도 시험", "required"),
