@@ -174,8 +174,6 @@
     renderReferences();
     $("panel-title").textContent = editing() ? "작성 상태" : "문서 정보";
     $("form-help").textContent = editing() ? "* 표시된 항목은 필수 입력이에요." : "개발에 필요한 핵심 정보를 확인해요.";
-    $("benchmark").innerHTML = '<label class="form-label"' + (editing() ? ' for="requisition-input-benchmark_product_name"' : "") + '>벤치마크 제품명</label>' +
-      '<div class="requisition-field-content">' + (editing() ? input("benchmark_product_name", "참고할 제품명 (선택)") : '<p class="requisition-field-value">' + escape(data.benchmark_product_name || "미입력") + "</p>") + '</div>';
     $("secondary").textContent = state === "result" ? "수정" : state === "edit" ? "수정 취소" : "작성 취소";
     $("primary").textContent = state === "result" ? "PDF로 저장" : state === "edit" ? "수정 완료" : "작성 완료";
     $("pdf-help").hidden = editing();
@@ -518,7 +516,7 @@
         '<tr><th scope="row">수신</th><td>연구소</td><th scope="row">작성 방식</th><td>' + escape(methods[data.creation_method] || "미지정") + '</td></tr></tbody></table>' +
         sections.map(([title, fields], index) => '<section><h2>' + escape(title) + '</h2><table class="requirements"><colgroup><col class="label-column"><col></colgroup><thead><tr><th scope="col">항목</th><th scope="col">요청 내용</th></tr></thead><tbody>' +
           fields.map(([key, label]) => row(label, key === "buyer_prohibited_ingredients" ? prohibitedIngredients : pdfValue(key))).join('') +
-          (index === 0 ? row("벤치마크 제품명", data.benchmark_product_name || "미입력") : '') + '</tbody></table></section>').join('') +
+          '</tbody></table></section>').join('') +
         '<section class="references"><h2>06 참고자료</h2>' + (referenceMarkup(data, true) || '<p class="empty-reference">등록된 참고자료 없음</p>') + '</section>' +
         '<section class="review-signoff"><h2>연구소 검토</h2><table class="requirements"><colgroup><col class="label-column"><col></colgroup><tbody>' +
         row("검토 담당자 / 검토일", "담당자:                         검토일:          년       월       일") +

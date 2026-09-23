@@ -46,6 +46,11 @@ try {
   assert(!by('fields').textContent.includes('미생물'), 'microbiology fields excluded');
   assert(!by('fields').textContent.includes('클레임'), 'claim testing fields excluded');
   assert(by('step').textContent.includes('STEP 4'), 'manual step');
+  by('section-tab-1').click();
+  assert(by('section-1').textContent.includes('벤치마크 제품명'), 'benchmark moved to product development');
+  assert(by('section-1').textContent.includes('기타 요구사항'), 'other requirements field');
+  assert(by('input-benchmark_product_name') && by('input-product_development.other_requirements'), 'development inputs available');
+  by('section-tab-0').click();
   const tabs = by('section-tabs').querySelectorAll('[role="tab"]');
   assert(tabs.length === 6, 'six section tabs');
   enter('customer', 'Retained customer');

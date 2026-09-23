@@ -140,6 +140,7 @@ regulatory_restricted_ingredients: only ingredients explicitly mentioned as rest
 benchmark_product_name: a single explicitly identified Formula Benchmark or Reference Product, else empty.
 Map Formula fields to product_development: Product Description, Formula Guidelines, Base Texture,
 Appearance/Sensory, Viscosity, Base Fragrance/Flavor, Base Finish, Base Coverage, Color/Shade Benchmark(s).
+Map other explicit formulation or product development requests that do not fit those fields to product_development.other_requirements.
 Map Necessary Ingredients and Additional Ideal Ingredients to ingredients.necessary and ingredients.ideal.
 Map Application (leave on/rinse off), Directions for Use, Additional Comments to usage.
 Map ONLY Stability from Quality Testing to quality; required is true/false/null.

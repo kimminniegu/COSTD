@@ -8,6 +8,7 @@ SECTIONS = [
         ("buyer_prohibited_ingredients", "수출 금지 원료", "list"),
     ]),
     ("02 제품 개발 요구사항", [
+        ("benchmark_product_name", "벤치마크 제품명", "text"),
         ("product_development.product_description", "제품 설명", "textarea"),
         ("product_development.formula_guidelines", "처방 가이드", "textarea"),
         ("product_development.texture", "제형 / 텍스처", "textarea"),
@@ -17,6 +18,7 @@ SECTIONS = [
         ("product_development.finish", "피니시", "text"),
         ("product_development.coverage", "커버력", "text"),
         ("product_development.color_shade_reference", "컬러 / 쉐이드 참고", "textarea"),
+        ("product_development.other_requirements", "기타 요구사항", "textarea"),
     ]),
     ("03 원료 요구사항", [
         ("ingredients.necessary", "필수 적용 원료", "list"),
@@ -34,8 +36,7 @@ SECTIONS = [
     ]),
 ]
 FIELDS = {key: kind for _, fields in SECTIONS for key, _, kind in fields}
-FIELDS.update(product_type_custom="text", benchmark_product_name="text",
-              regulatory_restricted_ingredients="list")
+FIELDS.update(product_type_custom="text", regulatory_restricted_ingredients="list")
 
 
 def get_value(data, path, default=None):
