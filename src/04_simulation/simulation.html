@@ -50,6 +50,16 @@
           </div>
           {% endfor %}
         </div>
+        <div class="simulation-formula" aria-label="총 배합 비율">
+          <div class="simulation-formula-heading"><span>총 배합 비율 <small>Total Ratio</small></span><strong id="simulation-formula-total"></strong></div>
+          <div class="simulation-formula-bar" id="simulation-formula-bar" role="img">
+            {% for id in ['active', 'carb', 'oil', 'hum', 'water'] %}<span class="simulation-formula-seg" data-seg="{{ id }}" id="simulation-formula-{{ id }}"></span>{% endfor %}
+          </div>
+          <ul class="simulation-formula-legend">
+            {% for id, label in [('active', '유효'), ('carb', '점증'), ('oil', '오일'), ('hum', '보습'), ('water', '정제수')] %}<li data-seg="{{ id }}">{{ label }}</li>{% endfor %}
+          </ul>
+          <div class="simulation-formula-status"><span class="text-caption">포뮬러 안정성 {{ help('stability', '포뮬러 안정성', '정제수 잔량과 오일·점증제 비율로 계산한 참고 지표입니다. 수상이 충분하고 유상을 잡아줄 점증제가 있는지 빠르게 확인하기 위해 표시합니다. 실제 안정성 시험 결과는 아닙니다.') }}</span><span class="simulation-formula-badge" id="simulation-formula-badge" data-state="stable"></span></div>
+        </div>
         <div class="simulation-hud" aria-label="제형 지표">
           <div class="stat-tile"><span>예상 질감 {{ help('texture', '예상 질감', '예측 점도를 사용감 표현으로 바꾼 지표입니다. 원하는 제형이 묽은지, 풍부하고 되직한지 비교하기 위해 표시합니다. 실제 관능평가 결과는 아닙니다.') }}</span><strong id="simulation-texture"></strong></div>
           <div class="stat-tile"><span>상대 유동성 {{ help('flow', '상대 유동성', '점도로 계산한 0~100 상대 지수입니다. 높을수록 잘 흐르는 방향이며, 배합별 퍼짐과 토출 특성을 비교하기 위해 표시합니다. 실측 유량이나 백분율은 아닙니다.') }}</span><strong id="simulation-flow"></strong><meter id="simulation-flow-gauge" min="0" max="100" value="0" aria-label="상대 유동성"></meter></div>

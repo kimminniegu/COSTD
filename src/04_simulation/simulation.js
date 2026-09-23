@@ -223,6 +223,17 @@ function update() {
   $('water').textContent = water.toFixed(2) + '\%';$('active-val').textContent = fmt(activePpm);
   $('flow-gauge').value = flow;
   $('water-gauge').value = water;
+  const parts = { active: a, carb: c, oil: o, hum: h, water };
+  Object.entries(parts).forEach(([id, pct]) => {
+    $('formula-' + id).style.flexGrow = pct;
+    $('formula-' + id).hidden = pct <= 0;
+  });
+  $('formula-total').textContent = Object.values(parts).reduce((sum, pct) => sum + pct, 0).toFixed(1) + '%';
+  $('formula-bar').setAttribute('aria-label', `유효 ${a}%, 점증제 ${c}%, 오일 ${o}%, 보습 ${h}%, 정제수 ${water.toFixed(2)}%`);
+  const stability = water < 45 || (o >= 20 && c < 0.2) ? 'unstable' : water < 60 || (o >= 12 && c < 0.2) ? 'review' : 'stable';
+  $('formula-badge').dataset.state = stability;
+  $('formula-badge').textContent = { stable: '안정', review: '검토', unstable: '주의' }[stability];
+  $('formula-badge').dataset.en = { stable: 'Stable', review: 'Review', unstable: 'Unstable' }[stability];
   $('lab-flow').textContent = `${flow} / 100`;
   $('lab-cycle').textContent = `${(.9 / (1 + v / 9000) + .08).toFixed(2)} /s`;
 
