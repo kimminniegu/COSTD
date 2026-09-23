@@ -2,7 +2,8 @@
 {# 담당자 B — 국가별 인허가 규제 / 기능 명세: src/02_regulatory/regulatory.md
    직접 검색: 성분명 + 시장 → 후보 선택 → 검색 버튼으로 선택 시장 규제 조회 → 결과 카드(조회 상태·규제 유형·규제 조건 원문). 함량·제품 조건 입력 없음.
    Route: /api/regulatory/ingredients, /api/regulatory/regulations (app.py [B] 영역 → regulatory_service.py)
-   미구현: 입력 중 자동완성·영문/부분 검색(4단계), 파일 업로드·추출(후속). 파일 탭 화면은 골격만 있습니다. #}
+   자동완성: 2글자 이상 입력 후 300ms 대기 → 후보 최대 10개 (한글명·영문 INCI명, 시작 일치). 후보 선택은 성분 확정만.
+   미구현: 중간 포함 검색, 파일 업로드·추출(후속). 파일 탭 화면은 골격만 있습니다. #}
 
 {% block title %}국가별 인허가 규제{% endblock %}
 
@@ -24,7 +25,7 @@
 {# 구현 상태 안내 — 기능 구현 후 제거 #}
 <div class="alert alert-info mb-6" id="regulatory-dev-notice">
   <div>
-    <p class="alert-title">성분 직접 검색 사용 가능 · 입력 중 자동완성·영문 검색·파일 분석 준비 중</p>
+    <p class="alert-title">성분 직접 검색·자동완성(한글·영문 INCI) 사용 가능 · 파일 분석 준비 중</p>
     <p id="regulatory-dev-notice-body" hidden></p>
   </div>
 </div>
@@ -53,10 +54,10 @@
             <div class="form-group regulatory-autocomplete">
               <label class="form-label" for="regulatory-search-ingredient">성분명 <span class="is-required">*</span></label>
               <input class="form-control" type="text" id="regulatory-search-ingredient" name="ingredient"
-                     placeholder="한글 성분명 (예: 레티놀)" autocomplete="off"
+                     placeholder="한글명 또는 영문 INCI명 (예: 레티놀, Retinol)" autocomplete="off"
                      role="combobox" aria-autocomplete="list" aria-expanded="false"
                      aria-controls="regulatory-autocomplete-list" aria-haspopup="listbox">
-              <p class="form-help" id="regulatory-search-ingredient-help">검색 버튼을 누르면 후보를 보여줘요. 후보를 고른 뒤 다시 검색 버튼을 누르면 규제를 조회해요.</p>
+              <p class="form-help" id="regulatory-search-ingredient-help">2글자 이상 입력하면 이름이 그 글자로 시작하는 성분 후보를 보여줘요. 후보를 고른 뒤 검색 버튼을 누르면 규제를 조회해요.</p>
               <p class="form-help regulatory-selected" id="regulatory-search-selected" hidden></p>
               <p class="form-error" id="regulatory-search-ingredient-error" hidden>성분명을 입력해 주세요.</p>
 

@@ -13,12 +13,12 @@
 
 ### GET `/api/regulatory/ingredients?q=<성분명>`
 
-한글 성분명 후보 검색. **규제 조회를 하지 않는다.** 3단계에서는 검색 버튼을 눌렀을 때만 호출한다 (입력 중 자동완성은 4단계).
+한글명·영문 INCI명 후보 검색. **규제 조회를 하지 않는다.** 자동완성(입력 멈춤 300ms 후)과 검색 버튼 모두 이 Route를 사용한다.
 
 | 항목 | 내용 |
 |---|---|
-| 파라미터 | `q` 필수. 앞뒤 공백 제거 후 빈 값이면 400 |
-| 외부 호출 | `GET /v1/ingredient/kr?q=<q>` 1회 |
+| 파라미터 | `q` 필수. 앞뒤 공백 제거 후 빈 값 또는 2글자 미만이면 400 (API 문서의 min 2 chars) |
+| 외부 호출 | 입력에 한글이 있으면 `GET /v1/ingredient/kr?q=<q>`, 없으면 `GET /v1/ingredient/inci?q=<q>` — **항상 1회** |
 | 성공 200 | 아래 JSON |
 | 검증 실패 400 | `{"ok": false, "error": {"kind": "validation", "message": "..."}}` |
 | 설정 오류 503 | `error.kind = "config"` — Key/Host 미설정. 외부 호출 없음 |
@@ -41,6 +41,8 @@
   ],
   "total": 1,
   "truncated": false,
+  "search_field": "kr",
+  "match_mode": "starts_with",
   "data_source": "Ministry of Food and Drug Safety (MFDS, ...), European Commission CosIng Database (...)",
   "queried_at": "2026-09-23T10:21:49+09:00"
 }
@@ -49,7 +51,9 @@
 - `candidates`는 `code` 기준 중복 제거 후 `match_rank`(0 정확 일치 → 1 시작 일치 → 2 포함 일치 → 3 그 외) 순, 같은 순위는 API 순서. 최대 10개, 초과 시 `truncated: true`.
 - `kr_name`이 비어 있으면 `null` — 화면은 영문명만 표시하고 한글명을 만들지 않는다.
 - `record_updated_at`은 API 레코드의 `updated_at`이다. **규제 자료 갱신일이 아니다.**
-- 매칭은 앞뒤 공백 제거 + `casefold()`(영문 대소문자 무시). 동의어·영문 검색은 API 확인 전이므로 `old_name`만 순위 계산에 포함한다.
+- 매칭은 앞뒤 공백 제거 + `casefold()`(영문 대소문자 무시). 순위 계산에는 `kr_name`·`inci_name`·`old_name`을 사용한다.
+- `search_field`는 실제 호출한 엔드포인트(`kr` | `inci`), `match_mode`는 API 일치 방식(`starts_with`). 두 엔드포인트 모두 **시작 일치**라 중간 포함 입력(예: `티놀`)은 후보가 없다.
+- 한글 엔드포인트에 영문을 넣으면 0건(`test_data/search_kr_english_retinol.json`)이므로 언어별로 엔드포인트를 고른다. 혼합 입력(한글+영문)은 한글 엔드포인트로 보낸다.
 
 ### GET `/api/regulatory/regulations?code=<성분코드>&country=<시장코드>`
 
@@ -116,26 +120,32 @@
 | 파일 | 호출 | HTTP | 확인 내용 |
 |---|---|---|---|
 | `search_kr_retinol.json` | `GET /v1/ingredient/kr?q=레티놀` | 200 | `success=true, count=1`, `data[0].code=5489`, `kr_name=레티놀`, `inci_name=Retinol`, `regulation_status=Restricted`, `updated_at` 있음 |
+| `search_kr_partial_reti.json` | `GET /v1/ingredient/kr?q=레티` | 200 | `count=15`, 모두 `레티`로 **시작**하는 한글명 (레티놀·레티닐…·레티노일…). 부분(시작) 검색 지원 확인 |
+| `search_kr_partial_etan.json` | `GET /v1/ingredient/kr?q=에탄` | 200 | `count=8`, `에탄`(6203)·`에탄올`(2093)·`에탄올아민`… 명세 예시 확인 |
+| `search_kr_english_retinol.json` | `GET /v1/ingredient/kr?q=Retinol` | 200 | `success=true, count=0, data=[]` — 한글 엔드포인트는 영문 미지원 |
+| `search_inci_partial_retin.json` | `GET /v1/ingredient/inci?q=retin` | 200 | `count=17`, 소문자 입력으로 `Retinol`·`Retinal`·`Retinyl …` 반환 — 영문 시작 일치·대소문자 무시 확인 |
 | `regulations_5489_EU.json` | `GET /v1/ingredient/5489/regulations?country=EU` | 200 | `result_status=listed`, `count=1`, `data[0].limit_condition`에 제품 유형·최대 농도(0,05 % / 0,3 % RE)·표시 문구 원문, `source_type=limit`, `markets_listed=["EU"]` |
 | `regulations_5489_US.json` | `GET /v1/ingredient/5489/regulations?country=US` | 200 | `result_status=not_listed_in_country`, `count=0`, `data=[]`, `result_note="No entry for US in our source data. ..."` |
 
 응답 공통 필드: `data_source`(MFDS + EU CosIng), `disclaimer`, `available_country_codes = ["KR","EU","CN","US","JP","ASEAN"]`, `available_countries`(한글 표시명), `country.{requested, resolved, code}`.
 
-호출 제한 헤더(2026-09-23 관측): `X-RateLimit-Requests-Limit: 25000`, `X-RateLimit-Requests-Remaining: 24937`. 월 단위 요청 한도로 보이나 요금제 문서로 재확인 필요.
+호출 제한 헤더(2026-09-23 관측): `X-RateLimit-Requests-Limit: 25000`, `X-RateLimit-Requests-Remaining: 24906`(4단계 확인 호출 4회 후). 월 단위 요청 한도로 보이나 요금제 문서로 재확인 필요.
+
+**엔드포인트 문서 출처**: API 제공자의 공개 저장소 README(github.com/han-tagg/Korean-cosmetic-ingredients-api). 검색 엔드포인트 `/v1/ingredient/{inci|kr|cas}?q=`는 모두 "starts with", `/v1/ingredient/search?q=&field=inci|kr|cas|all`은 "contains"이며 PRO+ 전용, 검색어 최소 2글자. 문서에 오류 응답 형식은 없다.
 
 ### 아직 확인하지 않은 것 (4단계 이후)
 
-- 영문 INCI 검색·부분 검색(`q=에탄` 등)·동의어 검색 지원 여부와 엔드포인트
+- 중간 포함 검색 `/v1/ingredient/search`(PRO+)의 실제 동작·현재 요금제 사용 가능 여부 (미호출). 동의어 검색 지원 여부
 - `result_status` 전체 값 목록, 오류 응답(4xx/5xx) 본문 형식
 - `ASEAN` 조회가 아세안 공통 기준인지 개별 국가 규정을 포함하는지
 - `markets_outside_plan` 의미, 규제 자료 갱신일 제공 여부
-- 429 초과 시 응답 형식, 자동완성 호출 빈도에 따른 캐시·디바운스 정책
+- 429 초과 시 응답 형식. 자동완성은 300ms 디바운스·조합 중 미요청으로 호출을 줄이며 캐시는 없음
 
 ## 3. 화면 흐름 (직접 검색, 현재 구현)
 
-1. 성분명·시장 입력 → **검색 버튼** → `/api/regulatory/ingredients` → 후보 목록 표시 (로딩 / 후보 없음 / 후보 검색 실패 구분). 직접 검색에는 함량·제품 조건 입력이 없다 (2026-09-23 요구사항 변경).
+1. 성분명(한글 또는 영문 INCI) 입력 → 앞뒤 공백 제거 후 2글자 이상이고 한글 조합이 끝난 뒤 300ms 동안 입력이 없으면 `/api/regulatory/ingredients` → 검색창 아래 후보 최대 10개 (로딩 / 후보 없음 / 후보 검색 실패 중 하나만 표시). 입력이 바뀌거나 목록이 닫히면 진행 중 응답은 무시한다(`acSeq`). **검색 버튼**을 바로 누르면 같은 Route로 후보를 조회한다. 직접 검색에는 함량·제품 조건 입력이 없다 (2026-09-23 요구사항 변경).
 2. 후보 클릭 또는 ↑↓ + Enter 로 성분 확정 → 목록 닫힘, 검색창 아래 "선택한 성분" 표시. **이 단계에서 규제 조회는 하지 않는다.**
-   - 후보가 정확히 1개이고 입력과 정확히 일치(공백·대소문자 무시)하면 자동 확정 후 같은 클릭에서 3번으로 진행한다. 여러 후보면 반드시 사용자 선택.
+   - 입력과 정확히 일치(공백·대소문자 무시)하는 후보가 **정확히 하나**이면 자동 확정 후 같은 클릭에서 3번으로 진행한다. 목록이 이미 열려 있으면 재요청 없이 그 후보 안에서 판단한다. 그 외에는 반드시 사용자 선택(첫 후보를 임의 확정하지 않음).
 3. 성분이 확정된 상태에서 **검색 버튼** → `/api/regulatory/regulations` → **결과 카드** 1장: 성분명·영문명·시장, 조회 상태, 규제 유형(`regulate_type` 원문), 규제 조건, 실제 조회 범위, '규제 원문·출처 보기' 버튼 → 상세 Modal.
    - 결과 영역은 `loading / error / single / batch` 중 한 블록만 표시한다. 요청 완료·실패 시 로딩과 버튼 비활성은 항상 해제된다.
    - `found`: 중립 배지 '규제 정보 조회됨'(허용·안전으로 보이지 않도록 초록색을 쓰지 않음). `no_data`: 경고 배지 + "확인되지 않았어요 / 허용·안전 아님" 안내 + API `result_note`, 규제 조건 영역 숨김. `hold`: 경고 배지 + 보류 안내. API 오류: Error 블록에 서버가 준 `error.kind`·`message`·외부 HTTP 상태를 그대로 표시하고 '다시 시도' 제공.

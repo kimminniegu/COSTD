@@ -3,13 +3,18 @@
    다른 페이지의 JS를 수정하거나 의존하지 않습니다. 공통 동작(탭·Modal)은 src/common/common.js 를 그대로 사용합니다.
 
    직접 검색 (현재 구현)
-   - 성분명 + 시장 → 검색 버튼 → /api/regulatory/ingredients 로 한글 성분명 후보 조회 → 후보 목록 표시
-   - 후보 선택(클릭 · ↑↓ + Enter)은 성분만 확정하고 규제 조회를 실행하지 않습니다
+   - 성분명(한글명 또는 영문 INCI명) + 시장. 서버가 언어에 맞는 엔드포인트를 고릅니다 (둘 다 '시작 일치', 영문 대소문자 무시)
+   - 자동완성: 앞뒤 공백 제거 후 2글자 이상이면 입력이 멈춘 뒤 300ms 후 /api/regulatory/ingredients 로 후보 조회 → 검색창 아래 최대 10개
+     · 한글 조합(IME composition) 중에는 요청하지 않고 조합이 끝난 뒤 조건을 다시 확인합니다
+     · 현재 입력에 대응하는 최신 응답만 반영하고, 이전 검색어의 늦은 응답과 닫힌 목록에 도착한 응답은 무시합니다
+   - 후보 선택(클릭 · ↑↓ + Enter)은 성분만 확정하고 규제 조회를 실행하지 않습니다. Esc·바깥 클릭으로 닫습니다
+   - 검색어를 수정하면 확정된 성분을 해제합니다
    - 성분이 확정된 상태에서 검색 버튼 → /api/regulatory/regulations 로 선택 시장 규제 조회 → 결과 카드 + 상세 Modal
-   - 후보가 정확히 1개이고 입력과 정확히 일치하면 그 성분으로 확정하고 같은 클릭에서 규제를 조회합니다 (명세 7항 6)
+   - 후보를 고르지 않고 검색 버튼 → 후보 조회 후 입력과 정확히 일치하는 후보가 하나뿐이면 확정하고 같은 클릭에서 규제 조회,
+     여러 후보면 목록을 열어 사용자 선택을 받습니다 (명세 7항 6). 임의로 첫 후보를 확정하지 않습니다
    - 결과 카드: 성분명·영문명·시장, 조회 상태, 규제 유형(원문), 규제 조건(원문을 항목별로 나눌 수 있으면 나눠서, 아니면 원문 그대로)
    - 규제 데이터 미확인(no_data) / 판단 보류(hold) / API 오류를 서로 다른 상태로 표시합니다. 적합성·안전성 판정은 하지 않습니다.
-   미구현(후속): 입력 중 자동완성·영문/부분 검색(4단계), 파일 업로드·추출·일괄 조회(함량 추출·수정 포함). */
+   미구현(후속): 중간 포함 검색(API 부분 검색 미사용), 파일 업로드·추출·일괄 조회(함량 추출·수정 포함). */
 (function () {
   "use strict";
 
@@ -87,9 +92,15 @@
     candidates: [],
     activeIndex: -1,
     listOpen: false,
-    lookupSeq: 0,         // 늦게 도착한 이전 응답 무시용
+    lookupSeq: 0,         // 늦게 도착한 이전 응답 무시용 (검색 버튼 흐름)
+    acSeq: 0,             // 자동완성 요청 순번 — 입력 변경·닫기 때마다 증가시켜 이전 응답을 무시
+    acTimer: null,        // 300ms 디바운스 타이머
+    composing: false,     // 한글 조합(IME) 중
     resultKey: null,      // 표시 중인 결과의 조건 키(성분 code|시장) — 현재 입력과 다르면 '이전 조건' 안내
   };
+
+  var AC_MIN_LENGTH = 2;    // 자동완성 최소 글자 수 (앞뒤 공백 제거 후)
+  var AC_DEBOUNCE_MS = 300; // 입력이 멈춘 뒤 대기 시간
 
   function normalize(text) { return (text || "").trim().toLowerCase(); }
 
@@ -118,6 +129,7 @@
     var list = $("regulatory-autocomplete-list");
     if (!list) return;
     var open = st !== "closed";
+    if (!open) { state.acSeq++; clearTimeout(state.acTimer); }   // 닫힌 목록이 진행 중 응답으로 다시 열리지 않게
     state.listOpen = open;
     show(list, open);
     if (input) input.setAttribute("aria-expanded", String(open));
@@ -223,11 +235,10 @@
       state.candidates = body.candidates || [];
       if (!state.candidates.length) { setAutocomplete("empty"); return; }
 
-      // 후보가 정확히 1개이고 입력과 정확히 일치 → 자동 확정 후 규제 조회 (여러 후보면 사용자 선택)
-      var only = state.candidates.length === 1 ? state.candidates[0] : null;
-      var qn = normalize(query);
-      if (only && (normalize(only.kr_name) === qn || normalize(only.inci_name) === qn)) {
-        selectCandidate(0, "정확 일치 자동 확정");
+      // 입력과 정확히 일치(공백·대소문자 무시)하는 후보가 정확히 하나 → 자동 확정 후 규제 조회. 그 외에는 사용자 선택
+      var exactIndex = findExactMatch(state.candidates, query);
+      if (exactIndex >= 0) {
+        selectCandidate(exactIndex, "정확 일치 자동 확정");
         runLookup();
         return;
       }
@@ -241,6 +252,54 @@
       if (msg) msg.textContent = "후보를 불러오지 못했어요. " + (err && err.message ? err.message : "잠시 후 다시 시도해 주세요.");
       setAutocomplete("error");
     });
+  }
+
+  /* 한글명 또는 INCI명이 입력과 정확히 일치하는 후보가 정확히 하나일 때 그 index, 아니면 -1 */
+  function findExactMatch(candidates, query) {
+    var qn = normalize(query);
+    var found = -1;
+    for (var i = 0; i < candidates.length; i++) {
+      var c = candidates[i];
+      if (normalize(c.kr_name) === qn || normalize(c.inci_name) === qn) {
+        if (found >= 0) return -1;   // 둘 이상 → 사용자 선택
+        found = i;
+      }
+    }
+    return found;
+  }
+
+  /* 자동완성 (입력 중) — 검색 버튼을 비활성화하지 않고 목록 안에서만 로딩·없음·오류를 표시 */
+  function fetchAutocomplete(query) {
+    var seq = ++state.acSeq;
+    setAutocomplete("loading");
+    apiGet("/api/regulatory/ingredients?q=" + encodeURIComponent(query)).then(function (body) {
+      if (seq !== state.acSeq) return;                       // 입력이 바뀌었거나 목록이 닫힘 → 무시
+      if (!input || input.value.trim() !== query) return;    // 현재 검색어와 다른 응답 → 무시
+      state.candidates = body.candidates || [];
+      if (!state.candidates.length) { setAutocomplete("empty"); return; }
+      renderCandidates(state.candidates);
+      setAutocomplete("list");
+      setActive(-1);                                         // 입력 중에는 활성 후보 없음 (Enter 가 임의 선택되지 않게)
+    }).catch(function (err) {
+      if (seq !== state.acSeq) return;
+      var msg = $("regulatory-autocomplete-error-text");
+      if (msg) msg.textContent = "후보를 불러오지 못했어요. " + (err && err.message ? err.message : "잠시 후 다시 시도해 주세요.");
+      setAutocomplete("error");
+    });
+  }
+
+  /* 입력 변경 → 조합 중이면 대기, 2글자 미만이면 닫기, 그 외 300ms 후 조회 */
+  function scheduleAutocomplete() {
+    clearTimeout(state.acTimer);
+    state.acSeq++;                                            // 이전 검색어의 진행 중 요청 무효화
+    if (state.composing) return;
+    var query = input ? input.value.trim() : "";
+    if (query.length < AC_MIN_LENGTH) { setAutocomplete("closed"); return; }
+    state.acTimer = setTimeout(function () {
+      if (state.composing) return;
+      if (!input || input.value.trim() !== query) return;
+      fetchAutocomplete(query);
+    }, AC_DEBOUNCE_MS);
   }
 
   function currentContext() {
@@ -277,23 +336,40 @@
       e.preventDefault();
       if (!validateForm()) return;
       var query = input.value.trim();
+      clearTimeout(state.acTimer);
       if (state.selected && state.selectedText === input.value) {
         runLookup();                 // 성분 확정됨 → 규제 조회
-      } else {
-        clearSelection();
-        fetchCandidates(query);      // 미확정 → 후보 검색 (조회 아님)
+        return;
       }
+      clearSelection();
+      // 자동완성 목록이 이미 현재 입력의 후보를 갖고 있으면 재요청 없이 그 안에서 정확 일치를 찾는다
+      if (state.listOpen && state.candidates.length) {
+        var exactIndex = findExactMatch(state.candidates, query);
+        if (exactIndex >= 0) { selectCandidate(exactIndex, "정확 일치 자동 확정"); runLookup(); return; }
+        setActive(state.activeIndex >= 0 ? state.activeIndex : 0);
+        var hint = $("regulatory-autocomplete-hint");
+        if (hint) hint.textContent = "여러 후보가 있어요. 목록에서 성분을 선택해 주세요 (↑↓ 이동 · Enter 선택 · Esc 닫기)";
+        return;
+      }
+      fetchCandidates(query);        // 미확정 → 후보 검색 (조회 아님)
     });
   }
 
   if (input) {
-    input.addEventListener("input", function () {
+    input.addEventListener("compositionstart", function () { state.composing = true; });
+    input.addEventListener("compositionend", function () {
+      state.composing = false;
+      scheduleAutocomplete();        // 조합 완료 후 길이·대기 조건을 다시 적용
+    });
+    input.addEventListener("input", function (e) {
       input.classList.remove("is-error");
       show($("regulatory-search-ingredient-error"), false);
       if (input.value !== state.selectedText) { clearSelection(); refreshStale(); }
-      setAutocomplete("closed");
+      if (e && e.isComposing) { state.composing = true; return; }   // 일부 브라우저는 compositionstart 전에 input 을 먼저 보냄
+      scheduleAutocomplete();
     });
     input.addEventListener("keydown", function (e) {
+      if (e.isComposing || e.keyCode === 229) return;                // 조합 중 키 입력은 목록 조작으로 쓰지 않음
       if (e.key === "Escape") { setAutocomplete("closed"); return; }
       if (!state.listOpen || !state.candidates.length) return;
       if (e.key === "ArrowDown") {
@@ -303,9 +379,11 @@
         e.preventDefault();
         setActive((state.activeIndex - 1 + state.candidates.length) % state.candidates.length);
       } else if (e.key === "Enter") {
-        // 후보 선택용 Enter — 폼 제출(규제 조회)로 이어지지 않음
-        e.preventDefault();
-        if (state.activeIndex >= 0) selectCandidate(state.activeIndex, "후보 선택");
+        // 활성 후보가 있으면 선택용 Enter — 폼 제출(규제 조회)로 이어지지 않음. 활성 후보가 없으면 폼 제출(검색 버튼과 동일)
+        if (state.activeIndex >= 0) {
+          e.preventDefault();
+          selectCandidate(state.activeIndex, "후보 선택");
+        }
       }
     });
     document.addEventListener("click", function (e) {

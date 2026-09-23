@@ -101,12 +101,14 @@ def _regulatory_error(exc):
 
 @app.route("/api/regulatory/ingredients")
 def regulatory_ingredients():
-    """한글 성분명 후보 검색. ?q=성분명 → 후보 최대 10개 (규제 조회는 하지 않음)."""
+    """한글명·영문 INCI명 후보 검색. ?q=성분명 → 후보 최대 10개 (규제 조회는 하지 않음). 자동완성도 같은 Route 사용."""
     q = (_regulatory_request.args.get("q") or "").strip()
     if not q:
         return _regulatory_jsonify({"ok": False, "error": {"kind": "validation", "message": "성분명을 입력해 주세요."}}), 400
+    if len(q) < regulatory_service.MIN_QUERY_LENGTH:
+        return _regulatory_jsonify({"ok": False, "error": {"kind": "validation", "message": "성분명을 2글자 이상 입력해 주세요."}}), 400
     try:
-        result = regulatory_service.search_ingredients_kr(q)
+        result = regulatory_service.search_ingredients(q)
     except regulatory_service.RegulatoryApiError as exc:
         return _regulatory_error(exc)
     result["ok"] = True

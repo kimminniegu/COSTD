@@ -27,7 +27,16 @@ RESULT_STATUS_FOUND = ("listed",)
 RESULT_STATUS_NO_DATA = ("not_listed_in_country",)
 
 MAX_CANDIDATES = 10
+MIN_QUERY_LENGTH = 2   # API 문서 기준 검색어 최소 길이 (min 2 chars). 자동완성·직접 검색 공통
 CONNECT_TIMEOUT = 5
+
+# 검색 엔드포인트 (공개 README 문서 + 실제 호출로 확인, 둘 다 "starts with" 일치)
+#   kr   : /v1/ingredient/kr?q=    한글명 시작 일치            (test_data/search_kr_*.json)
+#   inci : /v1/ingredient/inci?q=  영문 INCI명 시작 일치, 대소문자 무시 (test_data/search_inci_partial_retin.json)
+# 한글 엔드포인트에 영문을 넣으면 0건이므로 입력에 한글이 있으면 kr, 없으면 inci 로 1회만 호출한다.
+# "contains" 부분 검색(/v1/ingredient/search)은 PRO+ 전용으로 문서화되어 있으나 이 단계에서는 사용하지 않는다.
+SEARCH_ENDPOINTS = {"kr": "/v1/ingredient/kr", "inci": "/v1/ingredient/inci"}
+SEARCH_MATCH_MODE = "starts_with"
 READ_TIMEOUT = 15
 
 
@@ -98,7 +107,7 @@ def _now_iso():
 
 
 # ---------------------------------------------------------------------------
-# 성분명 후보 검색 (한글)  GET /v1/ingredient/kr?q=
+# 성분명 후보 검색  GET /v1/ingredient/kr?q=  (한글)  /  GET /v1/ingredient/inci?q=  (영문 INCI)
 # ---------------------------------------------------------------------------
 
 def normalize_query(text):
@@ -165,13 +174,43 @@ def normalize_search_response(body, query):
     }
 
 
-def search_ingredients_kr(query):
-    """한글 성분명 검색. 앞뒤 공백을 제거한 값으로 호출한다. (부분·영문 검색 지원 여부는 4단계에서 확인)"""
+def detect_search_field(query):
+    """검색어에 한글(가-힣, 자모)이 하나라도 있으면 'kr', 아니면 'inci'."""
+    for ch in (query or ""):
+        if "가" <= ch <= "힣" or "ㄱ" <= ch <= "ㆎ":
+            return "kr"
+    return "inci"
+
+
+def search_ingredients(query):
+    """한글명 또는 영문 INCI명 후보 검색. 앞뒤 공백 제거 후 언어에 맞는 엔드포인트를 1회만 호출한다.
+
+    영문 대소문자는 API 가 무시하며(실제 호출 확인) 순위 계산도 casefold 로 무시한다.
+    두 엔드포인트 모두 '시작 일치'라 중간 포함 검색(예: '티놀')은 이 단계에서 지원하지 않는다.
+    """
     q = (query or "").strip()
     if not q:
         raise ValueError("query is empty")
-    body = _get("/v1/ingredient/kr", {"q": q})
-    return normalize_search_response(body, q)
+    if len(q) < MIN_QUERY_LENGTH:
+        raise ValueError("query too short")
+    field = detect_search_field(q)
+    body = _get(SEARCH_ENDPOINTS[field], {"q": q})
+    result = normalize_search_response(body, q)
+    result["search_field"] = field
+    result["match_mode"] = SEARCH_MATCH_MODE
+    return result
+
+
+def search_ingredients_kr(query):
+    """한글 성분명 검색 (기존 계약 유지). 새 코드는 search_ingredients() 를 사용한다."""
+    q = (query or "").strip()
+    if not q:
+        raise ValueError("query is empty")
+    body = _get(SEARCH_ENDPOINTS["kr"], {"q": q})
+    result = normalize_search_response(body, q)
+    result["search_field"] = "kr"
+    result["match_mode"] = SEARCH_MATCH_MODE
+    return result
 
 
 # ---------------------------------------------------------------------------

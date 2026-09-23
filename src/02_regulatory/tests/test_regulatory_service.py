@@ -272,3 +272,105 @@ class RouteTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# 4단계: 한글·영문 INCI 검색 / 자동완성용 후보 검색 (실제 호출 기록 test_data/ 로 검증, 외부 호출 없음)
+# ---------------------------------------------------------------------------
+
+class BilingualSearchTest(unittest.TestCase):
+    def test_detect_search_field(self):
+        self.assertEqual(svc.detect_search_field("레티"), "kr")
+        self.assertEqual(svc.detect_search_field("ㄹㅔ"), "kr")          # 자모만 있어도 한글
+        self.assertEqual(svc.detect_search_field("Retin"), "inci")
+        self.assertEqual(svc.detect_search_field("peg-16"), "inci")
+        self.assertEqual(svc.detect_search_field("레티 Retinol"), "kr")  # 혼합 입력은 한글 우선
+
+    def test_korean_partial_uses_kr_endpoint_and_ranks_prefix(self):
+        with mock.patch.object(svc, "_get", return_value=load_body("search_kr_partial_reti.json")) as get:
+            result = svc.search_ingredients(" 레티 ")
+            get.assert_called_once_with("/v1/ingredient/kr", {"q": "레티"})
+        self.assertEqual(result["search_field"], "kr")
+        self.assertEqual(result["match_mode"], "starts_with")
+        self.assertEqual(result["total"], 15)
+        self.assertTrue(result["truncated"])
+        self.assertEqual(len(result["candidates"]), 10)
+        self.assertEqual(len({c["code"] for c in result["candidates"]}), 10)   # code 기준 중복 없음
+        self.assertTrue(all(c["match_rank"] == 1 for c in result["candidates"]))  # 모두 시작 일치
+
+    def test_korean_partial_etan_exact_first(self):
+        # 명세 예시: '에탄' → 등록된 '에탄올' 후보. 정확 일치 '에탄'(code 6203)이 맨 앞
+        with mock.patch.object(svc, "_get", return_value=load_body("search_kr_partial_etan.json")):
+            result = svc.search_ingredients("에탄")
+        codes = [c["code"] for c in result["candidates"]]
+        self.assertEqual(codes[0], 6203)
+        self.assertIn(2093, codes)                                    # 에탄올
+        self.assertEqual(result["candidates"][0]["match_rank"], 0)
+
+    def test_english_uses_inci_endpoint_case_insensitive(self):
+        with mock.patch.object(svc, "_get", return_value=load_body("search_inci_partial_retin.json")) as get:
+            result = svc.search_ingredients("  retin ")
+            get.assert_called_once_with("/v1/ingredient/inci", {"q": "retin"})
+        self.assertEqual(result["search_field"], "inci")
+        self.assertEqual(result["total"], 17)
+        self.assertTrue(result["truncated"])
+        self.assertEqual(len(result["candidates"]), 10)
+        for c in result["candidates"]:
+            self.assertTrue(c["inci_name"].lower().startswith("retin"), c["inci_name"])
+        self.assertTrue(all(c["kr_name"] for c in result["candidates"]))  # 응답의 한글명 그대로 (생성 아님)
+
+    def test_english_on_kr_endpoint_returns_nothing(self):
+        # 라우팅 근거: 한글 엔드포인트에 영문을 넣으면 0건 (실제 기록)
+        body = load_body("search_kr_english_retinol.json")
+        self.assertTrue(body["success"])
+        self.assertEqual(body["data"], [])
+
+    def test_min_length(self):
+        with self.assertRaises(ValueError):
+            svc.search_ingredients("레")
+        with mock.patch.object(svc, "_get") as get:
+            with self.assertRaises(ValueError):
+                svc.search_ingredients("  a ")
+            get.assert_not_called()
+
+    def test_legacy_kr_helper_still_works(self):
+        with mock.patch.object(svc, "_get", return_value=load_body("search_kr_retinol.json")) as get:
+            result = svc.search_ingredients_kr("레티놀")
+            get.assert_called_once_with("/v1/ingredient/kr", {"q": "레티놀"})
+        self.assertEqual(result["search_field"], "kr")
+
+
+class BilingualRouteTest(unittest.TestCase):
+    def setUp(self):
+        flask_app.app.config["TESTING"] = True
+        self.client = flask_app.app.test_client()
+
+    def test_route_rejects_single_char_without_external_call(self):
+        with mock.patch.object(svc, "_get") as get:
+            res = self.client.get("/api/regulatory/ingredients?q=%EB%A0%88")   # '레'
+            get.assert_not_called()
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.get_json()["error"]["kind"], "validation")
+        self.assertNotIn("RAPIDAPI", res.get_data(as_text=True))
+
+    def test_route_english_query(self):
+        with mock.patch.object(svc, "_get", return_value=load_body("search_inci_partial_retin.json")) as get:
+            res = self.client.get("/api/regulatory/ingredients?q=Retin")
+            get.assert_called_once_with("/v1/ingredient/inci", {"q": "Retin"})
+        body = res.get_json()
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["search_field"], "inci")
+        self.assertLessEqual(len(body["candidates"]), 10)
+        self.assertNotIn("x-rapidapi", res.get_data(as_text=True).lower())
+
+    def test_route_korean_query_single_call(self):
+        with mock.patch.object(svc, "_get", return_value=load_body("search_kr_partial_reti.json")) as get:
+            res = self.client.get("/api/regulatory/ingredients?q=%EB%A0%88%ED%8B%B0")   # '레티'
+            self.assertEqual(get.call_count, 1)
+        self.assertEqual(res.get_json()["search_field"], "kr")
+
+    def test_page_copy_mentions_bilingual_autocomplete(self):
+        html = self.client.get("/regulatory").get_data(as_text=True)
+        self.assertIn("영문 INCI", html)
+        self.assertNotIn("<<<<<<<", html)
