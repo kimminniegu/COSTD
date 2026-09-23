@@ -21,7 +21,7 @@
   let state = "upload", saved = null, draft = null, originalFile = null, controller = null;
   let printFrame = null;
   let activeSection = 0;
-  const sectionTitles = [...sections.map(([title]) => title), "06 참고자료"];
+  const sectionTitles = [...sections.map(([title]) => title), "05 참고자료"];
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const filled = (value) => Array.isArray(value) ? value.length > 0 : Boolean(String(value ?? "").trim());
@@ -36,14 +36,7 @@
     source_file: "", version: 1, field_provenance: [], raw_extracted_data: {}, reference_files: [],
     product_development: Object.fromEntries(definitions.filter(([key]) => key.startsWith("product_development.")).map(([key]) => [key.split(".")[1], ""])),
     ingredients: { necessary: [], ideal: [] },
-    quality: {
-      stability: { required: null, duration: "", responsibility: "" },
-      skin_irritation: { required: null, duration: "", responsibility: "" },
-      eye_irritation: { required: null, duration: "", responsibility: "" },
-      sensory: { required: null, duration: "", responsibility: "" },
-      clinical: { required: null, duration: "", responsibility: "" },
-      other_tests: ""
-    }
+    quality: { tests: [], additional_notes: "" }
   });
   function notice(message = "") {
     $("notice").textContent = message;
@@ -531,7 +524,7 @@
         sections.map(([title, fields], index) => '<section><h2>' + escape(title) + '</h2><table class="requirements"><colgroup><col class="label-column"><col></colgroup><thead><tr><th scope="col">항목</th><th scope="col">요청 내용</th></tr></thead><tbody>' +
           fields.map(([key, label]) => row(label, key === "buyer_prohibited_ingredients" ? prohibitedIngredients : pdfValue(key))).join('') +
           '</tbody></table></section>').join('') +
-        '<section class="references"><h2>06 참고자료</h2>' + (referenceMarkup(data, true) || '<p class="empty-reference">등록된 참고자료 없음</p>') + '</section>' +
+        '<section class="references"><h2>05 참고자료</h2>' + (referenceMarkup(data, true) || '<p class="empty-reference">등록된 참고자료 없음</p>') + '</section>' +
         '<section class="review-signoff"><h2>연구소 검토</h2><table class="requirements"><colgroup><col class="label-column"><col></colgroup><tbody>' +
         row("검토 담당자 / 검토일", "담당자:                         검토일:          년       월       일") +
         '<tr><th scope="row">검토 의견</th><td class="review-space"></td></tr></tbody></table></section>' +

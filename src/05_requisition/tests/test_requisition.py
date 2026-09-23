@@ -49,14 +49,13 @@ class RequisitionTest(unittest.TestCase):
             "product_development.other_requirements": "충진 시 기포 최소화",
             "ingredients.necessary": ["Silica"],
             "product_development.application_type": "Leave-on",
-            "quality.stability.required": False,
-            "quality.stability.duration": "12주",
+            "quality.tests": ["안정도 시험", "피부자극 테스트"],
+            "quality.additional_notes": "필요 시 기타 테스트 추가",
         }
         for key, value in fields.items():
             service.set_value(result, key, value)
             result["evidence"].append({"field_key": key, "source_value": str(value), "source_page": "3", "needs_review": False})
-        service.set_value(result, "quality.micro.required", True)
-        service.set_value(result, "quality.micro.responsibility", "PRIVATE_MICRO_OWNER")
+        service.set_value(result, "quality.legacy_private", "PRIVATE_MICRO_OWNER")
         result["raw_extracted_data"] = {
             "commercial_data": [{"field_key": "MOQ", "source_value": "SECRET_QUANTITY", "source_page": "2"}],
             "claim_data": [{"field_key": "Clinical Testing", "source_value": "PRIVATE_CLAIM_TEST", "source_page": "3"}],
@@ -65,13 +64,13 @@ class RequisitionTest(unittest.TestCase):
         document = service.normalize_result(result, "brief.pdf", "", "auto", "ko", [])
         for key, value in fields.items():
             self.assertEqual(service.get_value(document, key), value)
-        self.assertNotIn("micro", document["quality"])
+        self.assertNotIn("legacy_private", document["quality"])
         self.assertEqual(document["raw_extracted_data"], result["raw_extracted_data"])
         self.assertNotIn("SECRET_QUANTITY", json.dumps({key: document[key] for key in ("product_development", "quality")}))
         public_document = {key: value for key, value in document.items() if key != "raw_extracted_data"}
         self.assertNotIn("PRIVATE_MICRO_OWNER", json.dumps(public_document))
         self.assertNotIn("PRIVATE_CLAIM_TEST", json.dumps(public_document))
-        provenance = next(item for item in document["field_provenance"] if item["field_key"] == "quality.stability.required")
+        provenance = next(item for item in document["field_provenance"] if item["field_key"] == "quality.tests")
         self.assertEqual(provenance["source_page"], "3")
         self.assertEqual(provenance["review_status"], "confirmed")
 
@@ -80,8 +79,8 @@ class RequisitionTest(unittest.TestCase):
         result["product_development"] = {"texture": "Invented"}
         document = service.normalize_result(result, "brief.pdf", "", "auto", "ko", [])
         self.assertEqual(document["product_development"]["texture"], "")
-        for value in ("필요", 1, [], {}):
-            result["quality"] = {"stability": {"required": value}}
+        for value in ("필요", 1, {}):
+            result["quality"] = {"tests": value}
             with self.assertRaises(service.ConversionError):
                 service.normalize_result(result, "brief.pdf", "", "auto", "ko", [])
 
