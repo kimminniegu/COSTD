@@ -19,7 +19,13 @@
    - 여러 시트면 서버가 sheet_required 를 돌려주고, 시트를 고르면 같은 파일을 sheet 와 함께 다시 보냅니다
    - 표에서 성분명·함량 수정, 행 추가·삭제, 조회 포함 체크. 원문값은 별도로 남겨 둡니다
    - 처리 중 / 완료 / 실패(형식 미지원·읽기 실패·제한 초과) / 추출 결과 없음을 구분합니다
-   미구현(후속): 중간 포함 검색, 스캔 PDF·이미지 OCR, 파일 성분의 API 매칭·규제 일괄 조회. */
+   성분 확인·규제 일괄 조회 (이번 단계)
+   - '성분 확인' → 조회 포함 행의 성분명으로 /api/regulatory/ingredients 를 순차 호출 (같은 이름은 1회). 정확 일치 하나만 자동 확정,
+     복수 후보는 행의 select 로 사용자가 선택, 후보 없음은 '성분 확인 필요'. 성분명을 고치면 그 행의 매칭·결과를 지웁니다
+   - '확정 성분 규제 조회' → 확정 행만 /api/regulatory/regulations 를 (성분 코드, 시장)당 1회 순차 호출해 각 행에 연결.
+     429(rate_limit) 는 즉시 중단, 실패 행만 '실패 항목 재시도'. 시장·목록·매칭이 바뀌면 '이전 조건의 결과' 안내, 늦은 응답은 순번으로 무시
+   - 결과 표: 성분명·선택 시장·조회 상태·규제 유형·상세. 상세 Modal 에 규제 조건을 영문 위·한국어 아래로 표시. 함량은 문서 참고값만, 적합 판정 없음
+   미구현(후속): 중간 포함 검색, 스캔 PDF·이미지 OCR, 함량 기준 비교(검토 상태). */
 (function () {
   "use strict";
 
@@ -556,19 +562,22 @@
     return wrap;
   }
 
-  function renderConditions(res) {
-    var section = $("regulatory-single-conditions");
-    var body = $("regulatory-single-conditions-body");
+  /* 규제 조건을 지정한 컨테이너에 렌더링 (직접 검색 카드와 상세 Modal 이 공유) */
+  function renderConditionsInto(res, section, body, note) {
     if (!section || !body) return;
     body.innerHTML = "";
     var entries = (res && res.entries) || [];
     if (!entries.length) { show(section, false); return; }
     entries.forEach(function (e, i) { body.appendChild(renderConditionEntry(e, i, entries.length)); });
     var structured = entries.some(function (e) { return !!parseConditionText(e.limit_condition); });
-    setText($("regulatory-single-conditions-note"), structured
+    setText(note, structured
       ? "API 원문을 언어별·항목별로 나눠 표시했어요. 번역·요약 없이 수치·단위·조건은 원문 그대로예요."
       : "API 원문 그대로예요.");
     show(section, true);
+  }
+
+  function renderConditions(res) {
+    renderConditionsInto(res, $("regulatory-single-conditions"), $("regulatory-single-conditions-body"), $("regulatory-single-conditions-note"));
   }
 
   /* ==========================================================================
@@ -625,6 +634,9 @@
     setText($("regulatory-detail-title"), "성분 상세 · " + ingredientFull(res, ctx));
     set("input-raw", ctx.inputRaw);
     set("input-market", ctx.marketLabel);
+    set("input-amount", ctx.amountRef ? ctx.amountRef + " — 문서에서 읽은 참고값이에요. 적합 여부는 판정하지 않아요." : "해당 없음");
+    set("input-location", ctx.location || "해당 없음");
+    renderConditionsInto(res, $("regulatory-detail-conditions-section"), $("regulatory-detail-conditions"), $("regulatory-detail-conditions-note"));
     var sel = ctx.selected || {};
     set("match-name", ingredientFull(res, ctx) + " · code " + sel.code);
     set("match-method", ctx.matchMethod || "—");
@@ -711,7 +723,13 @@
   var ERROR_KIND_LABEL = { validation: "입력 확인", limit: "제한 초과", unsupported: "형식 미지원", unreadable: "읽기 실패", network: "연결 실패", http: "서버 오류", invalid_response: "응답 오류" };
 
   // items: 서버 추출값(name_raw/amount_raw/location/needs_review/review_reasons) + 화면 편집값(name/amount/include/user_added)
-  var fileState = { seq: 0, items: [], nextId: 1, sheets: [], selectedSheet: null, lastFile: null, emptyResult: false };
+  var fileState = { seq: 0, items: [], nextId: 1, sheets: [], selectedSheet: null, lastFile: null, emptyResult: false,
+                    doc: null,            // 추출 응답의 document_market / document_use / scope / kind
+                    matching: false,      // 성분 확인 진행 중 (중복 실행 방지)
+                    looking: false,       // 규제 조회 진행 중
+                    batchSeq: 0,          // 늦게 도착한 이전 조회 응답 무시
+                    batchResultKey: null, // 표시 중인 일괄 결과의 조건 키 (시장 + 확정 목록)
+                    batchMarket: null };  // 표시 중인 결과의 시장 코드
 
   function currentFile() { return fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null; }
 
@@ -859,9 +877,13 @@
         role_raw: it.role_raw || null, location: it.location || "—",
         needs_review: !!it.needs_review, review_reasons: it.review_reasons || [],
         name: it.name_raw || "", amount: it.amount_raw || "", include: true, user_added: false, edited: false,
+        match: null, result: null,      // match: 성분 확인 결과 / result: 규제 조회 결과 (행별)
       };
     });
     fileState.nextId = 1;
+    fileState.doc = { kind: result.file && result.file.kind, scope: result.scope || {}, market: result.document_market || null, use: result.document_use || null };
+    fileState.batchResultKey = null; fileState.batchMarket = null;
+    if (!$("regulatory-result-single") || $("regulatory-result-single").hidden) setResult("hidden");
 
     var scopeText = "";
     var sc = result.scope || {};
@@ -905,7 +927,13 @@
     tdName.appendChild(el("p", "regulatory-review-origin", "원문: " + (it.user_added ? "(직접 입력)" : (it.name_raw || "(비어 있음)"))));
     var nameInput = el("input", "form-control form-control-sm"); nameInput.type = "text"; nameInput.value = it.name;
     nameInput.placeholder = "성분명 (한글 또는 INCI)"; nameInput.setAttribute("aria-label", "성분명 수정");
-    nameInput.addEventListener("input", function () { it.name = nameInput.value; if (!it.user_added && nameInput.value.trim() !== it.name_raw) it.edited = true; else it.edited = false; replaceChildren(statusCell, statusBadge(it)); updateReviewCount(); });
+    nameInput.addEventListener("input", function () {
+      it.name = nameInput.value;
+      if (!it.user_added && nameInput.value.trim() !== it.name_raw) it.edited = true; else it.edited = false;
+      invalidateRow(it);                       // 성분명이 바뀌면 이전 매칭·조회 결과는 무효
+      replaceChildren(statusCell, statusBadge(it));
+      updateReviewCount();
+    });
     tdName.appendChild(nameInput);
     tr.appendChild(tdName);
 
@@ -927,12 +955,17 @@
     if (it.review_reasons.length) statusCell.appendChild(el("p", "regulatory-review-reason", it.review_reasons.join(" ")));
     tr.appendChild(statusCell);
 
+    var tdMatch = el("td", "regulatory-match");
+    it._matchCell = tdMatch;
+    renderMatchCell(it);
+    tr.appendChild(tdMatch);
+
     var tdAct = el("td", "regulatory-col-action");
     var del = el("button", "btn btn-secondary btn-sm", "삭제"); del.type = "button"; del.setAttribute("aria-label", "행 삭제");
     del.addEventListener("click", function () {
       fileState.items = fileState.items.filter(function (x) { return x !== it; });
       if (tr.parentNode) tr.parentNode.removeChild(tr);
-      updateReviewCount();
+      updateReviewCount();               // 삭제 행은 조회 대상·결과 표에서 제외
     });
     tdAct.appendChild(del);
     tr.appendChild(tdAct);
@@ -946,30 +979,322 @@
     setText($("regulatory-review-count"), total + "행 · 조회 포함 " + included + " · 확인 필요 " + review);
     // 서버가 '성분 표 없음'을 돌려준 경우에만 Empty State. 행을 직접 추가하면 숨기고, 모두 지우면 다시 보인다
     show($("regulatory-file-empty"), fileState.emptyResult && total === 0);
+    updateLookupSummary();
+  }
+
+  /* ---------------- 성분 확인 (API 매칭) ---------------- */
+  function includedRows() { return fileState.items.filter(function (x) { return x.include && x.name.trim(); }); }
+  function confirmedRows() { return includedRows().filter(function (x) { return x.match && x.match.status === "confirmed"; }); }
+
+  function invalidateRow(it) {
+    it.match = null;
+    it.result = null;
+    renderMatchCell(it);
+    refreshBatchStale();
+  }
+
+  function updateLookupSummary() {
+    var inc = includedRows();
+    var confirmed = confirmedRows().length;
+    var unconfirmed = inc.length - confirmed;
+    var btn = $("regulatory-review-submit");
+    if (btn) btn.disabled = fileState.looking || fileState.matching || confirmed === 0;
+    var marketSel = $("regulatory-file-market");
+    setText($("regulatory-lookup-summary"), "확정 " + confirmed + " · 미확정 " + unconfirmed + " · 조회 대상 " + confirmed +
+      (confirmed ? (marketSel && marketSel.value ? " — 선택 시장: " + fileMarketLabel() : " — 국가/시장을 선택해 주세요.") : " — 성분 확인 후 조회할 수 있어요."));
+    refreshBatchStale();
+  }
+
+  function fileMarketLabel() {
+    var sel = $("regulatory-file-market");
+    if (!sel) return "";
+    for (var i = 0; i < sel.options.length; i++) if (sel.options[i].value === sel.value) return sel.options[i].text;
+    return sel.value;
+  }
+
+  function candidateLabel(c) {
+    return (c.kr_name || "") + (c.kr_name && c.inci_name ? " (" + c.inci_name + ")" : (c.inci_name || "")) + (!c.kr_name && !c.inci_name ? "code " + c.code : "");
+  }
+
+  function confirmMatch(it, c, method) {
+    it.match = { status: "confirmed", code: c.code, kr_name: c.kr_name || null, inci_name: c.inci_name || null, record_updated_at: c.record_updated_at || null, method: method, candidates: it.match ? it.match.candidates : [] };
+    it.result = null;
+    renderMatchCell(it);
+    updateLookupSummary();
+  }
+
+  function renderMatchCell(it) {
+    var td = it._matchCell;
+    if (!td) return;
+    td.innerHTML = "";
+    var m = it.match;
+    if (!m) { td.appendChild(el("span", "text-caption text-secondary", "성분 확인 전")); return; }
+    if (m.status === "confirmed") {
+      td.appendChild(badge("확정", ""));
+      td.appendChild(el("p", "regulatory-match__name", candidateLabel(m) + " · code " + m.code + " · " + m.method));
+      return;
+    }
+    if (m.status === "choose") {
+      td.appendChild(badge("성분 확인 필요", "warning"));
+      var sel = el("select", "form-control form-control-sm mt-2"); sel.setAttribute("aria-label", "후보 선택");
+      var o0 = el("option", null, "후보 " + m.candidates.length + "개 — 선택하세요"); o0.value = ""; sel.appendChild(o0);
+      m.candidates.forEach(function (c, i) { var o = el("option", null, candidateLabel(c)); o.value = String(i); sel.appendChild(o); });
+      sel.addEventListener("change", function () { var i = parseInt(sel.value, 10); if (!isNaN(i) && m.candidates[i]) confirmMatch(it, m.candidates[i], "후보 선택"); });
+      td.appendChild(sel);
+      td.appendChild(el("p", "regulatory-match__name", "정확히 일치하는 후보가 없거나 여러 개예요. 임의로 확정하지 않았어요."));
+      return;
+    }
+    if (m.status === "not_found") {
+      td.appendChild(badge("성분 확인 필요", "warning"));
+      td.appendChild(el("p", "regulatory-match__name", "일치하는 성분이 없어요. 성분명을 수정한 뒤 다시 확인해 주세요."));
+      return;
+    }
+    td.appendChild(badge("확인 실패", "danger"));
+    td.appendChild(el("p", "regulatory-match__name", m.message || "후보를 불러오지 못했어요. 다시 확인해 주세요."));
+  }
+
+  function setMatchBusy(on, label) {
+    fileState.matching = on;
+    var btn = $("regulatory-review-match");
+    if (btn) { btn.disabled = on; btn.textContent = on ? (label || "확인 중") : "성분 확인 (API 매칭)"; }
+    updateLookupSummary();
+  }
+
+  /* 조회 포함 행을 순서대로 확인. 같은 이름(공백·대소문자 무시)은 한 번만 검색해 결과를 공유한다 */
+  function runMatching() {
+    if (fileState.matching || fileState.looking) return;
+    var rows = includedRows().filter(function (x) { return !x.match || x.match.status !== "confirmed"; });
+    var progress = $("regulatory-match-progress");
+    if (!rows.length) { setText(progress, "확인할 행이 없어요. 조회 포함 행의 성분명을 입력하거나 이미 모두 확정됐어요."); return; }
+    var seq = ++fileState.seq;
+    var cache = {};
+    var done = 0;
+    setMatchBusy(true, "확인 중 0/" + rows.length);
+    function next(i) {
+      if (seq !== fileState.seq) return;                       // 다시 업로드 등으로 무효화
+      if (i >= rows.length) {
+        setMatchBusy(false);
+        var c = confirmedRows().length, inc = includedRows().length;
+        setText(progress, "확인 완료 — 확정 " + c + " · 미확정 " + (inc - c) + ". 미확정 행은 후보를 고르거나 성분명을 수정한 뒤 다시 확인해 주세요.");
+        return;
+      }
+      var it = rows[i];
+      var q = it.name.trim();
+      var key = normalize(q);
+      var p = cache[key] || (cache[key] = apiGet("/api/regulatory/ingredients?q=" + encodeURIComponent(q)).then(function (b) { return { candidates: b.candidates || [] }; }, function (err) { return { error: err }; }));
+      p.then(function (r) {
+        if (seq !== fileState.seq) return;
+        if (!it.include || it.name.trim() !== q) { /* 진행 중에 바뀐 행은 건너뜀 */ }
+        else if (r.error) it.match = { status: "error", candidates: [], message: r.error.message || "후보 검색 실패" };
+        else if (!r.candidates.length) it.match = { status: "not_found", candidates: [] };
+        else {
+          var exact = findExactMatch(r.candidates, q);
+          if (exact >= 0) { it.match = { status: "choose", candidates: r.candidates }; confirmMatch(it, r.candidates[exact], "정확 일치 자동 확정"); }
+          else it.match = { status: "choose", candidates: r.candidates };
+        }
+        it.result = null;
+        renderMatchCell(it);
+        done++;
+        setMatchBusy(true, "확인 중 " + done + "/" + rows.length);
+        setText(progress, "성분 확인 중 " + done + "/" + rows.length + " — " + q);
+        next(i + 1);
+      });
+    }
+    next(0);
+  }
+
+  var matchBtn = $("regulatory-review-match");
+  if (matchBtn) matchBtn.addEventListener("click", runMatching);
+
+  /* ---------------- 규제 일괄 조회 ---------------- */
+  function batchKey() {
+    var market = $("regulatory-file-market") ? $("regulatory-file-market").value : "";
+    return market + "|" + confirmedRows().map(function (x) { return x.id + ":" + x.match.code; }).join(",") +
+      "|" + includedRows().filter(function (x) { return !x.match || x.match.status !== "confirmed"; }).map(function (x) { return x.id + ":" + normalize(x.name); }).join(",");
+  }
+
+  function refreshBatchStale() {
+    var notice = $("regulatory-batch-stale");
+    if (!notice) return;
+    if (fileState.batchResultKey == null || fileState.looking) { show(notice, false); return; }
+    show(notice, batchKey() !== fileState.batchResultKey);
+  }
+
+  var fileMarketSel = $("regulatory-file-market");
+  if (fileMarketSel) fileMarketSel.addEventListener("change", function () { fileMarketSel.classList.remove("is-error"); show($("regulatory-file-market-error"), false); updateLookupSummary(); });
+
+  function runBatchLookup(retryOnly) {
+    if (fileState.looking || fileState.matching) return;
+    var marketSel = $("regulatory-file-market");
+    var market = marketSel ? marketSel.value : "";
+    if (!market) { if (marketSel) marketSel.classList.add("is-error"); show($("regulatory-file-market-error"), true); return; }
+    var rows = confirmedRows();
+    if (retryOnly) rows = rows.filter(function (x) { return x.result && x.result.status === "api_error" && x.result.market === market; });
+    if (!rows.length) return;
+    // 같은 (성분 코드, 시장) 은 한 번만 호출
+    var groups = {};
+    rows.forEach(function (x) { var k = x.match.code + "|" + market; (groups[k] = groups[k] || { code: x.match.code, rows: [] }).rows.push(x); });
+    var keys = Object.keys(groups);
+    var seq = ++fileState.batchSeq;
+    fileState.looking = true;
+    fileState.batchMarket = market;
+    updateLookupSummary();
+    setText($("regulatory-result-loading-label"), "규제 정보를 조회하는 중이에요 (0/" + keys.length + ")");
+    setResult("loading");
+    setFileStep("lookup");
+    var stopped = false;
+    function finish() {
+      if (seq !== fileState.batchSeq) return;
+      fileState.looking = false;
+      fileState.batchResultKey = batchKey();
+      renderBatch(market);
+      updateLookupSummary();
+      setFileStep("result");
+    }
+    function next(i) {
+      if (seq !== fileState.batchSeq) return;               // 새 조회·다시 업로드로 무효화 → 늦은 응답 무시
+      if (i >= keys.length) { finish(); return; }
+      var g = groups[keys[i]];
+      if (stopped) {
+        g.rows.forEach(function (x) { x.result = { status: "api_error", market: market, err: { kind: "rate_limit", message: "호출 한도 초과로 이 항목은 조회하지 않았어요. 잠시 후 ‘실패 항목 재시도’를 눌러 주세요." }, res: null }; });
+        next(i + 1); return;
+      }
+      apiGet("/api/regulatory/regulations?code=" + encodeURIComponent(g.code) + "&country=" + encodeURIComponent(market)).then(function (res) {
+        if (seq !== fileState.batchSeq) return;
+        g.rows.forEach(function (x) { x.result = { status: res.lookup_status, market: market, res: res, err: null }; });
+        setText($("regulatory-result-loading-label"), "규제 정보를 조회하는 중이에요 (" + (i + 1) + "/" + keys.length + ")");
+        next(i + 1);
+      }).catch(function (err) {
+        if (seq !== fileState.batchSeq) return;
+        g.rows.forEach(function (x) { x.result = { status: "api_error", market: market, err: err || { kind: "unknown", message: "조회 실패" }, res: null }; });
+        if (err && err.kind === "rate_limit") stopped = true;   // 429: 남은 항목은 호출하지 않고 실패로 표시. 자동 재시도 없음
+        next(i + 1);
+      });
+    }
+    next(0);
+  }
+
+  var lookupBtn = $("regulatory-review-submit");
+  if (lookupBtn) lookupBtn.addEventListener("click", function () { runBatchLookup(false); });
+  var retryFailedBtn = $("regulatory-retry-failed");
+  if (retryFailedBtn) retryFailedBtn.addEventListener("click", function () { runBatchLookup(true); });
+
+  var BATCH_LABEL = {
+    found: { text: "규제 정보 조회됨", variant: "" },
+    no_data: { text: "규제 데이터 미확인", variant: "warning" },
+    hold: { text: "판단 보류 (미확인 응답)", variant: "warning" },
+    api_error: { text: "API 오류", variant: "danger" },
+    choose: { text: "성분 확인 필요", variant: "warning" },
+    not_found: { text: "성분 매칭 실패", variant: "warning" },
+    error: { text: "성분 확인 실패", variant: "danger" },
+    unmatched: { text: "성분 확인 필요", variant: "warning" },
+    pending: { text: "미조회", variant: "" },
+  };
+
+  function rowStatus(x, market) {
+    if (!x.match) return "unmatched";
+    if (x.match.status !== "confirmed") return x.match.status;
+    if (!x.result || x.result.market !== market) return "pending";
+    return x.result.status;
+  }
+
+  function batchContext(x, market) {
+    return {
+      inputRaw: x.name.trim() + (x.name.trim() !== x.name_raw && x.name_raw ? " (원문: " + x.name_raw + ")" : ""),
+      marketCode: market,
+      marketLabel: fileMarketLabel(),
+      selected: x.match && x.match.status === "confirmed" ? x.match : null,
+      matchMethod: x.match && x.match.method ? x.match.method : (x.match ? BATCH_LABEL[x.match.status].text : "성분 확인 전"),
+      amountRef: (x.amount || "").trim() || (x.amount_raw ? x.amount_raw : "") || "미기재",
+      location: x.location,
+    };
+  }
+
+  function renderBatch(market) {
+    var rows = includedRows();
+    var counts = { total: 0, found: 0, review: 0, fail: 0 };
+    var body = $("regulatory-result-body");
+    if (body) body.innerHTML = "";
+    var reviewNames = [];
+    rows.forEach(function (x) {
+      var st = rowStatus(x, market);
+      counts.total++;
+      if (st === "found") counts.found++;
+      if (st !== "found") { counts.review++; reviewNames.push(x.name.trim()); }
+      if (st === "api_error") counts.fail++;
+      if (!body) return;
+      var tr = el("tr");
+      var tdName = el("td");
+      tdName.appendChild(el("span", null, x.name.trim() || "(이름 없음)"));
+      if (x.match && x.match.status === "confirmed") tdName.appendChild(el("p", "regulatory-result__sub", "매칭: " + candidateLabel(x.match) + " · code " + x.match.code));
+      var amt = (x.amount || "").trim() || x.amount_raw;
+      tdName.appendChild(el("p", "regulatory-result__sub", "문서 함량(참고): " + (amt || "미기재")));
+      tr.appendChild(tdName);
+      tr.appendChild(el("td", null, fileMarketLabel()));
+      var tdStatus = el("td");
+      var lab = BATCH_LABEL[st] || BATCH_LABEL.pending;
+      tdStatus.appendChild(badge(lab.text, lab.variant));
+      if (st === "api_error" && x.result && x.result.err) tdStatus.appendChild(el("p", "regulatory-result__sub", x.result.err.message || ""));
+      if (st === "no_data" && x.result && x.result.res && x.result.res.result_note) tdStatus.appendChild(el("p", "regulatory-result__sub", "API 안내: " + x.result.res.result_note));
+      tr.appendChild(tdStatus);
+      var types = x.result && x.result.res && x.result.res.entries ? x.result.res.entries.map(function (e) { return e.regulate_type || "구분 미제공"; }) : [];
+      tr.appendChild(el("td", null, types.length ? types.join(", ") : "—"));
+      var tdAct = el("td", "regulatory-col-action");
+      if (x.match && x.match.status === "confirmed" && x.result && x.result.market === market) {
+        var btn = el("button", "btn btn-soft btn-sm", "상세"); btn.type = "button"; btn.setAttribute("data-modal-open", "regulatory-detail-modal");
+        btn.addEventListener("click", function () { fillModal(x.result.res, batchContext(x, market), x.result.err); });
+        tdAct.appendChild(btn);
+      } else {
+        tdAct.appendChild(el("span", "text-caption text-secondary", "—"));
+      }
+      tr.appendChild(tdAct);
+      body.appendChild(tr);
+    });
+
+    setText($("regulatory-result-time"), formatTime(new Date().toISOString().slice(0, 19)));
+    setText($("regulatory-cond-market"), fileMarketLabel());
+    setText($("regulatory-cond-doc-country"), fileState.doc && fileState.doc.market ? fileState.doc.market.text : "미확인");
+    setText($("regulatory-cond-product"), fileState.doc && fileState.doc.use ? fileState.doc.use.text : "미입력");
+    setText($("regulatory-cond-scope"), "시장 코드 " + market + " · 확정 성분 " + confirmedRows().length + "건 조회");
+    setText($("regulatory-kpi-total"), String(counts.total));
+    setText($("regulatory-kpi-found"), String(counts.found));
+    setText($("regulatory-kpi-review"), String(counts.review));
+
+    show($("regulatory-partial-fail-notice"), counts.fail > 0);
+    setText($("regulatory-partial-fail-count"), String(counts.fail));
+    show($("regulatory-retry-failed"), counts.fail > 0);
+
+    var allNoData = rows.length > 0 && counts.found === 0 && rows.every(function (x) { return rowStatus(x, market) === "no_data"; });
+    show($("regulatory-result-empty"), allNoData);
+    var list = $("regulatory-empty-review-list");
+    if (list) { list.innerHTML = ""; if (allNoData) reviewNames.forEach(function (n) { list.appendChild(el("li", null, n)); }); }
+    show($("regulatory-result-table-wrap"), rows.length > 0 && !allNoData);
+    setResult("batch");
+    refreshBatchStale();
   }
 
   var addRowBtn = $("regulatory-review-add");
   if (addRowBtn) {
     addRowBtn.addEventListener("click", function () {
       var it = { id: "u" + (fileState.nextId++), name_raw: "", amount_raw: null, amount_unit_hint: null, role_raw: null, location: "직접 입력",
-                 needs_review: true, review_reasons: ["직접 입력한 행이에요. 성분명을 확인해 주세요."], name: "", amount: "", include: true, user_added: true, edited: false };
+                 needs_review: true, review_reasons: ["직접 입력한 행이에요. 성분명을 확인해 주세요."], name: "", amount: "", include: true, user_added: true, edited: false, match: null, result: null };
       fileState.items.push(it);
       if (reviewBody) { var tr = rowElement(it); reviewBody.appendChild(tr); var inp = tr.querySelector("input[type=text]"); if (inp) inp.focus(); }
       updateReviewCount();
     });
   }
 
-  /* 규제 일괄 조회 — 다음 단계. 여기서는 준비 중 안내만 (API 호출 없음) */
-  ["regulatory-review-submit", "regulatory-retry-failed"].forEach(function (id) {
-    var btn = $(id);
-    if (btn) btn.addEventListener("click", function () { notReady("파일 성분의 규제 일괄 조회"); });
-  });
-
   var reupload = $("regulatory-review-reupload");
   if (reupload) {
     reupload.addEventListener("click", function () {
-      fileState.seq++;                                  // 진행 중 응답 무시
+      fileState.seq++; fileState.batchSeq++;            // 진행 중 응답(추출·매칭·조회) 무시
       fileState.items = []; fileState.sheets = []; fileState.selectedSheet = null; fileState.lastFile = null; fileState.emptyResult = false;
+      fileState.matching = false; fileState.looking = false; fileState.batchResultKey = null; fileState.batchMarket = null; fileState.doc = null;
+      var rb = $("regulatory-result-body"); if (rb) rb.innerHTML = "";     // 이전 일괄 결과 표 비우기
+      show($("regulatory-batch-stale"), false); show($("regulatory-partial-fail-notice"), false); show($("regulatory-retry-failed"), false);
+      setMatchBusy(false);
+      setText($("regulatory-match-progress"), "조회 포함 행의 성분명으로 후보를 찾아요. 정확히 일치하는 후보가 하나일 때만 자동 확정하고, 여러 후보는 행에서 직접 골라요.");
+      if (!$("regulatory-result-single") || $("regulatory-result-single").hidden) setResult("hidden");
       if (reviewBody) reviewBody.innerHTML = "";
       hideFileError();
       setFileStep("upload");
@@ -984,11 +1309,12 @@
   function setFileStep(st) {
     show($("regulatory-file-loading"), st === "loading");
     show($("regulatory-sheet-block"), st === "sheet");
-    show($("regulatory-review-block"), st === "review");
-    if (st !== "review") { show($("regulatory-review-partial"), false); show($("regulatory-file-empty"), false); }
+    var reviewVisible = st === "review" || st === "lookup" || st === "result";   // 조회 중·결과 단계에도 확인 표는 남겨 둔다
+    show($("regulatory-review-block"), reviewVisible);
+    if (!reviewVisible) { show($("regulatory-review-partial"), false); show($("regulatory-file-empty"), false); }
     show($("regulatory-excluded-block"), false);        // 사용 제외 성분 목록은 다음 단계
 
-    var stepKey = { upload: "upload", loading: "upload", sheet: "sheet", review: "review" }[st] || "upload";
+    var stepKey = { upload: "upload", loading: "upload", sheet: "sheet", review: "review", lookup: "lookup", result: "result" }[st] || "upload";
     var order = ["upload", "sheet", "review", "lookup", "result"];
     var idx = order.indexOf(stepKey);
     document.querySelectorAll(".regulatory-steps__item").forEach(function (li) {

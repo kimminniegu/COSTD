@@ -113,6 +113,10 @@
   overflow-wrap: anywhere;
 }
 .regulatory-review-reason { margin: var(--space-1) 0 0; font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+.regulatory-match { min-width: 180px; }
+.regulatory-match__name { margin: var(--space-1) 0 0; font-size: var(--font-size-caption); color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.regulatory-match select.form-control-sm { min-width: 180px; }
+.regulatory-result-table .regulatory-result__sub { margin: var(--space-1) 0 0; font-size: var(--font-size-caption); color: var(--color-text-secondary); }
 .regulatory-notes { margin: var(--space-2) 0 0; padding-left: var(--space-5); }
 .regulatory-notes li + li { margin-top: var(--space-1); }
 

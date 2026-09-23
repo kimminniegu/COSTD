@@ -4,7 +4,8 @@
    Route: /api/regulatory/ingredients, /api/regulatory/regulations (app.py [B] 영역 → regulatory_service.py)
    자동완성: 2글자 이상 입력 후 300ms 대기 → 후보 최대 10개 (한글명·영문 INCI명, 시작 일치). 후보 선택은 성분 확정만.
    파일 탭: 텍스트 PDF·.xlsx 업로드 → (시트 선택) → 성분명·함량 추출 → 확인·수정 표 (POST /api/regulatory/extract → regulatory_extract.py).
-   미구현: 중간 포함 검색, 스캔 PDF·이미지 OCR, 파일 성분의 API 매칭·규제 일괄 조회(다음 단계). #}
+   성분 확인·일괄 조회: 확인 버튼 → 행별 후보 검색(정확 일치 하나만 자동 확정, 복수 후보는 행에서 선택) → 확정 행만 시장별 규제 순차 조회 → 결과 표 + 상세 Modal.
+   미구현: 중간 포함 검색, 스캔 PDF·이미지 OCR, 함량 기준 비교(검토 상태). #}
 
 {% block title %}국가별 인허가 규제{% endblock %}
 
@@ -26,7 +27,7 @@
 {# 구현 상태 안내 — 기능 구현 후 제거 #}
 <div class="alert alert-info mb-6" id="regulatory-dev-notice">
   <div>
-    <p class="alert-title">성분 직접 검색·자동완성 · 파일 성분 추출(텍스트 PDF·Excel) 사용 가능 · 파일 성분의 규제 일괄 조회는 준비 중</p>
+    <p class="alert-title">성분 직접 검색·자동완성 · 파일 성분 추출·확인·규제 일괄 조회 사용 가능 · 스캔 PDF·이미지와 함량 기준 비교는 준비 중</p>
     <p id="regulatory-dev-notice-body" hidden></p>
   </div>
 </div>
@@ -108,8 +109,8 @@
           <li class="regulatory-steps__item is-active" data-step="upload">1. 업로드</li>
           <li class="regulatory-steps__item" data-step="sheet">2. 시트 선택</li>
           <li class="regulatory-steps__item" data-step="review">3. 추출값 확인</li>
-          <li class="regulatory-steps__item" data-step="lookup" title="다음 단계">4. 규제 조회 (준비 중)</li>
-          <li class="regulatory-steps__item" data-step="result" title="다음 단계">5. 결과 (준비 중)</li>
+          <li class="regulatory-steps__item" data-step="lookup">4. 규제 조회</li>
+          <li class="regulatory-steps__item" data-step="result">5. 결과</li>
         </ol>
 
         <form id="regulatory-file-form" novalidate>
@@ -143,7 +144,7 @@
 
           <div class="row mt-2">
             <button type="submit" class="btn btn-primary" id="regulatory-file-submit">파일 분석</button>
-            <span class="text-caption text-secondary">파일에서 성분명·함량을 읽어 표로 보여줘요. 규제 조회는 확인·수정 후 별도로 실행해요(다음 단계).</span>
+            <span class="text-caption text-secondary">파일에서 성분명·함량을 읽어 표로 보여줘요. 이어서 ‘성분 확인’ → ‘확정 성분 규제 조회’ 순서로 진행해요.</span>
           </div>
         </form>
 
@@ -218,10 +219,11 @@
                   <th>함량 (원문 → 수정)</th>
                   <th>원문 위치</th>
                   <th>상태</th>
+                  <th>성분 확인 (API 매칭)</th>
                   <th class="regulatory-col-action"></th>
                 </tr>
               </thead>
-              {# 행은 regulatory.js renderReview() 가 추출 결과로 생성합니다 #}
+              {# 행은 regulatory.js renderReview() 가 추출 결과로 생성합니다. 매칭 열은 runMatching() 이 채웁니다 #}
               <tbody id="regulatory-review-body"></tbody>
             </table>
           </div>
@@ -236,10 +238,15 @@
             <p class="text-secondary">—</p>
           </div>
 
+          {# 성분 확인(매칭) → 확정 성분만 규제 조회. 매칭·조회 모두 화면이 기존 /api/regulatory/ Route 를 순차 호출 #}
           <div class="row mt-6">
-            <button type="button" class="btn btn-primary" id="regulatory-review-submit">확인한 성분으로 규제 조회</button>
+            <button type="button" class="btn btn-soft" id="regulatory-review-match">성분 확인 (API 매칭)</button>
+            <span class="text-caption text-secondary" id="regulatory-match-progress">조회 포함 행의 성분명으로 후보를 찾아요. 정확히 일치하는 후보가 하나일 때만 자동 확정하고, 여러 후보는 행에서 직접 골라요.</span>
+          </div>
+          <div class="row mt-4">
+            <button type="button" class="btn btn-primary" id="regulatory-review-submit" disabled>확정 성분 규제 조회</button>
             <button type="button" class="btn btn-secondary" id="regulatory-review-reupload">다시 업로드</button>
-            <span class="text-caption text-secondary">규제 일괄 조회와 API 성분 매칭은 다음 단계예요. 지금은 추출값 확인·수정까지 할 수 있어요.</span>
+            <span class="text-caption text-secondary" id="regulatory-lookup-summary">확정 0 · 미확정 0 — 성분 확인 후 조회할 수 있어요.</span>
           </div>
         </div>
       </div>
@@ -366,7 +373,7 @@
           <div class="grid grid-4">
             <div class="stat-tile"><p class="stat-tile__label">선택 국가/시장</p><p class="stat-tile__value" id="regulatory-cond-market">—</p></div>
             <div class="stat-tile"><p class="stat-tile__label">문서에 명시된 국가</p><p class="stat-tile__value" id="regulatory-cond-doc-country">—</p></div>
-            <div class="stat-tile"><p class="stat-tile__label">제품 유형·사용 조건</p><p class="stat-tile__value" id="regulatory-cond-product">미입력</p></div>
+            <div class="stat-tile"><p class="stat-tile__label">제품 유형·사용 조건 (문서 원문)</p><p class="stat-tile__value" id="regulatory-cond-product">미입력</p></div>
             <div class="stat-tile"><p class="stat-tile__label">실제 조회 범위</p><p class="stat-tile__value" id="regulatory-cond-scope">—</p></div>
           </div>
         </div>
@@ -394,7 +401,7 @@
         <div class="card-header">
           <div>
             <h3 class="card-title">성분별 결과</h3>
-            <p class="card-subtitle">조회 상태와 검토 상태는 따로 표시해요. 규제 데이터 미확인은 허용·안전을 뜻하지 않아요.</p>
+            <p class="card-subtitle">확정된 성분만 조회했어요. 규제 데이터 미확인은 허용·안전을 뜻하지 않고, 함량 적합 여부는 판정하지 않아요.</p>
           </div>
           <button type="button" class="btn btn-secondary btn-sm" id="regulatory-retry-failed" hidden>실패 항목 재시도</button>
         </div>
@@ -419,15 +426,23 @@
             </div>
           </div>
 
-          {# 간결한 표: 성분명 · 조회 상태 · 규제 유형 · 검토 상태 · 상세. 원문·오류 전문은 상세 Modal #}
+          {# 이전 조건의 결과 안내 — 시장·목록·매칭이 바뀌면 표시 #}
+          <div class="alert alert-warning mb-4" id="regulatory-batch-stale" hidden>
+            <div>
+              <p class="alert-title">이전 조건의 결과예요</p>
+              <p>시장이나 성분 목록·매칭이 바뀌었어요. ‘확정 성분 규제 조회’를 다시 눌러야 현재 조건의 결과를 볼 수 있어요.</p>
+            </div>
+          </div>
+
+          {# 간결한 표: 성분명 · 선택 시장 · 조회 상태 · 규제 유형 · 상세. 원문·출처·오류 전문은 상세 Modal #}
           <div class="table-wrap" id="regulatory-result-table-wrap" hidden>
             <table class="table regulatory-result-table">
               <thead>
                 <tr>
                   <th>성분명</th>
+                  <th>선택 시장</th>
                   <th>조회 상태</th>
                   <th>규제 유형</th>
-                  <th>검토 상태</th>
                   <th class="regulatory-col-action"></th>
                 </tr>
               </thead>
@@ -436,8 +451,8 @@
           </div>
 
           <p class="text-caption text-secondary mt-4">
-            조회 상태: 규제 정보 조회됨 · 규제 데이터 미확인 · 성분 매칭 실패 · 성분 확인 필요 · API 오류 · 미조회 /
-            검토 상태: 해당 기준 충족 · 해당 기준 불충족 · 판단 보류. 이 결과는 성분 조합이나 제품 전체의 적합성을 확정하지 않아요.
+            조회 상태: 규제 정보 조회됨 · 규제 데이터 미확인 · 판단 보류 · 성분 확인 필요 · 성분 매칭 실패 · API 오류 · 미조회.
+            함량은 문서 참고값으로만 상세에 표시하고 기준 비교(검토 상태)는 하지 않아요. 이 결과는 성분 조합이나 제품 전체의 적합성을 확정하지 않아요.
           </p>
         </div>
       </div>
@@ -462,7 +477,14 @@
           <dl class="regulatory-detail">
             <dt>검색어</dt><dd data-detail="input-raw">—</dd>
             <dt>조회 시장</dt><dd data-detail="input-market">—</dd>
+            <dt>문서 함량 (참고)</dt><dd data-detail="input-amount">해당 없음</dd>
+            <dt>원문 위치</dt><dd data-detail="input-location">해당 없음</dd>
           </dl>
+        </section>
+        <section id="regulatory-detail-conditions-section" hidden>
+          <p class="form-label">규제 조건 (영문 위 · 한국어 아래)</p>
+          <p class="text-caption text-secondary" id="regulatory-detail-conditions-note"></p>
+          <div class="regulatory-conditions mt-2" id="regulatory-detail-conditions"></div>
         </section>
         <section>
           <p class="form-label">매칭 정보</p>
