@@ -222,7 +222,9 @@ function update() {
   $('viscosity').textContent = fmt(v);$('flow').textContent = flow + ' / 100';
   $('water').textContent = water.toFixed(2) + '\%';$('active-val').textContent = fmt(activePpm);
   $('flow-gauge').value = flow;
-  $('water-gauge').value = water;
+  $('water-mix').style.flexGrow = 100 - water;
+  $('water-base').style.flexGrow = water;
+  $('water-gauge').setAttribute('aria-label', `배합 성분 ${(100 - water).toFixed(2)}%, 정제수 ${water.toFixed(2)}%`);
   const parts = { active: a, carb: c, oil: o, hum: h, water };
   Object.entries(parts).forEach(([id, pct]) => {
     $('formula-' + id).style.flexGrow = pct;

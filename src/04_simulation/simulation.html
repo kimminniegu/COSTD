@@ -64,7 +64,7 @@
           <div class="stat-tile"><span>예상 질감 {{ help('texture', '예상 질감', '예측 점도를 사용감 표현으로 바꾼 지표입니다. 원하는 제형이 묽은지, 풍부하고 되직한지 비교하기 위해 표시합니다. 실제 관능평가 결과는 아닙니다.') }}</span><strong id="simulation-texture"></strong></div>
           <div class="stat-tile"><span>상대 유동성 {{ help('flow', '상대 유동성', '점도로 계산한 0~100 상대 지수입니다. 높을수록 잘 흐르는 방향이며, 배합별 퍼짐과 토출 특성을 비교하기 위해 표시합니다. 실측 유량이나 백분율은 아닙니다.') }}</span><strong id="simulation-flow"></strong><meter id="simulation-flow-gauge" min="0" max="100" value="0" aria-label="상대 유동성"></meter></div>
           <div class="stat-tile"><span>유효 성분 농도 {{ help('concentration', '유효 성분 농도', '유효 활성 성분 함량을 ppm으로 환산합니다. 1% = 10,000 ppm이며 바이어의 농도 요구와 배합을 같은 단위로 비교하기 위해 표시합니다. 효능의 크기를 뜻하지는 않습니다.') }}</span><div class="simulation-metric-value"><strong id="simulation-active-val"></strong><small>ppm</small></div></div>
-          <div class="stat-tile"><span>정제수 잔량비 {{ help('water', '정제수 잔량비', '100%에서 네 가지 배합 성분의 합을 뺀 값입니다. 배합 총량이 100%인지, 성분을 늘릴 때 물의 비중이 얼마나 줄어드는지 확인하기 위해 표시합니다.') }}</span><strong id="simulation-water"></strong><meter id="simulation-water-gauge" min="0" max="100" value="0" aria-label="정제수 잔량비"></meter></div>
+          <div class="stat-tile"><span>정제수 잔량비 {{ help('water', '정제수 잔량비', '100%에서 네 가지 배합 성분의 합을 뺀 값입니다. 배합 총량이 100%인지, 성분을 늘릴 때 물의 비중이 얼마나 줄어드는지 확인하기 위해 표시합니다.') }}</span><strong id="simulation-water"></strong><div class="simulation-dual-bar" id="simulation-water-gauge" role="img"><span id="simulation-water-mix"></span><span id="simulation-water-base"></span></div></div>
         </div>
       </div>
     </section>
