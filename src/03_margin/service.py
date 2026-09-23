@@ -1114,7 +1114,8 @@ def _estimated_rates(base):
 
 def _fetch_koreaexim():
     """한국수출입은행 현재환율. 비영업일·11시 이전 빈 응답이면 최대 7일 역조회 (§6.3.1)"""
-    key = os.getenv("MARGIN_KOREAEXIM_API_KEY")
+    # 홈(A)과 같은 수출입은행 API 라서, 전용 키가 없으면 홈의 EXIM_API_KEY 를 함께 씁니다
+    key = os.getenv("MARGIN_KOREAEXIM_API_KEY") or os.getenv("EXIM_API_KEY")
     today = now_kst().date()
     if not key or _fx_state["exim_blocked_date"] == today:
         return None
