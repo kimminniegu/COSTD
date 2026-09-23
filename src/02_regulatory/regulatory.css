@@ -99,13 +99,37 @@
 
 .regulatory-align-end { justify-content: flex-end; }
 
-/* 추출값 편집 표 — 표 안의 입력은 작은 크기 사용 */
+/* 추출값 편집 표 — 표 안의 입력은 작은 크기 사용
+   공통 .table 의 nowrap 때문에 원문 성분명·확인 사유·매칭명이 길면 표가 옆으로 늘어난다.
+   결과 표와 같이 글 열만 줄바꿈을 허용하고 열 너비를 비율로 고정해 카드 폭 안에 들어오게 한다. (공통 CSS 수정 없음) */
+.regulatory-review-table { table-layout: fixed; }
 .regulatory-review-table th,
 .regulatory-review-table td { vertical-align: top; }
-.regulatory-review-table .form-control-sm { min-width: 140px; }
-.regulatory-review-table .regulatory-col-check { width: 56px; }
+.regulatory-review-table td:nth-child(2),
+.regulatory-review-table td:nth-child(3),
+.regulatory-review-table td:nth-child(4),
+.regulatory-review-table td:nth-child(5),
+.regulatory-review-table td:nth-child(6) { white-space: normal; overflow-wrap: anywhere; }
+.regulatory-review-table .form-control-sm { width: 100%; min-width: 0; }
+.regulatory-review-table .regulatory-col-check { width: 52px; }
+.regulatory-review-table th:nth-child(2) { width: 24%; }
+.regulatory-review-table th:nth-child(3) { width: 15%; }
+.regulatory-review-table th:nth-child(4) { width: 11%; }
+.regulatory-review-table th:nth-child(5) { width: 15%; }
+.regulatory-review-table th:nth-child(6) { width: 22%; }
 .regulatory-review-table .regulatory-col-action { width: 64px; }
 .regulatory-review-table td:last-child { white-space: nowrap; }
+
+/* 좁은 화면(본문 폭 기준)에서는 고정 폭을 풀고 공통 가로 스크롤로 돌아간다 */
+@container page (max-width: 900px) {
+  .regulatory-review-table { table-layout: auto; }
+  .regulatory-review-table th:nth-child(2),
+  .regulatory-review-table th:nth-child(3),
+  .regulatory-review-table th:nth-child(4),
+  .regulatory-review-table th:nth-child(5),
+  .regulatory-review-table th:nth-child(6) { width: auto; }
+  .regulatory-review-table .form-control-sm { min-width: 140px; }
+}
 .regulatory-review-origin {
   margin: 0 0 var(--space-1);
   font-size: var(--font-size-caption);
@@ -113,9 +137,8 @@
   overflow-wrap: anywhere;
 }
 .regulatory-review-reason { margin: var(--space-1) 0 0; font-size: var(--font-size-caption); color: var(--color-text-secondary); }
-.regulatory-match { min-width: 180px; }
 .regulatory-match__name { margin: var(--space-1) 0 0; font-size: var(--font-size-caption); color: var(--color-text-secondary); overflow-wrap: anywhere; }
-.regulatory-match select.form-control-sm { min-width: 180px; }
+.regulatory-match select.form-control-sm { width: 100%; min-width: 0; }
 .regulatory-result-table .regulatory-result__sub { margin: var(--space-1) 0 0; font-size: var(--font-size-caption); color: var(--color-text-secondary); }
 .regulatory-notes { margin: var(--space-2) 0 0; padding-left: var(--space-5); }
 .regulatory-notes li + li { margin-top: var(--space-1); }
@@ -248,12 +271,29 @@
   overflow-wrap: anywhere;
 }
 
-/* 파일 일괄 조회 결과 표 — 성분명·조회 상태·규제 유형·검토 상태·상세. 원문·오류 전문은 상세 Modal */
+/* 파일 일괄 조회 결과 표 — 성분명·선택 시장·조회 상태·규제 유형·상세. 원문·오류 전문은 상세 Modal
+   공통 .table 은 셀을 nowrap 으로 두어(가로 스크롤 전제) 매칭명·API 안내 문구가 길면 표가 옆으로 늘어난다.
+   이 표에서는 글 열(성분명·조회 상태·규제 유형)만 줄바꿈을 허용해 카드 폭 안에 들어오게 한다. (공통 CSS 수정 없음) */
+.regulatory-result-table { table-layout: fixed; }
 .regulatory-result-table td { vertical-align: top; }
-.regulatory-result-table th:first-child,
-.regulatory-result-table td:first-child { min-width: 180px; }
+.regulatory-result-table td:nth-child(1),
+.regulatory-result-table td:nth-child(3),
+.regulatory-result-table td:nth-child(4) { white-space: normal; overflow-wrap: anywhere; }
+.regulatory-result-table th:nth-child(1) { width: 34%; }
+.regulatory-result-table th:nth-child(2) { width: 15%; }
+.regulatory-result-table th:nth-child(3) { width: 25%; }
+.regulatory-result-table th:nth-child(4) { width: 16%; }
 .regulatory-result-table .regulatory-col-action { width: 72px; }
 .regulatory-result-table td:last-child { white-space: nowrap; }
+
+/* 좁은 화면(본문 폭 기준)에서는 고정 폭을 풀고 공통 가로 스크롤로 돌아간다 */
+@container page (max-width: 720px) {
+  .regulatory-result-table { table-layout: auto; }
+  .regulatory-result-table th:nth-child(1),
+  .regulatory-result-table th:nth-child(2),
+  .regulatory-result-table th:nth-child(3),
+  .regulatory-result-table th:nth-child(4) { width: auto; }
+}
 
 /* 빈 결과 아래 확인 필요 목록 */
 .regulatory-review-list__items {

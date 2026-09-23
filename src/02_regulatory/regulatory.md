@@ -308,6 +308,7 @@
 **PM 협의 사항 — 임의 해결 금지**
 
 - 현재 `ui_components.md`에는 자동완성 컴포넌트 규격이 없다. 규제 페이지 전용으로 구현하되 목록 배치·포커스·키보드 및 접근성 표현을 PM과 협의한다. 공통 변수와 UI 규격을 사용하며 새 공통 컴포넌트나 독자적인 디자인 값은 정의하지 않는다.
+- **상세 Modal 위치 (2026-09-23, PM 공유 사항)**: 공통 `main.container` 에 `container-type: inline-size` 와 진입 애니메이션(`transform`)이 있어 그 안의 `position: fixed` Modal 은 뷰포트가 아니라 컨테이너 기준으로 배치된다(긴 페이지에서 배경만 보이고 창은 화면 밖). 담당 JS 가 페이지 로드 시 `#regulatory-detail-modal` 을 `body` 바로 아래로 옮겨 해결했다. 공통 `common.js` 는 id 로 찾으므로 동작은 같다. 같은 구조의 다른 페이지 Modal 도 영향을 받을 수 있어 PM 에게 공유한다.
 - 공통 UI 문서의 Table 설명은 Header 14px·배경 없음이나 실제 CSS는 `--font-size-caption`·`--color-surface-muted`를 사용한다. 페이지 CSS로 덮어쓰지 않고 PM이 규격과 구현의 정합성을 확정해야 한다.
 - 공통 CSS의 Shape 주석은 Card 그림자 없음으로 되어 있으나 디자인 문서와 실제 `.card`는 `--shadow-card`를 사용한다. 주석 정합성은 PM 확인 사항이다.
 - 전부 규제 데이터 미확인일 때 공통 ‘Table 대신 Empty State’ 규칙과 성분별 실패 사유 표시를 함께 충족하는 구체적 배치는 PM과 확인한다. 빈 결과 안내 아래 확인 필요 목록을 제공하는 요구사항은 유지한다.

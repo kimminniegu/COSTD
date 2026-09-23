@@ -101,6 +101,14 @@
     });
   }
 
+  /* 상세 Modal 을 body 바로 아래로 옮긴다 -------------------------------------
+     공통 레이아웃의 main.container 에는 container-type: inline-size 와 진입 애니메이션(transform)이 있어
+     그 안의 position: fixed 요소는 뷰포트가 아니라 컨테이너(페이지 전체 높이) 기준으로 배치된다.
+     그러면 배경은 화면을 다 덮지만 Modal 창은 긴 페이지의 세로 정중앙(화면 밖)에 그려진다.
+     공통 common.js 는 id 로 Modal 을 찾으므로 위치를 옮겨도 열기·닫기·ESC·배경 클릭은 그대로 동작한다. (공통 파일 수정 없음) */
+  var detailModal = $("regulatory-detail-modal");
+  if (detailModal && detailModal.parentNode !== document.body) document.body.appendChild(detailModal);
+
   /* ==========================================================================
      직접 검색: 상태
      ========================================================================== */
