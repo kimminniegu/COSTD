@@ -488,6 +488,137 @@ function finishLiquid(x, y, r, t, isVitC, isCapsule) {
   ctx.strokeStyle = isVitC && !isCapsule ? 'rgba(210,160,110,.5)' : 'rgba(202,243,255,.48)';
   ctx.lineWidth = .7;
   ctx.stroke();
+  // 액적 안쪽에 광원을 반사해 둥근 부피감을 표현합니다.
+  ctx.save();
+  ctx.clip();
+  const shine = ctx.createRadialGradient(x - r * .35, y - r * .3, 0, x - r * .2, y, r * 1.15);
+  shine.addColorStop(0, 'rgba(255,255,255,.9)');
+  shine.addColorStop(.3, 'rgba(255,255,255,.3)');
+  shine.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = shine;
+  ctx.fillRect(x - r * 2, y - r * 2, r * 4, r * 4);
+  ctx.restore();
+}
+
+// Canvas에 원근·굴절·접지 그림자를 합성합니다. 배합/물성 계산과 독립된 렌더링입니다.
+function drawSamplePlatform(x, y, radius, scale) {
+  const depth = 18 * scale;
+  const ry = radius * .22;
+  ctx.save();
+  ctx.translate(x + radius * .08, y + depth + 18 * scale);
+  ctx.scale(1, .25);
+  const shadow = ctx.createRadialGradient(0, 0, radius * .2, 0, 0, radius * 1.3);
+  shadow.addColorStop(0, 'rgba(39,64,96,.24)');
+  shadow.addColorStop(.65, 'rgba(39,64,96,.08)');
+  shadow.addColorStop(1, 'rgba(39,64,96,0)');
+  ctx.fillStyle = shadow;
+  ctx.fillRect(-radius * 1.4, -radius * 1.4, radius * 2.8, radius * 2.8);
+  ctx.restore();
+
+  // 수평 타원 상판 + 두께가 있는 전면으로 유리 원판의 원근을 구성합니다.
+  ctx.beginPath();
+  ctx.ellipse(x, y, radius, ry, 0, 0, Math.PI);
+  ctx.lineTo(x - radius, y + depth);
+  ctx.ellipse(x, y + depth, radius, ry, 0, Math.PI, 0, true);
+  ctx.closePath();
+  const edge = ctx.createLinearGradient(x - radius, y, x + radius, y + depth);
+  edge.addColorStop(0, '#b6cbdc');
+  edge.addColorStop(.18, '#edf7ff');
+  edge.addColorStop(.48, '#c5d6e5');
+  edge.addColorStop(.8, '#8faac2');
+  edge.addColorStop(1, '#dceaf4');
+  ctx.fillStyle = edge;
+  ctx.fill();
+
+  ellipse(x, y, radius, ry);
+  const top = ctx.createLinearGradient(x, y - ry, x, y + ry);
+  top.addColorStop(0, '#e2edf5');
+  top.addColorStop(.5, '#f8fcff');
+  top.addColorStop(1, '#d9e8f4');
+  ctx.fillStyle = top;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.95)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ellipse(x, y, radius * .9, ry * .87);
+  ctx.strokeStyle = 'rgba(111,151,185,.22)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(x, y + depth, radius, ry, 0, .12, Math.PI - .12);
+  ctx.strokeStyle = 'rgba(255,255,255,.75)';
+  ctx.stroke();
+}
+
+function drawGlassPipette(x, top, tip, scale, thick) {
+  const tubeW = 18 * scale;
+  const taper = 34 * scale;
+  ctx.save();
+  // 유리 외곽 경로. 클리핑 영역 안에서 액체와 반사광을 차례로 합성합니다.
+  ctx.beginPath();
+  ctx.moveTo(x - tubeW, top);
+  ctx.lineTo(x - tubeW, tip - taper);
+  ctx.bezierCurveTo(x - tubeW, tip - 19 * scale, x - 6 * scale, tip - 8 * scale, x - 5 * scale, tip);
+  ctx.lineTo(x + 5 * scale, tip);
+  ctx.bezierCurveTo(x + 6 * scale, tip - 8 * scale, x + tubeW, tip - 19 * scale, x + tubeW, tip - taper);
+  ctx.lineTo(x + tubeW, top);
+  ctx.closePath();
+  const glass = ctx.createLinearGradient(x - tubeW, 0, x + tubeW, 0);
+  glass.addColorStop(0, 'rgba(100,142,175,.55)');
+  glass.addColorStop(.12, 'rgba(219,241,254,.7)');
+  glass.addColorStop(.28, 'rgba(255,255,255,.95)');
+  glass.addColorStop(.48, 'rgba(233,248,255,.22)');
+  glass.addColorStop(.82, 'rgba(135,182,214,.35)');
+  glass.addColorStop(1, 'rgba(89,133,170,.55)');
+  ctx.fillStyle = glass;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(110,154,190,.6)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.clip();
+  const liquidTop = top + (tip - top) * .3;
+  ctx.fillStyle = getFluidMaterial(x, liquidTop, tubeW, thick, current.isVitC, current.isCapsule);
+  ctx.fillRect(x - tubeW + 3 * scale, liquidTop, tubeW * 2 - 6 * scale, tip - liquidTop);
+  ellipse(x, liquidTop, tubeW - 3 * scale, 4 * scale);
+  ctx.fillStyle = current.isVitC && !current.isCapsule ? '#d5b595' : '#cceefa';
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.66)';
+  ctx.fillRect(x - tubeW * .62, top, 3 * scale, tip - top - 12 * scale);
+  ctx.fillStyle = 'rgba(255,255,255,.28)';
+  ctx.fillRect(x + tubeW * .6, top, 1.5 * scale, tip - top - 18 * scale);
+  // 눈금은 유체를 가리지 않도록 우측 벽에 배치합니다.
+  ctx.strokeStyle = 'rgba(70,109,143,.45)';
+  ctx.lineWidth = .8;
+  for (let i = 1; i <= 5; i++) {
+    const yy = top + i * (tip - top - taper) / 6;
+    ctx.beginPath();
+    ctx.moveTo(x + tubeW * (i % 2 ? .5 : .2), yy);
+    ctx.lineTo(x + tubeW * .9, yy);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 상단 고무 벌브와 금속 칼라: 원통형 명암으로 스포이드 형태를 완성합니다.
+  const bulbW = tubeW * 1.25;
+  const bulbH = 38 * scale;
+  ctx.beginPath();
+  ctx.roundRect(x - bulbW, top - bulbH, bulbW * 2, bulbH + 3 * scale, [bulbW, bulbW, 4 * scale, 4 * scale]);
+  const bulb = ctx.createLinearGradient(x - bulbW, 0, x + bulbW, 0);
+  bulb.addColorStop(0, '#294363');
+  bulb.addColorStop(.3, '#607c9d');
+  bulb.addColorStop(.5, '#405e80');
+  bulb.addColorStop(1, '#243c57');
+  ctx.fillStyle = bulb;
+  ctx.fill();
+  const collar = ctx.createLinearGradient(x - bulbW, 0, x + bulbW, 0);
+  collar.addColorStop(0, '#9cabbc');
+  collar.addColorStop(.3, '#ffffff');
+  collar.addColorStop(.55, '#e0e8f0');
+  collar.addColorStop(1, '#879bb0');
+  ctx.fillStyle = collar;
+  ctx.fillRect(x - bulbW, top - 3 * scale, bulbW * 2, 12 * scale);
+  ellipse(x, top + 9 * scale, bulbW, 3 * scale);
+  ctx.fill();
 }
 
 function drawScene() {
@@ -498,11 +629,11 @@ function drawScene() {
   }
 
   const x = width * .5;
-  const tip = height * .33;
-  const floor = height * .78;
+  const tip = height * .43;
+  const floor = height * .76;
 
   const thick = clamp(Math.log(1 + displayViscosity / 2000) / Math.log(26), 0, 1);
-  const scale = Math.min(width / 600, height / 420, 1.25);
+  const scale = Math.min(width / 480, height / 460, 1.45);
   const r = 17 * scale;
   const neckMax = lerp(22, 92, thick) * scale;
   const formEnd = .54;
@@ -511,42 +642,22 @@ function drawScene() {
 
   ctx.clearRect(0, 0, width, height);
 
-  // 배경 조명 & 실험대 그리드
-  const light = ctx.createRadialGradient(x, height * .4, 2, x, height * .48, width * .52);
-  light.addColorStop(0, 'rgba(56,126,170,.19)');
-  light.addColorStop(.6, 'rgba(28,59,87,.08)');
-  light.addColorStop(1, 'rgba(9,15,24,0)');
+  // 밝은 스튜디오의 곡면 배경: UI 배경과 재질 렌더링을 분리합니다.
+  const light = ctx.createLinearGradient(0, 0, width * .6, height);
+  light.addColorStop(0, '#f6f9fd');
+  light.addColorStop(.5, '#e8f0f8');
+  light.addColorStop(.72, '#f3f7fb');
+  light.addColorStop(1, '#e1eaf4');
   ctx.fillStyle = light;
   ctx.fillRect(0, 0, width, height);
 
-  ctx.strokeStyle = 'rgba(89,139,174,.07)';
-  ctx.lineWidth = 1;
-  for (let i = -5; i <= 5; i++) {
-    ctx.beginPath();
-    ctx.moveTo(x + i * width * .07, height * .65);
-    ctx.lineTo(x + i * width * .12, height);
-    ctx.stroke();
-  }
-
-  // 유리 받침대 렌더링
-  const plateW = Math.min(width * .34, 230);
-  const plateH = 27 * scale;
-
-  ctx.save();
-  ctx.translate(x, floor + 19);
-  ctx.scale(1, .22);
-  const shadow = ctx.createRadialGradient(0, 0, 2, 0, 0, plateW);
-  shadow.addColorStop(0, 'rgba(25,31,40,.12)');
-  shadow.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = shadow;
-  ctx.fillRect(-plateW, -plateW, plateW * 2, plateW * 2);
-  ctx.restore();
-
-  ellipse(x, floor + 6, plateW, plateH);
-  ctx.fillStyle = 'rgba(86,137,164,.12)';
-  ctx.fill();
-  ctx.strokeStyle = token('--color-primary-light');
-  ctx.stroke();
+  const glow = ctx.createRadialGradient(width * .32, height * .22, 0, x, height * .4, width * .65);
+  glow.addColorStop(0, 'rgba(255,255,255,.95)');
+  glow.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, width, height);
+  const plateW = Math.min(width * .33, 235);
+  drawSamplePlatform(x, floor + 6, plateW, scale);
 
   // 바닥 액웅덩이
   const settle = phase < hit ? 1 : ease(clamp(impact * 2, 0, 1));
@@ -559,6 +670,19 @@ function drawScene() {
   ctx.fill();
   ctx.strokeStyle = current.isVitC && !current.isCapsule ? 'rgba(220,150,100,.4)' : 'rgba(190,241,254,.3)';
   ctx.stroke();
+  // 유체 상단 반사광과 낙하 충돌의 동심원 파동.
+  ctx.save();
+  ctx.clip();
+  ellipse(x - poolW * .18, floor - poolH * .3 - 2, poolW * .56, Math.max(1, poolH * .24));
+  ctx.fillStyle = 'rgba(255,255,255,.5)';
+  ctx.fill();
+  ctx.restore();
+  if (impact > 0) {
+    ellipse(x, floor - 1, poolW * (.3 + impact * .65), Math.max(2, poolH * (.3 + impact * .6)));
+    ctx.strokeStyle = `rgba(255,255,255,${(1 - impact) * .6})`;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  }
 
   // [R&D 시각 효과 1: 유수분 상분리 주황색 오일 띠 렌더링]
   if (current.isOilPhase && !current.isCapsule) {
@@ -595,34 +719,7 @@ function drawScene() {
     ctx.restore();
   }
 
-  // 피펫 실린더 렌더링
-  const tubeW = 15 * scale;
-  const top = height * .12;
-
-  ctx.beginPath();
-  ctx.moveTo(x - tubeW, top);
-  ctx.lineTo(x - tubeW, tip - 27 * scale);
-  ctx.quadraticCurveTo(x - tubeW, tip - 17 * scale, x - 5 * scale, tip);
-  ctx.lineTo(x + 5 * scale, tip);
-  ctx.quadraticCurveTo(x + tubeW, tip - 17 * scale, x + tubeW, tip - 27 * scale);
-  ctx.lineTo(x + tubeW, top);
-  ctx.closePath();
-
-  const glass = ctx.createLinearGradient(x - tubeW, 0, x + tubeW, 0);
-  glass.addColorStop(0, 'rgba(179,218,238,.32)');
-  glass.addColorStop(1, 'rgba(223,245,255,.48)');
-  ctx.fillStyle = glass;
-  ctx.fill();
-  ctx.strokeStyle = token('--color-primary-light');
-  ctx.lineWidth = .8;
-  ctx.stroke();
-
-  // 피펫 내부 유체 렌더링
-  ctx.save();
-  ctx.clip();
-  ctx.fillStyle = getFluidMaterial(x, top, tubeW, thick, current.isVitC, current.isCapsule);
-  ctx.fillRect(x - tubeW + 4, top + 20, tubeW * 2 - 8, tip - top);
-  ctx.restore();
+  drawGlassPipette(x, height * .2, tip, scale, thick);
 
   // 액적 물리 애니메이션 (Bézier Necking Tail & Droplet)
   let stageText = '액적 형성';
@@ -664,7 +761,7 @@ function drawScene() {
   ctx.textAlign = 'center';
   ctx.fillStyle = current.isCapsule ? token('--color-warning') : token('--color-text-secondary');
   const stageNotice = current.isCapsule ? `[특허 캡슐화 보호 중] ${stageText}` : stageText;
-  ctx.fillText(stageNotice, x, Math.min(height - 35, floor + 42));
+  ctx.fillText(stageNotice, x, height - 24, width - 32);
 }
 
 function tick(time) {

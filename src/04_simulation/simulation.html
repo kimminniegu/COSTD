@@ -11,7 +11,7 @@
       <p class="page-eyebrow">제형 · 패키징</p>
       <h1 class="page-title">AI 제형/샘플 시뮬레이션</h1>
       <p class="page-description">
-        배합에 따른 질감 변화를 살펴보고, 알맞은 용기와 안정화 방안을 확인해요.
+        배합별 질감 변화와 용기 적합성 · 성분 안정화 시뮬레이션
       </p>
     </div>
 
@@ -47,7 +47,7 @@
           <div>
             <p class="page-eyebrow">실시간 샘플 미리보기</p>
             <h2 class="card-title" id="simulation-sample-name">앰플</h2>
-            <p class="text-caption" id="simulation-sim-subtitle">비뉴턴 연신 액주 · 액적 분리 · 충돌 안정화 시연</p>
+            <p class="text-caption" id="simulation-sim-subtitle">점탄성 · 액적 분리 · 표면 장력 시연</p>
           </div>
 
           <div class="simulation-sim-value">
@@ -60,6 +60,7 @@
 
       <div class="card-body">
       <div class="simulation-stage">
+        <span class="simulation-stage-label" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5v8l-9 5-9-5V8zM3 8l9 5 9-5M12 13v8"/></svg>제형 물성 뷰</span>
         <canvas id="simulation-canvas">
           배합 변경에 따른 점도와 유동성은 아래 지표에서 확인할 수 있습니다.
         </canvas>
@@ -75,7 +76,7 @@
       <!-- 2. Controls & Sliders -->
       <section class="card simulation-controls" aria-label="배합 물성 목표">
         <div class="card-header">
-          <h2 class="card-title">배합을 조절해요</h2>
+          <h2 class="card-title">배합 조절</h2>
           <span class="text-caption">정제수(Purified Water) 함량은 100.0%로 실시간 자동 역산됩니다.</span>
         </div>
 
@@ -134,7 +135,7 @@
         <div class="simulation-stress-box">
           <div class="simulation-stress-title">
             <span>성분 상성과 안정화</span>
-            <span class="text-caption">조건을 선택해 변화를 확인해요</span>
+            <span class="text-caption">조건별 제형 변화 및 안정화 비교</span>
           </div>
           <div class="simulation-stress-options">
             <label class="form-check">
@@ -182,21 +183,21 @@
 
     <!-- Right Column: Packaging & Pitching -->
     <aside class="card simulation-packaging" aria-label="패키징 적합성 검토">
-      <div class="card-header"><h2 class="card-title">용기 적합성을 확인해요</h2></div>
+      <div class="card-header"><h2 class="card-title">용기 적합성 확인</h2></div>
       <div class="card-body">
 
       <div class="simulation-legend">
-        <span><i class="simulation-dot simulation-blue"></i>적합 (Optimal)</span>
-        <span><i class="simulation-dot simulation-yellow"></i>주의 (Caution)</span>
-        <span><i class="simulation-dot simulation-red"></i>부적합 (Incompatible)</span>
+        <span><i class="simulation-dot simulation-blue"></i>적합</span>
+        <span><i class="simulation-dot simulation-yellow"></i>주의</span>
+        <span><i class="simulation-dot simulation-red"></i>부적합</span>
       </div>
 
-      <label class="form-label simulation-pack-label" for="simulation-pack">확인할 타깃 용기</label>
+      <label class="form-label simulation-pack-label" for="simulation-pack">타깃 용기</label>
       <select class="form-control" id="simulation-pack">
-        <option value="dropper">스포이드 (Dropper Pipette)</option>
-        <option value="pump">디스펜서 펌프 (Dispenser Pump)</option>
-        <option value="airless">에어리스 펌프 (Airless Vacuum Pump)</option>
-        <option value="jar">크림 자 (Wide Mouth Jar)</option>
+        <option value="dropper">스포이드</option>
+        <option value="pump">디스펜서 펌프</option>
+        <option value="airless">에어리스 펌프</option>
+        <option value="jar">크림 자</option>
       </select>
 
       <div id="simulation-status-card" class="alert alert-info simulation-status-card" role="status" aria-live="polite">
@@ -238,7 +239,7 @@
       <!-- 4. Comparison Section -->
       <section class="card simulation-comparison" aria-label="저장 배합과 현재 배합 비교">
         <div class="card-header">
-          <h2 class="card-title">저장한 배합과 비교해요</h2>
+          <h2 class="card-title">배합 전후 비교</h2>
           <div class="simulation-compare-actions">
             <button class="btn btn-primary" id="simulation-save-baseline" type="button">현재 배합을 비교 기준으로 저장</button>
             <button class="btn btn-secondary" id="simulation-restore-baseline" type="button" disabled>저장 배합 불러오기</button>
@@ -267,7 +268,7 @@
         </div>
 
         <p id="simulation-storage-note" class="simulation-compare-help">
-          현재 배합을 비교 기준으로 저장하고, 조절 전후의 차이를 확인해요.
+          현재 배합 저장 후 조절 전후의 물성 변화 비교
         </p>
         </div>
       </section>
