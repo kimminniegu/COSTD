@@ -954,9 +954,7 @@
     tdAmount.appendChild(amountInput);
     tr.appendChild(tdAmount);
 
-    var tdLoc = el("td", "text-caption text-secondary", it.location);
-    if (it.role_raw) tdLoc.appendChild(el("p", "regulatory-review-reason", "문서 비고: " + it.role_raw));
-    tr.appendChild(tdLoc);
+    // 원문 위치(it.location)·문서 비고(it.role_raw)는 화면 열에서 제외. 데이터는 유지되어 상세 Modal 의 '원문 위치'에 표시된다.
 
     var statusCell = el("td");
     statusCell.appendChild(statusBadge(it));
