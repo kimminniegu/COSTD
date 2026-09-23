@@ -59,6 +59,37 @@ const PRESETS = {
   cream: { name: '영양 크림', a: 2.0, c: 0.80, o: 28, h: 10, pack: 'jar' }
 };
 
+// 시연용 개발요청서 분석 결과. 배합비는 시뮬레이터에 그대로 적용하고, target은 요청서에 적힌 목표치입니다.
+const BRIEFS = {
+  ampoule: {
+    chip: '고농축 리치 앰플 의뢰서',
+    title: '고농축 리치 앰플',
+    file: '[COSMOA] 2026_Q3_글로벌_안티에이징_고농축앰플_개발요청서.pdf',
+    request: '스포이드로 토출 가능하면서도 쫀쫀한 밀착감, 유효성분 10% 이상, 끈적임 없는 오일 보습막 형성',
+    keywords: ['고보습', '밀착감', '고농축'],
+    target: { v: 20483, texture: '농축 리치' },
+    a: 9.0, c: 0.20, o: 29, h: 12, pack: 'dropper'
+  },
+  serum: {
+    chip: '수분 세럼 의뢰서',
+    title: '센텔라 수분 세럼',
+    file: '[비건인증] 센텔라_카밍_수분세럼_의뢰서_v2.pdf',
+    request: '여름철 가벼운 흡수감, 물처럼 흐르는 텍스처, 끈적임 제로',
+    keywords: ['수분진정', '워터리', '비건'],
+    target: { v: 1850, texture: '워터리 플루이드' },
+    a: 3.5, c: 0.08, o: 3, h: 18, pack: 'dropper'
+  },
+  balm: {
+    chip: '장벽강화 밤 의뢰서',
+    title: '장벽강화 밤 크림',
+    file: '[더마코스메틱] 장벽강화_오버나이트_크림_사양서.pdf',
+    request: '피부 장벽 재건을 위한 고밀도 밤-크림 제형, 고함량 세라마이드 안정화',
+    keywords: ['장벽강화', '고밀도', '세라마이드'],
+    target: { v: 58200, texture: '고밀도 밤(Balm)' },
+    a: 12.0, c: 0.85, o: 42, h: 8, pack: 'dropper'
+  }
+};
+
 const PACKS = {
   dropper: {
     name: '스포이드 (Dropper)',
@@ -124,10 +155,13 @@ function calculateScore(v, key, state) {
     const penalty = Math.min(10, Math.round(Math.abs(v - mid) / range * 8));
     return 100 - penalty;
   }
+  // 권장 범위를 벗어난 정도에 따라 결정적으로 감점합니다. (같은 배합은 항상 같은 점수)
   if (state === 'caution') {
-    return 65 + Math.round(Math.random() * 10);
+    const t = v < p.min ? (p.min - v) / (p.min - p.low) : (v - p.max) / (p.high - p.max);
+    return 75 - Math.round(Math.min(1, t) * 10);
   }
-  return 25 + Math.round(Math.random() * 15);
+  const ratio = v < p.low ? p.low / v : v / p.high;
+  return Math.max(5, Math.round(40 - 9 * Math.log2(ratio)));
 }
 
 function getEligiblePacks(v) {
@@ -217,7 +251,7 @@ function update() {
 
   $('active-out').textContent = a.toFixed(1) + '\%';
   $('carb-out').textContent = c.toFixed(2) + '%';
-  $('oil-out').textContent = o + '\%';$('hum-out').textContent = h + '%';
+  $('oil-out').textContent = o.toFixed(0) + '%';$('hum-out').textContent = h.toFixed(0) + '%';
 
   $('viscosity').textContent = fmt(v);$('flow').textContent = flow + ' / 100';
   $('water').textContent = water.toFixed(2) + '\%';$('active-val').textContent = fmt(activePpm);
@@ -282,7 +316,9 @@ function update() {
 }
 
 function loadPreset() {
-  const p = PRESETS[$('preset').value];$('active').value = p.a;
+  const p = $('preset').value === 'brief' ? appliedBrief : PRESETS[$('preset').value];
+  $('brief-badge').hidden = $('preset').value !== 'brief';
+  $('active').value = p.a;
   $('carb').value = p.c;
   $('oil').value = p.o;
   $('hum').value = p.h;
@@ -298,9 +334,201 @@ $('preset').addEventListener('change', loadPreset);$('pack').addEventListener('c
   $(id).addEventListener('input', () => {
     update();
   });
+  // 적용 애니메이션 중 사용자가 직접 조작하면 사용자 조작을 우선합니다.
+  $(id).addEventListener('pointerdown', stopBriefAnimation);
+  $(id).addEventListener('keydown', stopBriefAnimation);
 });
 
-$('reset').addEventListener('click', () => {$('preset').value = 'ampoule';
+// 개발요청서 AI 분석 (시연): 업로드 → 분석 진행 → 요약 → 시뮬레이터 적용
+const SLIDERS = ['active', 'carb', 'oil', 'hum'];
+const SLIDER_STEPS = Object.fromEntries(SLIDERS.map(id => [id, $(id).step]));
+const briefModal = $('brief-modal');
+const briefDialog = briefModal.querySelector('.modal');
+let appliedBrief = null;
+let pendingBrief = null;
+let analyzeTimers = [];
+let briefFrame = 0;
+document.body.append(briefModal); // 페이지 container 밖에 두어 fixed 위치를 유지합니다.
+
+const packLabel = key => PACKS[key].name.split(' (')[0];
+function setBriefStep(step) {
+  briefDialog.dataset.step = step;
+  briefModal.querySelectorAll('[data-step-panel]').forEach(panel => { panel.hidden = panel.dataset.stepPanel !== step; });
+  $('brief-back').hidden = $('brief-apply').hidden = step !== 'result';
+}
+function clearAnalyzeTimers() { analyzeTimers.forEach(clearTimeout); analyzeTimers = []; }
+function resetBriefModal() {
+  clearAnalyzeTimers();
+  pendingBrief = null;
+  $('brief-file').value = '';
+  $('brief-error').hidden = true;
+  $('brief-drop').classList.remove('is-dragover', 'is-error');
+  setBriefStep('upload');
+}
+
+const DOC_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5H6a1.5 1.5 0 0 0-1.5 1.5v12A1.5 1.5 0 0 0 6 17.5h8a1.5 1.5 0 0 0 1.5-1.5V6.5z"/><path d="M11.5 2.5v4h4"/></svg>';
+for (const [key, brief] of Object.entries(BRIEFS)) {
+  const chip = document.createElement('button');
+  chip.type = 'button';
+  chip.className = 'simulation-brief-chip';
+  chip.innerHTML = DOC_ICON;
+  chip.append(brief.chip);
+  chip.title = brief.file;
+  chip.addEventListener('click', () => analyzeBrief(key, brief.file));
+  $('brief-chips').append(chip);
+}
+
+// 실제 파싱 없이 파일명의 제형 키워드로 가장 가까운 시연 데이터를 고릅니다.
+function matchBrief(name) {
+  if (/세럼|serum|수분|카밍|워터|토너/i.test(name)) return 'serum';
+  if (/크림|cream|밤|balm|장벽|barrier/i.test(name)) return 'balm';
+  return 'ampoule';
+}
+function handleBriefFile(file) {
+  if (!file) return;
+  const message = !/\.(pdf|docx?)$/i.test(file.name) ? 'PDF 또는 Word(.doc, .docx) 파일만 업로드할 수 있어요.'
+    : file.size > 20 * 1024 * 1024 ? '20MB 이하의 파일만 업로드할 수 있어요.' : '';
+  $('brief-error').textContent = message;
+  $('brief-error').hidden = !message;
+  $('brief-drop').classList.toggle('is-error', Boolean(message));
+  if (!message) analyzeBrief(matchBrief(file.name), file.name);
+}
+
+function analyzeBrief(key, fileName) {
+  clearAnalyzeTimers();
+  pendingBrief = { ...BRIEFS[key], file: fileName };
+  briefModal.querySelectorAll('[data-brief-filename]').forEach(el => { el.textContent = fileName; });
+  briefModal.querySelectorAll('.simulation-brief-file-icon').forEach(el => { el.textContent = /\.docx?$/i.test(fileName) ? 'DOC' : 'PDF'; });
+  const checks = [...$('brief-checks').children];
+  checks.forEach(li => li.classList.remove('is-done'));
+  const bar = $('brief-progress');
+  bar.style.transition = 'none';
+  bar.style.width = '0%';
+  setBriefStep('analyzing');
+  void bar.offsetWidth;
+  bar.style.transition = '';
+  bar.style.width = '100%';
+  checks.forEach((li, i) => analyzeTimers.push(setTimeout(() => li.classList.add('is-done'), 400 + i * 400)));
+  analyzeTimers.push(setTimeout(showBriefResult, 1500));
+}
+
+function showBriefResult() {
+  const b = pendingBrief;
+  const v = calculateViscosity(b.a, b.c, b.o, b.h);
+  const state = evaluatePackage(v, b.pack);
+  const alternatives = getEligiblePacks(v).filter(k => k !== b.pack);
+  $('brief-request').textContent = b.request;
+  const verdict = state === 'optimal' ? [`${packLabel(b.pack)}적합`] : alternatives.slice(0, 1).map(k => `${packLabel(k).replace(/\s/g, '')}권장`);
+  $('brief-keywords').replaceChildren(...[...b.keywords, ...verdict].map(word => Object.assign(document.createElement('span'), { textContent: `#${word}` })));
+  const water = Math.max(0, 100 - b.a - b.c - b.o - b.h);
+  const rows = [
+    ['유효 활성 성분', b.a, $('active').max, b.a.toFixed(1)],
+    ['점증제 (카보머)', b.c, $('carb').max, b.c.toFixed(2)],
+    ['유상 오일 성분', b.o, $('oil').max, b.o.toFixed(0)],
+    ['수분 유지 성분', b.h, $('hum').max, b.h.toFixed(0)],
+    ['정제수 (베이스)', water, 100, water.toFixed(2)]
+  ];
+  $('brief-mix').replaceChildren(...rows.map(([label, value, max, text]) => {
+    const row = document.createElement('div');
+    row.innerHTML = '<dt></dt><dd><span class="simulation-brief-meter"><span></span></span><b></b></dd>';
+    row.querySelector('dt').textContent = label;
+    row.querySelector('b').textContent = `${text}%`;
+    row.querySelector('.simulation-brief-meter > span').style.width = `${Math.min(100, value / max * 100)}%`;
+    return row;
+  }));
+  $('brief-target-v').textContent = fmt(b.target.v);
+  $('brief-predicted-v').textContent = fmt(v);
+  $('brief-texture').textContent = b.target.texture;
+  const chip = Object.assign(document.createElement('span'), { className: `simulation-brief-state is-${state}`, textContent: `${packLabel(b.pack)} · ${STATES[state].label}` });
+  const nodes = [chip];
+  if (state !== 'optimal' && alternatives.length) {
+    nodes.push(Object.assign(document.createElement('span'), { className: 'simulation-brief-alt', textContent: `→ ${alternatives.map(packLabel).join(', ')} 권장` }));
+  }
+  $('brief-pack').replaceChildren(...nodes);
+  setBriefStep('result');
+  $('brief-apply').focus();
+}
+
+function stopBriefAnimation() {
+  if (!briefFrame) return;
+  cancelAnimationFrame(briefFrame);
+  briefFrame = 0;
+  SLIDERS.forEach(id => { $(id).step = SLIDER_STEPS[id]; });
+}
+function flashViscosity() {
+  const box = $('viscosity').parentElement;
+  box.classList.remove('is-flash');
+  void box.offsetWidth;
+  box.classList.add('is-flash');
+}
+// 슬라이더를 목표 배합까지 부드럽게 이동시키며 매 프레임 모든 지표와 캔버스를 다시 계산합니다.
+function applyBrief() {
+  const b = pendingBrief;
+  if (!b) return;
+  appliedBrief = b;
+  let option = $('preset').querySelector('option[value=brief]');
+  if (!option) option = $('preset').appendChild(Object.assign(document.createElement('option'), { value: 'brief' }));
+  option.textContent = `개발요청서 · ${b.title}`;
+  $('preset').value = 'brief';
+  $('brief-badge').hidden = false;
+  $('brief-badge').title = b.file;
+  $('pack').value = b.pack;
+  window.Common.closeModal('simulation-brief-modal');
+
+  stopBriefAnimation();
+  const from = SLIDERS.map(id => +$(id).value);
+  const to = [b.a, b.c, b.o, b.h];
+  const duration = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 900;
+  const start = performance.now();
+  SLIDERS.forEach(id => { $(id).step = 'any'; });
+  const step = now => {
+    const t = duration ? Math.min(1, (now - start) / duration) : 1;
+    const eased = 1 - Math.pow(1 - t, 3);
+    SLIDERS.forEach((id, i) => { $(id).value = from[i] + (to[i] - from[i]) * eased; });
+    if (t < 1) {
+      update();
+      briefFrame = requestAnimationFrame(step);
+      return;
+    }
+    briefFrame = 0;
+    SLIDERS.forEach((id, i) => { $(id).step = SLIDER_STEPS[id]; $(id).value = to[i]; });
+    update();
+    flashViscosity();
+  };
+  briefFrame = requestAnimationFrame(step);
+}
+
+$('brief-open').addEventListener('click', () => {
+  resetBriefModal();
+  requestAnimationFrame(() => $('brief-drop').focus());
+});
+$('brief-file').addEventListener('change', event => handleBriefFile(event.target.files[0]));
+$('brief-drop').tabIndex = 0;
+$('brief-drop').addEventListener('keydown', event => {
+  if (event.target !== $('brief-drop') || (event.key !== 'Enter' && event.key !== ' ')) return;
+  event.preventDefault();
+  $('brief-file').click();
+});
+['dragenter', 'dragover'].forEach(type => $('brief-drop').addEventListener(type, event => {
+  event.preventDefault();
+  $('brief-drop').classList.add('is-dragover');
+}));
+$('brief-drop').addEventListener('dragleave', () => $('brief-drop').classList.remove('is-dragover'));
+$('brief-drop').addEventListener('drop', event => {
+  event.preventDefault();
+  $('brief-drop').classList.remove('is-dragover');
+  handleBriefFile(event.dataTransfer.files[0]);
+});
+$('brief-back').addEventListener('click', resetBriefModal);
+$('brief-apply').addEventListener('click', applyBrief);
+// 분석 중 모달을 닫으면 진행 중인 분석을 취소합니다.
+new MutationObserver(() => { if (!briefModal.classList.contains('is-open')) clearAnalyzeTimers(); })
+  .observe(briefModal, { attributes: true, attributeFilter: ['class'] });
+setBriefStep('upload');
+
+$('reset').addEventListener('click', () => {
+  stopBriefAnimation();
+  $('preset').value = 'ampoule';
   phase = 0;
   loadPreset();
 });
