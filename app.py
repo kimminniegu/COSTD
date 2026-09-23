@@ -120,6 +120,20 @@ def margin_reverse_counter_offer():
     return margin_service.handle(margin_service.reverse_counter_offer, request.get_json(silent=True))
 
 
+def _margin_render_pi_document(context):
+    return render_template("03_margin/margin_pi_document.html", **context)
+
+
+@app.route("/api/margin-calculator/render-pi", methods=["POST"])
+def margin_render_pi():
+    return margin_service.handle_pi(request.get_json(silent=True), _margin_render_pi_document)
+
+
+@app.route("/api/margin-calculator/export-pi-pdf", methods=["POST"])
+def margin_export_pi_pdf():
+    return margin_service.handle_pi(request.get_json(silent=True), _margin_render_pi_document, as_pdf=True)
+
+
 # [D] AI 제형/샘플 시뮬레이션 — 접두사: /api/ai-formulation/...
 
 

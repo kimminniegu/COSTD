@@ -11,6 +11,7 @@
 | 1.2 | 2026-09-23 | MOQ 1,500ea 고정(읽기 전용, 서버 `MOQ_FIXED`), 수량 구간 사용자 정의 Chip 입력 규칙 확정(§2.3, §3.1.3, §4.2.1, §7.1) | C |
 | 1.3 | 2026-09-23 | Tab 1 원/ea 금액 소수 2자리 표시(§4.0), chart 응답에 `unit_margin` 추가(§6.4.3), 목표 마진·방어선 범위 오류 코드 `INVALID_MARGIN`으로 통일 | C |
 | 1.4 | 2026-09-23 | Tab 2 구현 반영: 매수인 부담 보험료는 금액 `null`(§6.4.4), 스트레스 표는 EXW·수출 마진율 병기, 화면 보조 요소(`#margin-export-wait`, `#margin-logistics-status`, `#margin-logistics-alert`, `#margin-fx-alert`) 및 CSS 허용 목록 추가(§2.4, §2.7) | C |
+| 1.5 | 2026-09-23 | Tab 3 구현 반영: render-pi `mode`(preview/final), `bound.carton`·`transport_mode`로 서버가 포장 내역 재계산, 총액 응답 헤더 `X-Margin-PI-Total`, PDF·인쇄 필수값 오류 유지 규칙, CSS 허용 목록 추가(§6.4.7, §2.7) | C |
 
 **문서 표기 규칙**
 
@@ -329,7 +330,8 @@ Modal × 4 (§2.6)
 | `.margin-tier-price-input.is-overridden` | 수동 수정된 단가 Input 강조(`--color-primary-soft` 배경) |
 | `.margin-chart` / `.margin-chart__bar` / `.margin-chart__line` / `.margin-chart__point` / `.margin-chart__label` / `.margin-chart__grid` | 차트 SVG 요소 색(`fill`/`stroke`는 Token) |
 | `.margin-chart-tooltip` | Hover Tooltip(흰 배경 `--shadow-overlay`, `--radius-sm`) |
-| `.margin-pi-frame` | PI 미리보기 iframe 높이(`min-height: 960px`), 배경 `--color-surface-muted` |
+| `.margin-pi-frame` / `.margin-pi-frame-loading` | PI 미리보기 iframe 높이(`min-height: 960px`), 배경 `--color-surface-muted`, 갱신 중 흐림 |
+| `.margin-pi-bound-list` / `.margin-pi-extra-input` | 연동 값 타일 세로 간격, 추가 품목 표 안 입력칸 최소 폭 |
 | `.margin-row-muted` | 매수인 부담 등 계산 제외 행 텍스트를 `--color-text-placeholder` |
 | `.margin-diff-up` / `.margin-diff-down` | 비교 Modal 변동 셀 — `--color-up` / `--color-down` |
 | `.margin-tier-chip` / `.margin-tier-chip__remove` / `.margin-tier-chip-fixed` / `.margin-tier-chip-flash` | 수량 구간 Chip(공통 `.multi-select__chip`에 덧붙임): MOQ 고정 Chip `--color-primary` 배경, 중복 입력 강조 `--color-primary-bright` |
@@ -1380,7 +1382,8 @@ get_fx_rates(currencies, force=False)
   "bound": {
     "product_name": "Hydra Essence 50ml", "volume_ml": 50, "qty": 5000, "unit_price": 1.876, "currency": "USD",
     "incoterm": "CIF", "named_place": "Los Angeles, USA", "moq": 1500, "hs_code": "3304.99",
-    "cartons": 84, "units_per_carton": 60, "gross_weight_kg": 1008.0, "cbm": 2.646, "counter_applied": false
+    "transport_mode": "SEA_LCL", "counter_applied": false,
+    "carton": { "length_cm": 40, "width_cm": 30, "height_cm": 25, "units_per_carton": 60, "gross_weight_kg": 12, "allowance_rate": 5 }
   },
   "pi": {
     "pi_no": "COSMOA-PI-20260923-001", "issue_date": "2026-09-23", "validity_date": "2026-10-23",
@@ -1397,6 +1400,11 @@ get_fx_rates(currencies, force=False)
 ```
 
 **Response 200**: `text/html; charset=utf-8` — 완성된 단독 HTML 문서(`<!DOCTYPE html>`부터). 프론트는 `iframe.srcdoc`에 넣습니다.
+
+- `mode`: `"preview"`(자동 미리보기) — **필수값 누락은 허용**하고 `—`로 표시, 영문·형식·날짜 검사는 그대로 / 그 외(`"final"`, 생략) — 전체 검증. `export-pi-pdf`는 항상 전체 검증.
+- 포장 내역(카톤 수·G.W.·CBM)은 `bound.carton` + `bound.qty` + `bound.transport_mode`로 **서버가 다시 계산**합니다(역제안 적용으로 수량이 바뀌어도 일치).
+- 응답 헤더 `X-Margin-PI-Total: USD 9,380.00` — 서버가 다시 계산한 총액. 화면 연동 값 카드의 "총액" 타일에 표시합니다(JS에서 금액을 계산하지 않기 위함).
+- 화면 동작: 자동 미리보기가 성공해도 **PDF·인쇄 요청에서 난 필수값 오류는 사용자가 해당 필드를 고칠 때까지 유지**합니다.
 
 - 서버는 `build_pi_context()`에서 **금액을 다시 계산**합니다(프론트가 보낸 합계를 신뢰하지 않음). 검증 실패 시 422 JSON.
 

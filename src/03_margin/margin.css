@@ -138,3 +138,22 @@
 /* 역제안 입력 줄 — 버튼을 입력칸과 같은 줄 아래쪽에 정렬 */
 .margin-counter-submit { justify-content: flex-end; }
 
+
+/* Tab 3 — 견적서(PI) ------------------------------------------------------- */
+
+/* PI 미리보기 iframe — 문서 자체가 흰 A4 용지이므로 바깥은 연한 회색 */
+.margin-pi-frame {
+  display: block;
+  width: 100%;
+  min-height: 960px;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
+}
+.margin-pi-frame-loading { opacity: 0.6; }
+
+/* 연동 값 타일 — 세로 목록 간격을 좁게 */
+.margin-pi-bound-list { gap: var(--space-2); }
+
+/* 추가 품목 표 안의 입력칸 */
+.margin-pi-extra-input { min-width: 88px; }

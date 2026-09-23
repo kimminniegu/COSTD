@@ -1,7 +1,7 @@
 /* 원가 경쟁력 및 마진 시뮬레이션 전용 JavaScript (담당자 C)
    이 페이지에서만 필요한 로직만 작성합니다.
    다른 페이지의 JS를 수정하거나 의존하지 않습니다. 공통 동작은 src/common/common.js 참고.
-   기능 명세: src/03_margin/margin.md — 현재 구현 범위: Tab 1 (§2.3, §4.2), Tab 2 (§2.4, §4.3~4.5, §6.3), §5, §7, §8.3 */
+   기능 명세: src/03_margin/margin.md — 현재 구현 범위: Tab 1 (§2.3, §4.2), Tab 2 (§2.4, §4.3~4.5, §6.3), Tab 3 PI (§2.5, §6.4.7~6.4.8), §5, §7, §8.3 */
 (function () {
   "use strict";
 
@@ -53,6 +53,10 @@
       seq: 0, controller: null, quoteSeq: 0, quoteController: null,
     },
     counter: { result: null, applied: null, qtyDirty: false }, // applied = { price, qty, currency } → Tab 3
+    pi: {
+      bound: null, signature: "", margin: null,  // bound: PI 에 들어가는 Tab 1·2 확정값 (§5.4 stale 비교는 signature)
+      dirty: {}, extras: [], previewSeq: 0, previewController: null, strictErrors: false,
+    },
   };
 
   function $(id) { return document.getElementById(id); }
@@ -749,6 +753,7 @@
   /* 이벤트 --------------------------------------------------------------------- */
   function bindEvents() {
     bindExportEvents();
+    bindPiEvents();
     var tierInput = $("margin-tier-input");
     tierInput.addEventListener("keydown", function (e) {
       if (e.key === "Enter" && !e.isComposing) {
@@ -1232,6 +1237,7 @@
         state.export.quote = json.data;
         renderQuote(json.data, json.warnings || []);
         enablePiTab();
+        checkPiStale();
       })
       .catch(function (err) {
         if ((err && err.name === "AbortError") || seq !== state.export.quoteSeq) return;
@@ -1513,12 +1519,473 @@
       if (!r || r.verdict === "negative") return;
       state.counter.applied = { price: r.counter_price, qty: r.qty, currency: r.currency };
       enablePiTab();
+      if (state.pi.bound) bindPi(); // 사용자가 명시적으로 적용했으므로 바로 다시 바인딩
       $("margin-tab-btn-pi").click();
     });
     $("margin-go-pi-btn").addEventListener("click", function () {
       enablePiTab();
       $("margin-tab-btn-pi").click();
     });
+  }
+
+  /* ==========================================================================
+     Tab 3 — 견적서(PI) 미리보기 · 인쇄 · PDF (§2.5, §3.1.7, §5.3~5.4, §6.4.7~6.4.8, §7.5)
+     ========================================================================== */
+  var PI_PREVIEW_DEBOUNCE_MS = 800;
+  var PI_SELLER_STORAGE_KEY = "cosmoa.margin.seller";
+  var PI_MAX_EXTRA_ITEMS = 10;
+  var PI_FIELD_MAP = {
+    "pi.pi_no": "margin-pi-no",
+    "pi.issue_date": "margin-pi-date",
+    "pi.validity_date": "margin-pi-validity",
+    "pi.buyer.company": "margin-buyer-company",
+    "pi.buyer.country": "margin-buyer-country",
+    "pi.buyer.address": "margin-buyer-address",
+    "pi.buyer.contact": "margin-buyer-contact",
+    "pi.buyer.email": "margin-buyer-email",
+    "pi.seller.company": "margin-seller-company",
+    "pi.seller.address": "margin-seller-address",
+    "pi.seller.contact": "margin-seller-contact",
+    "pi.bank.name": "margin-bank-name",
+    "pi.bank.swift": "margin-bank-swift",
+    "pi.bank.account": "margin-bank-account",
+    "pi.bank.beneficiary": "margin-bank-beneficiary",
+    "pi.port_loading": "margin-port-loading",
+    "pi.port_discharge": "margin-port-discharge",
+    "pi.lead_time_days": "margin-lead-time",
+    "pi.shipment_date": "margin-shipment-date",
+    "pi.hs_code": "margin-hs-code",
+    "pi.remarks": "margin-pi-remarks",
+  };
+  /* localStorage 에 저장하는 매도인·은행 필드 (§3.4.1) */
+  var PI_SELLER_FIELDS = {
+    company: "margin-seller-company",
+    address: "margin-seller-address",
+    contact: "margin-seller-contact",
+    bank_name: "margin-bank-name",
+    bank_swift: "margin-bank-swift",
+    bank_account: "margin-bank-account",
+    bank_beneficiary: "margin-bank-beneficiary",
+  };
+  var PI_EMPTY_PREVIEW = '<!DOCTYPE html><html><body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;'
+    + 'font-family:sans-serif;color:#6b7684;background:#f9fafb">Tab 2에서 수출 조건을 확정하면 미리보기가 나타나요</body></html>';
+
+  function isoDate(d) {
+    var pad = function (n) { return String(n).padStart(2, "0"); };
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  }
+
+  function addDays(iso, days) {
+    var parts = String(iso).split("-").map(Number);
+    if (parts.length !== 3 || parts.some(Number.isNaN)) return "";
+    return isoDate(new Date(parts[0], parts[1] - 1, parts[2] + days));
+  }
+
+  function storageGet(key) {
+    try { return JSON.parse(window.localStorage.getItem(key) || "null"); } catch (e) { return null; }
+  }
+
+  function storageSet(key, value) {
+    try {
+      if (value === null) window.localStorage.removeItem(key);
+      else window.localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) { /* 저장할 수 없는 환경은 무시 */ }
+  }
+
+  /* 폼 초기값 -------------------------------------------------------------- */
+  function setupPiForm(master) {
+    fillSelect("margin-payment-terms", master.payment_terms, function (t) { return t.label; });
+    setPiDefaults();
+  }
+
+  function setPiDefaults() {
+    var d = state.master.defaults;
+    var today = isoDate(new Date());
+    $("margin-pi-no").value = "COSMOA-PI-" + today.replace(/-/g, "") + "-001";
+    $("margin-pi-date").value = today;
+    $("margin-pi-validity").value = addDays(today, d.pi_validity_days);
+    $("margin-lead-time").value = d.pi_lead_time_days;
+    $("margin-shipment-date").value = addDays(today, d.pi_lead_time_days);
+    $("margin-hs-code").value = d.hs_code;
+    $("margin-payment-terms").value = d.payment_terms;
+    ["margin-buyer-company", "margin-buyer-country", "margin-buyer-address", "margin-buyer-contact", "margin-buyer-email",
+      "margin-port-loading", "margin-port-discharge", "margin-pi-remarks"].forEach(function (id) { $(id).value = ""; });
+    Object.keys(PI_SELLER_FIELDS).forEach(function (k) { $(PI_SELLER_FIELDS[k]).value = ""; });
+    state.pi.dirty = {};
+    state.pi.extras = [];
+    renderExtras();
+
+    var saved = storageGet(PI_SELLER_STORAGE_KEY);
+    $("margin-seller-remember").checked = Boolean(saved);
+    if (saved) {
+      Object.keys(PI_SELLER_FIELDS).forEach(function (k) { if (saved[k]) $(PI_SELLER_FIELDS[k]).value = saved[k]; });
+    }
+    clearPiErrors();
+  }
+
+  function saveSellerIfRemembered() {
+    if (!$("margin-seller-remember").checked) return;
+    var data = {};
+    Object.keys(PI_SELLER_FIELDS).forEach(function (k) { data[k] = $(PI_SELLER_FIELDS[k]).value.trim(); });
+    storageSet(PI_SELLER_STORAGE_KEY, data);
+  }
+
+  /* 추가 품목 --------------------------------------------------------------- */
+  function renderExtras() {
+    var tbody = $("margin-pi-extra-tbody");
+    tbody.textContent = "";
+    state.pi.extras.forEach(function (item, i) {
+      var tr = document.createElement("tr");
+      [["description", "text", "품목 설명 (영문)"], ["qty", "number", "수량"], ["unit_price", "number", "단가"]].forEach(function (spec) {
+        var td = cell(undefined, spec[0] !== "description");
+        var input = document.createElement("input");
+        input.type = spec[1];
+        input.className = "form-control form-control-sm margin-pi-extra-input";
+        input.value = item[spec[0]];
+        input.placeholder = spec[2];
+        input.setAttribute("aria-label", "추가 품목 " + (i + 1) + " " + spec[2]);
+        input.dataset.index = String(i);
+        input.dataset.key = spec[0];
+        if (spec[1] === "number") { input.min = "0"; input.step = spec[0] === "qty" ? "1" : "any"; }
+        td.appendChild(input);
+        tr.appendChild(td);
+      });
+      var del = cell();
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-ghost btn-sm";
+      btn.dataset.removeIndex = String(i);
+      btn.textContent = "삭제";
+      del.appendChild(btn);
+      tr.appendChild(del);
+      tbody.appendChild(tr);
+    });
+    $("margin-pi-extra-empty").hidden = state.pi.extras.length > 0;
+    $("margin-pi-extra-add").disabled = state.pi.extras.length >= PI_MAX_EXTRA_ITEMS;
+  }
+
+  /* 시뮬레이션 값 바인딩 (§5.3~5.4) ------------------------------------------- */
+  function buildBound() {
+    var row = findRow(state.selection.qty);
+    var quote = state.export.quote;
+    var logistics = state.export.logistics;
+    if (!row || !quote || !logistics || !state.export.logisticsRequest) return null;
+    var applied = state.counter.applied && state.counter.applied.currency === quote.currency ? state.counter.applied : null;
+    var volume = readNumber("margin-product-volume");
+    return {
+      product_name: $("margin-product-name").value.trim(),
+      volume_ml: volume === null || Number.isNaN(volume) ? null : volume,
+      qty: applied ? applied.qty : logistics.qty,
+      unit_price: applied ? applied.price : quote.unit_price_fx,
+      currency: quote.currency,
+      incoterm: logistics.effective_incoterm,
+      named_place: logistics.named_place,
+      transport_mode: logistics.transport_mode,
+      carton: state.export.logisticsRequest.carton,
+      counter_applied: Boolean(applied),
+    };
+  }
+
+  function boundSignature(bound) { return bound ? JSON.stringify(bound) : ""; }
+
+  /* 내부 확인용 마진 — PI 요청에는 넣지 않습니다 */
+  function boundMargin() {
+    var applied = state.pi.bound && state.pi.bound.counter_applied;
+    var r = applied ? state.counter.result : state.export.quote;
+    if (!r) return null;
+    return { rate: r.margin_rate_exw, status: r.status };
+  }
+
+  function bindPi() {
+    var bound = buildBound();
+    if (!bound) return false;
+    state.pi.bound = bound;
+    state.pi.signature = boundSignature(bound);
+    state.pi.margin = boundMargin();
+    var mode = state.master.transport_modes.filter(function (m) { return m.code === bound.transport_mode; })[0];
+    if (!state.pi.dirty["margin-port-loading"] && mode) $("margin-port-loading").value = mode.port_loading;
+    if (!state.pi.dirty["margin-port-discharge"]) $("margin-port-discharge").value = bound.named_place;
+    $("margin-pi-stale-alert").hidden = true;
+    renderBound();
+    renderPreview();
+    return true;
+  }
+
+  function checkPiStale() {
+    if (!state.pi.bound) return;
+    var stale = boundSignature(buildBound()) !== state.pi.signature;
+    $("margin-pi-stale-alert").hidden = !stale;
+    $("margin-pi-stale-text").textContent = state.pi.bound.counter_applied
+      ? "견적서에는 이전 조건이 들어가 있어요. 역제안 단가는 이전 원가 기준이에요."
+      : "견적서에는 이전 조건이 들어가 있어요.";
+  }
+
+  function renderBound() {
+    var b = state.pi.bound;
+    setTileValue("margin-pi-bound-product", b.product_name || "— (Tab 1에서 영문 제품명을 입력해 주세요)");
+    setTileValue("margin-pi-bound-qty", fmt.qty(b.qty));
+    setTileValue("margin-pi-bound-price", fmtFx(b.unit_price, b.currency, "price"));
+    setTileValue("margin-pi-bound-currency", b.currency);
+    setTileValue("margin-pi-bound-incoterm", b.incoterm + " " + b.named_place);
+    setTileValue("margin-pi-bound-total", "—");
+    var marginValue = $("margin-pi-bound-margin").querySelector(".stat-tile__value");
+    var m = state.pi.margin;
+    marginValue.textContent = m && m.rate !== null ? fmt.pct(m.rate) + " " : "— ";
+    if (m) marginValue.appendChild(makeBadge(m.status));
+    $("margin-pi-counter-badge").hidden = !b.counter_applied;
+  }
+
+  /* PI 요청 ------------------------------------------------------------------ */
+  function collectPi() {
+    var val = function (id) { return $(id).value.trim(); };
+    return {
+      pi_no: val("margin-pi-no"),
+      issue_date: val("margin-pi-date"),
+      validity_date: val("margin-pi-validity"),
+      buyer: {
+        company: val("margin-buyer-company"), country: val("margin-buyer-country"), address: val("margin-buyer-address"),
+        contact: val("margin-buyer-contact"), email: val("margin-buyer-email"),
+      },
+      seller: { company: val("margin-seller-company"), address: val("margin-seller-address"), contact: val("margin-seller-contact") },
+      bank: {
+        name: val("margin-bank-name"), swift: val("margin-bank-swift").toUpperCase(),
+        account: val("margin-bank-account"), beneficiary: val("margin-bank-beneficiary"),
+      },
+      payment_terms: $("margin-payment-terms").value,
+      port_loading: val("margin-port-loading"),
+      port_discharge: val("margin-port-discharge"),
+      lead_time_days: val("margin-lead-time"),
+      shipment_date: val("margin-shipment-date"),
+      hs_code: val("margin-hs-code"),
+      extra_items: state.pi.extras.map(function (x) { return { description: x.description, qty: x.qty, unit_price: x.unit_price }; }),
+      remarks: val("margin-pi-remarks"),
+    };
+  }
+
+  /* render-pi / export-pi-pdf 는 HTML·PDF 를 돌려주므로 api() 대신 fetch 를 직접 씁니다 */
+  function piFetch(path, mode, signal) {
+    return fetch(API_BASE + path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bound: state.pi.bound, pi: collectPi(), version: "1.0", mode: mode }),
+      signal: signal,
+    }).then(function (res) {
+      if (res.ok) return res;
+      return res.json().catch(function () { return null; }).then(function (json) {
+        var error = (json && json.error) || { code: "HTTP_" + res.status, message: "견적서를 만들지 못했어요. 잠시 후 다시 시도해 주세요" };
+        throw { status: res.status, code: error.code, message: error.message, fields: error.fields || {} };
+      });
+    });
+  }
+
+  function clearPiErrors() {
+    Object.keys(PI_FIELD_MAP).forEach(function (k) { setFieldError(PI_FIELD_MAP[k], ""); });
+    document.querySelectorAll(".margin-pi-extra-input.is-error").forEach(function (el) { el.classList.remove("is-error"); });
+    $("margin-pi-form-alert").hidden = true;
+  }
+
+  function showPiAlert(kind, title, messages) {
+    var alert = $("margin-pi-form-alert");
+    alert.className = "alert alert-" + kind;
+    $("margin-pi-form-alert-title").textContent = title;
+    showListAlert("margin-pi-form-alert", "margin-pi-form-alert-list", messages.length ? messages : [title]);
+  }
+
+  function applyPiErrors(err, strict) {
+    clearPiErrors();
+    state.pi.strictErrors = Boolean(strict);
+    var fields = (err && err.fields) || {};
+    var messages = [];
+    Object.keys(fields).forEach(function (key) {
+      var extra = key.match(/^pi\.extra_items\[(\d+)\]\.(\w+)$/);
+      if (PI_FIELD_MAP[key]) setFieldError(PI_FIELD_MAP[key], fields[key]);
+      else if (extra) {
+        var input = document.querySelector('.margin-pi-extra-input[data-index="' + extra[1] + '"][data-key="' + extra[2] + '"]');
+        if (input) input.classList.add("is-error");
+      }
+      messages.push(fields[key]);
+    });
+    var title = err && err.code === "NON_ENGLISH_TEXT" ? "견적서는 영문으로 작성해 주세요" : (err && err.message) || "입력값을 확인해 주세요";
+    showPiAlert("danger", title, messages);
+  }
+
+  var schedulePreview = debounce(renderPreview, PI_PREVIEW_DEBOUNCE_MS);
+
+  function setPreviewHtml(html, onLoad) {
+    var frame = $("margin-pi-preview-frame");
+    if (onLoad) {
+      var handler = function () { frame.removeEventListener("load", handler); onLoad(frame); };
+      frame.addEventListener("load", handler);
+    }
+    frame.srcdoc = html;
+  }
+
+  function renderPreview() {
+    if (!state.pi.bound) { setPreviewHtml(PI_EMPTY_PREVIEW); return; }
+    if (state.pi.previewController) state.pi.previewController.abort();
+    var seq = ++state.pi.previewSeq;
+    state.pi.previewController = new AbortController();
+    $("margin-pi-preview-frame").classList.add("margin-pi-frame-loading");
+    piFetch("/render-pi", "preview", state.pi.previewController.signal)
+      .then(function (res) {
+        var total = res.headers.get("X-Margin-PI-Total");
+        return res.text().then(function (html) {
+          if (seq !== state.pi.previewSeq) return;
+          // 미리보기는 필수값을 검사하지 않으므로, PDF·인쇄에서 난 필수값 오류는 사용자가 고칠 때까지 유지
+          if (!state.pi.strictErrors) clearPiErrors();
+          setPreviewHtml(html);
+          if (total) setTileValue("margin-pi-bound-total", total);
+          $("margin-pi-preview-meta").textContent = "미리보기 갱신 " + new Date().toLocaleTimeString("ko-KR");
+        });
+      })
+      .catch(function (err) {
+        if ((err && err.name === "AbortError") || seq !== state.pi.previewSeq) return;
+        applyPiErrors(err);
+      })
+      .then(function () {
+        if (seq === state.pi.previewSeq) $("margin-pi-preview-frame").classList.remove("margin-pi-frame-loading");
+      });
+  }
+
+  function setButtonLoading(id, loading, label) {
+    var btn = $(id);
+    btn.disabled = loading;
+    btn.textContent = "";
+    if (loading) {
+      var spinner = document.createElement("span");
+      spinner.className = "spinner spinner-sm";
+      btn.appendChild(spinner);
+      btn.appendChild(document.createTextNode(" " + label));
+    } else {
+      btn.textContent = label;
+    }
+  }
+
+  /* 인쇄 — 필수값까지 검증한 PI 를 iframe 에 넣고 iframe 만 인쇄 (페이지 전체 인쇄 아님) */
+  function printPi() {
+    if (!state.pi.bound) return;
+    setButtonLoading("margin-pi-print-btn", true, "준비 중");
+    return piFetch("/render-pi", "final")
+      .then(function (res) { return res.text(); })
+      .then(function (html) {
+        state.pi.strictErrors = false;
+        clearPiErrors();
+        state.pi.previewSeq += 1; // 진행 중인 미리보기 응답이 덮어쓰지 않게
+        setPreviewHtml(html, function (frame) {
+          frame.contentWindow.focus();
+          frame.contentWindow.print();
+        });
+      })
+      .catch(function (err) { applyPiErrors(err, true); })
+      .then(function () { setButtonLoading("margin-pi-print-btn", false, "인쇄"); });
+  }
+
+  function downloadPdf() {
+    if (!state.pi.bound) return;
+    setButtonLoading("margin-pi-pdf-btn", true, "PDF 만드는 중");
+    piFetch("/export-pi-pdf", "final")
+      .then(function (res) {
+        var disposition = res.headers.get("Content-Disposition") || "";
+        var match = disposition.match(/filename="?([^";]+)"?/);
+        var filename = match ? match[1] : "PI.pdf";
+        return res.blob().then(function (blob) {
+          state.pi.strictErrors = false;
+          clearPiErrors();
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+        });
+      })
+      .catch(function (err) {
+        if (err && (err.code === "PDF_ENGINE_UNAVAILABLE" || err.code === "PDF_RENDER_FAILED")) {
+          showPiAlert("info", err.message, ["인쇄 창의 대상에서 'PDF로 저장'을 선택하면 PDF로 받을 수 있어요"]);
+          return printPi();
+        }
+        applyPiErrors(err, true);
+      })
+      .then(function () { setButtonLoading("margin-pi-pdf-btn", false, "PDF 다운로드"); });
+  }
+
+  /* Tab 3 진입 — 처음이면 바인딩, 이미 있으면 덮어쓰지 않고 stale 여부만 표시 */
+  function onEnterPi() {
+    if (!state.pi.bound) bindPi();
+    else checkPiStale();
+  }
+
+  function resetPi() {
+    if (state.pi.previewController) state.pi.previewController.abort();
+    state.pi.previewSeq += 1;
+    state.pi.bound = null;
+    state.pi.signature = "";
+    state.pi.margin = null;
+    ["margin-pi-bound-product", "margin-pi-bound-qty", "margin-pi-bound-price", "margin-pi-bound-currency",
+      "margin-pi-bound-incoterm", "margin-pi-bound-total", "margin-pi-bound-margin"].forEach(function (id) { setTileValue(id, "—"); });
+    $("margin-pi-stale-alert").hidden = true;
+    $("margin-pi-counter-badge").hidden = true;
+    $("margin-pi-preview-meta").textContent = "입력하면 잠시 후 자동으로 갱신돼요";
+    setPiDefaults();
+    setPreviewHtml(PI_EMPTY_PREVIEW);
+  }
+
+  function bindPiEvents() {
+    document.querySelectorAll("[data-margin-pi-input]").forEach(function (el) {
+      el.addEventListener(el.tagName === "SELECT" || el.type === "date" ? "change" : "input", function () {
+        state.pi.dirty[el.id] = true;
+        setFieldError(el.id, "");
+        if (!document.querySelector("#margin-pi-form-card .is-error")) {  // 남은 오류가 없으면 경고도 닫음
+          state.pi.strictErrors = false;
+          $("margin-pi-form-alert").hidden = true;
+        }
+        var issue = $("margin-pi-date").value;
+        if ((el.id === "margin-pi-date") && !state.pi.dirty["margin-pi-validity"]) {
+          $("margin-pi-validity").value = addDays(issue, state.master.defaults.pi_validity_days);
+        }
+        if ((el.id === "margin-pi-date" || el.id === "margin-lead-time") && !state.pi.dirty["margin-shipment-date"]) {
+          var lead = readNumber("margin-lead-time");
+          if (lead > 0) $("margin-shipment-date").value = addDays(issue, lead);
+        }
+        if (el.hasAttribute("data-margin-seller-field")) saveSellerIfRemembered();
+        schedulePreview();
+      });
+    });
+    $("margin-seller-remember").addEventListener("change", function (e) {
+      if (e.target.checked) saveSellerIfRemembered();
+      else storageSet(PI_SELLER_STORAGE_KEY, null);
+    });
+
+    $("margin-pi-extra-add").addEventListener("click", function () {
+      if (state.pi.extras.length >= PI_MAX_EXTRA_ITEMS) return;
+      state.pi.extras.push({ description: "", qty: 1, unit_price: 0 });
+      renderExtras();
+      var inputs = document.querySelectorAll(".margin-pi-extra-input[data-key='description']");
+      if (inputs.length) inputs[inputs.length - 1].focus();
+    });
+    $("margin-pi-extra-tbody").addEventListener("input", function (e) {
+      var input = e.target.closest(".margin-pi-extra-input");
+      if (!input) return;
+      var item = state.pi.extras[Number(input.dataset.index)];
+      item[input.dataset.key] = input.value;
+      input.classList.remove("is-error");
+      schedulePreview();
+    });
+    $("margin-pi-extra-tbody").addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-remove-index]");
+      if (!btn) return;
+      state.pi.extras.splice(Number(btn.dataset.removeIndex), 1);
+      renderExtras();
+      schedulePreview();
+    });
+
+    $("margin-tab-btn-pi").addEventListener("click", function () { if (!this.disabled) onEnterPi(); });
+    $("margin-pi-rebind-btn").addEventListener("click", bindPi);
+    $("margin-pi-preview-btn").addEventListener("click", renderPreview);
+    $("margin-pi-print-btn").addEventListener("click", printPi);
+    $("margin-pi-pdf-btn").addEventListener("click", downloadPdf);
   }
 
   /* 입력값 초기화 (§5.3) — 확인 Modal 에서 [확인] 시 실행 */
@@ -1564,6 +2031,7 @@
     renderCostPreview();
     renderChart();
     resetExport();
+    resetPi();
   }
 
   /* 초기화 --------------------------------------------------------------------- */
@@ -1588,6 +2056,8 @@
     renderChips();
     renderChart();
     setupExportControls(master);
+    setupPiForm(master);
+    setPreviewHtml(PI_EMPTY_PREVIEW);
   }
 
   function init() {

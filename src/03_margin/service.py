@@ -4,22 +4,24 @@
 - app.py 의 Route 는 입력 추출 → 이 모듈 호출 → 응답 반환만 합니다.
 - 금액 계산은 모두 Decimal 로 하고, 응답 직전에만 float 로 변환합니다. (margin.md §4.0)
 - 현재 구현 범위: Master Data·GET master (§8.2 0~1단계), Tab 1 수량별 단가·마진 (2단계),
-  Tab 2 물류·인코텀즈·환율·스트레스·역제안 (3~5단계)
+  Tab 2 물류·인코텀즈·환율·스트레스·역제안 (3~5단계), Tab 3 PI 미리보기·PDF (10~11단계)
 """
 
+import io
 import json
 import logging
 import os
+import re
 import threading
 import time
 import urllib.parse
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal, InvalidOperation
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 
-from flask import current_app, jsonify
+from flask import Response, current_app, jsonify
 
 KST = timezone(timedelta(hours=9), "KST")
 
@@ -1550,3 +1552,366 @@ def reverse_counter_offer(payload):
         "quantity_guide": search_required_qty(price, fx_rate, tier_req["cost"], logistics_req, target, minimum),
     }
     return data, warnings
+
+
+# ---------------------------------------------------------------------------
+# Tab 3 — 견적서(PI) (margin.md §3.1.7, §4.6, §6.4.7~6.4.8, §6.6, §7.5)
+# ---------------------------------------------------------------------------
+
+PI_ALLOWED_EXTRA_CHARS = set("€£¥®±")
+PI_NO_PATTERN = re.compile(r"^[A-Za-z0-9\-_/]{1,40}$")
+PI_SWIFT_PATTERN = re.compile(r"^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$")
+PI_HS_PATTERN = re.compile(r"^\d{4}(\.\d{2}(\d{2,4})?)?$")
+PI_EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+PI_MAX_EXTRA_ITEMS = 10
+PI_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+_ONES = ["ZERO", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "ELEVEN",
+         "TWELVE", "THIRTEEN", "FOURTEEN", "FIFTEEN", "SIXTEEN", "SEVENTEEN", "EIGHTEEN", "NINETEEN"]
+_TENS = ["", "", "TWENTY", "THIRTY", "FORTY", "FIFTY", "SIXTY", "SEVENTY", "EIGHTY", "NINETY"]
+_SCALES = [(10 ** 9, "BILLION"), (10 ** 6, "MILLION"), (10 ** 3, "THOUSAND")]
+
+
+class MarginPdfUnavailableError(Exception):
+    """xhtml2pdf 미설치 → HTTP 501 (프론트는 인쇄 흐름으로 대체)"""
+
+
+def _words_below_thousand(n):
+    words = []
+    if n >= 100:
+        words += [_ONES[n // 100], "HUNDRED"]
+        n %= 100
+    if n >= 20:
+        words.append(_TENS[n // 10] + ("-" + _ONES[n % 10] if n % 10 else ""))
+    elif n > 0 or not words:
+        words.append(_ONES[n])
+    return words
+
+
+def _integer_to_words(n):
+    """0 ≤ n < 10^12 정수 → 영문 대문자. 예: 9380 → NINE THOUSAND THREE HUNDRED EIGHTY"""
+    if n == 0:
+        return "ZERO"
+    words = []
+    for scale, name in _SCALES:
+        if n >= scale:
+            words += _words_below_thousand(n // scale) + [name]
+            n %= scale
+    if n:
+        words += _words_below_thousand(n)
+    return " ".join(words)
+
+
+def amount_to_words(amount, currency):
+    """PI 영문 금액. 예: 9380.00 USD → SAY US DOLLARS NINE THOUSAND THREE HUNDRED EIGHTY AND CENTS ZERO ONLY (§4.6)"""
+    info = CURRENCIES[currency]
+    value = round_to(amount, info["amount_decimals"])
+    integer = int(value)
+    text = f"SAY {info['words']} {_integer_to_words(integer)}"
+    if info["amount_decimals"] > 0:
+        cents = int((value - integer) * 100)
+        text += f" AND CENTS {_integer_to_words(cents)}"
+    return text + " ONLY"
+
+
+def _is_english(text):
+    return all(32 <= ord(ch) < 127 or ch in "\r\n\t" or ch in PI_ALLOWED_EXTRA_CHARS for ch in text)
+
+
+def _parse_date(value):
+    try:
+        return date.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _pi_date(value):
+    """PI 표기용 날짜 — 로케일에 영향받지 않도록 월 이름을 직접 씁니다. 예: Sep 23, 2026"""
+    return f"{PI_MONTHS[value.month - 1]} {value.day:02d}, {value.year}"
+
+
+def _pi_money(value, currency, kind="amount"):
+    """PI 금액 표기(통화 코드 없이 숫자만). 예: 9,380.00 / 1.876"""
+    places = CURRENCIES[currency]["price_decimals" if kind == "price" else "amount_decimals"]
+    return f"{round_to(value, places):,.{places}f}"
+
+
+class _PiReader:
+    """PI 입력 필드 읽기 — 영문 검사를 먼저 모아 NON_ENGLISH_TEXT 를 대표 오류로 만듭니다."""
+
+    def __init__(self, strict):
+        self.strict = strict
+        self.english = _Errors()
+        self.errors = _Errors()
+
+    def text(self, source, key, field, label, *, required=False, max_len=120, pattern=None, pattern_msg=None):
+        value = str(source.get(key) or "").strip()
+        if not value:
+            if required and self.strict:
+                self.errors.add("REQUIRED_FIELD", field, f"{label}을(를) 입력해 주세요")
+            return ""
+        if not _is_english(value):
+            self.english.add("NON_ENGLISH_TEXT", field, f"{label}은(는) 영문으로 입력해 주세요")
+            return value
+        if len(value) > max_len:
+            self.errors.add("OUT_OF_RANGE", field, f"{label}은(는) {max_len}자 이내로 입력해 주세요")
+        elif pattern and not pattern.match(value):
+            self.errors.add("OUT_OF_RANGE", field, pattern_msg or f"{label} 형식이 올바르지 않아요")
+        return value
+
+    def raise_if_any(self):
+        merged = _Errors()
+        for source in (self.english, self.errors):  # 영문 오류를 먼저 넣어 대표 코드가 되게 함
+            for field, message in source.fields.items():
+                merged.add(source.code, field, message)
+        if self.english.code:
+            merged.message = "견적서는 영문으로 작성해 주세요"
+        merged.raise_if_any()
+
+
+def validate_pi(payload, *, strict=True):
+    """render-pi / export-pi-pdf 요청 검증 (§3.1.7, §7.5)
+
+    strict=False(미리보기)는 필수값 누락만 허용하고 영문·형식·날짜 검사는 그대로 합니다.
+    """
+    reader = _PiReader(strict)
+    errors = reader.errors
+    bound = payload.get("bound") if isinstance(payload.get("bound"), dict) else {}
+    pi = payload.get("pi") if isinstance(payload.get("pi"), dict) else {}
+    buyer = pi.get("buyer") if isinstance(pi.get("buyer"), dict) else {}
+    seller = pi.get("seller") if isinstance(pi.get("seller"), dict) else {}
+    bank = pi.get("bank") if isinstance(pi.get("bank"), dict) else {}
+
+    # 시뮬레이션 연동 값 (Tab 1·2)
+    product_name = reader.text(bound, "product_name", "bound.product_name", "제품명", max_len=80)
+    if not product_name and strict:
+        errors.add("REQUIRED_FIELD", "bound.product_name", "Tab 1에서 제품명을 영문으로 입력해 주세요")
+    qty = to_quantity(bound.get("qty"))
+    if qty is None or not MARGIN_MOQ <= qty <= MARGIN_MAX_QTY:
+        errors.add("MOQ_VIOLATION", "bound.qty", f"수량은 {MARGIN_MOQ:,}~{MARGIN_MAX_QTY:,}ea 사이여야 해요")
+    unit_price = to_decimal(bound.get("unit_price"), "bound.unit_price", errors, label="단가",
+                            min_value=Decimal("0.0001"), max_value=Decimal("100000"))
+    currency = _enum(bound.get("currency"), CURRENCIES, "bound.currency", errors, "통화")
+    incoterm = _enum(bound.get("incoterm"), INCOTERMS, "bound.incoterm", errors, "인코텀즈")
+    mode = bound.get("transport_mode") if bound.get("transport_mode") in TRANSPORT_MODES else None
+    named_place = reader.text(bound, "named_place", "bound.named_place", "지정 장소", required=True,
+                              max_len=MAX_NAMED_PLACE_LEN)
+    volume = to_decimal(bound.get("volume_ml"), "bound.volume_ml", errors, label="용량",
+                        min_value=Decimal(0), max_value=Decimal(5000), required=False)
+    carton_raw = bound.get("carton") if isinstance(bound.get("carton"), dict) else None
+
+    # PI 기본
+    pi_no = reader.text(pi, "pi_no", "pi.pi_no", "PI 번호", required=True, max_len=40, pattern=PI_NO_PATTERN,
+                        pattern_msg="PI 번호는 영문·숫자와 - _ / 만 쓸 수 있어요")
+    issue = _parse_date(pi.get("issue_date"))
+    validity = _parse_date(pi.get("validity_date"))
+    shipment = _parse_date(pi.get("shipment_date")) if pi.get("shipment_date") else None
+    if issue is None:
+        errors.add("INVALID_DATE", "pi.issue_date", "발행일을 입력해 주세요")
+    if validity is None:
+        errors.add("INVALID_DATE", "pi.validity_date", "유효기간을 입력해 주세요")
+    elif issue and validity < issue:
+        errors.add("INVALID_DATE", "pi.validity_date", "유효기간은 발행일 이후여야 해요")
+    if pi.get("shipment_date") and shipment is None:
+        errors.add("INVALID_DATE", "pi.shipment_date", "선적 예정일 형식이 올바르지 않아요")
+    elif shipment and issue and shipment < issue:
+        errors.add("INVALID_DATE", "pi.shipment_date", "선적 예정일은 발행일 이후여야 해요")
+
+    buyer_info = {
+        "company": reader.text(buyer, "company", "pi.buyer.company", "바이어 회사명", required=True),
+        "country": reader.text(buyer, "country", "pi.buyer.country", "바이어 국가", required=True, max_len=60),
+        "address": reader.text(buyer, "address", "pi.buyer.address", "바이어 주소", max_len=300),
+        "contact": reader.text(buyer, "contact", "pi.buyer.contact", "바이어 담당자", max_len=80),
+        "email": reader.text(buyer, "email", "pi.buyer.email", "바이어 이메일", max_len=120, pattern=PI_EMAIL_PATTERN,
+                             pattern_msg="이메일 형식이 올바르지 않아요"),
+    }
+    seller_info = {
+        "company": reader.text(seller, "company", "pi.seller.company", "매도인 회사명", required=True),
+        "address": reader.text(seller, "address", "pi.seller.address", "매도인 주소", max_len=300),
+        "contact": reader.text(seller, "contact", "pi.seller.contact", "매도인 담당자", max_len=120),
+    }
+    bank_info = {
+        "name": reader.text(bank, "name", "pi.bank.name", "은행명", required=True),
+        "swift": reader.text(bank, "swift", "pi.bank.swift", "SWIFT 코드", required=True, max_len=11,
+                             pattern=PI_SWIFT_PATTERN, pattern_msg="SWIFT 코드는 영문 대문자·숫자 8자리 또는 11자리예요"),
+        "account": reader.text(bank, "account", "pi.bank.account", "계좌번호", required=True, max_len=40),
+        "beneficiary": reader.text(bank, "beneficiary", "pi.bank.beneficiary", "예금주", required=True),
+    }
+
+    payment = pi.get("payment_terms") or DEFAULT_PAYMENT_TERMS
+    if payment not in PAYMENT_TERMS:
+        errors.add("OUT_OF_RANGE", "pi.payment_terms", "결제 조건 값이 올바르지 않아요")
+    port_loading = reader.text(pi, "port_loading", "pi.port_loading", "선적항", required=True, max_len=80)
+    port_discharge = reader.text(pi, "port_discharge", "pi.port_discharge", "도착항", required=True, max_len=80)
+    lead_time = to_quantity(pi.get("lead_time_days")) if pi.get("lead_time_days") not in (None, "") else PI_LEAD_TIME_DAYS_DEFAULT
+    if lead_time is None or not 1 <= lead_time <= 365:
+        errors.add("OUT_OF_RANGE", "pi.lead_time_days", "생산 리드타임은 1~365일 사이로 입력해 주세요")
+    hs_code = reader.text(pi, "hs_code", "pi.hs_code", "HS Code", max_len=12, pattern=PI_HS_PATTERN,
+                          pattern_msg="HS Code 형식이 올바르지 않아요 (예: 3304.99)") or PI_HS_CODE_DEFAULT
+    remarks = reader.text(pi, "remarks", "pi.remarks", "비고", max_len=1000)
+
+    extra_raw = pi.get("extra_items") or []
+    extra_items = []
+    if not isinstance(extra_raw, list) or len(extra_raw) > PI_MAX_EXTRA_ITEMS:
+        errors.add("OUT_OF_RANGE", "pi.extra_items", f"추가 품목은 최대 {PI_MAX_EXTRA_ITEMS}개까지 넣을 수 있어요")
+        extra_raw = []
+    for i, item in enumerate(extra_raw):
+        item = item if isinstance(item, dict) else {}
+        desc = reader.text(item, "description", f"pi.extra_items[{i}].description", f"추가 품목 {i + 1} 설명",
+                           required=True)
+        item_qty = to_quantity(item.get("qty"))
+        if item_qty is None or not 1 <= item_qty <= MARGIN_MAX_QTY:
+            errors.add("OUT_OF_RANGE", f"pi.extra_items[{i}].qty", f"추가 품목 {i + 1} 수량은 1 이상 정수로 입력해 주세요")
+        price = to_decimal(item.get("unit_price"), f"pi.extra_items[{i}].unit_price", errors,
+                           label=f"추가 품목 {i + 1} 단가", min_value=Decimal(0), max_value=Decimal("100000"),
+                           default=Decimal(0))
+        if desc or not reader.strict:
+            extra_items.append({"description": desc, "qty": item_qty or 0, "unit_price": price or Decimal(0)})
+
+    reader.raise_if_any()
+    return {
+        "bound": {"product_name": product_name, "volume_ml": volume, "qty": qty, "unit_price": unit_price,
+                  "currency": currency, "incoterm": incoterm, "named_place": named_place, "transport_mode": mode,
+                  "carton": carton_raw},
+        "pi_no": pi_no, "issue_date": issue, "validity_date": validity, "shipment_date": shipment,
+        "buyer": buyer_info, "seller": seller_info, "bank": bank_info, "payment_terms": payment,
+        "port_loading": port_loading, "port_discharge": port_discharge, "lead_time_days": lead_time,
+        "hs_code": hs_code, "remarks": remarks, "extra_items": extra_items,
+        "version": str(payload.get("version") or "1.0")[:10],
+    }
+
+
+def _pi_packing(carton_raw, qty, mode):
+    """PI 포장 내역 — 카톤 규격이 있으면 서버에서 다시 계산 (없거나 잘못되면 None)."""
+    if not carton_raw or not mode:
+        return None
+    try:
+        req, _ = validate_logistics_request({"qty": qty, "carton": carton_raw, "transport_mode": mode,
+                                             "dest_region": next(iter(REGIONS)), "incoterm": "EXW", "usd_rate": 1},
+                                            require_prices=False)
+    except MarginValidationError:
+        return None
+    p = calc_packing(req["carton"], qty, mode)
+    return {
+        "cartons": p["cartons"],
+        "units_per_carton": req["carton"]["units_per_carton"],
+        "last_carton_units": p["last_carton_units"],
+        "gross_weight_kg": f"{round_to(p['gross_weight_kg'], 1):,.1f}",
+        "cbm": f"{round_to(p['cbm'], 3):,.3f}",
+    }
+
+
+def build_pi_context(payload, *, strict=True):
+    """PI 템플릿 변수. 금액은 서버에서 다시 계산하고, 원가·마진·환율 출처는 넣지 않습니다. (§4.6, §6.6)"""
+    req = validate_pi(payload, strict=strict)
+    b = req["bound"]
+    currency = b["currency"]
+    amount_places = CURRENCIES[currency]["amount_decimals"]
+
+    main_amount = round_to(b["unit_price"] * b["qty"], amount_places)                       # A_main
+    description = b["product_name"]
+    if b["volume_ml"] and "ml" not in description.lower():  # 제품명에 용량이 없을 때만 덧붙임
+        description += f" ({_fmt(b['volume_ml'])} ml)"
+    lines = [{"no": 1, "description": description, "detail": "Cosmetic product", "hs_code": req["hs_code"],
+              "qty": f"{b['qty']:,}", "unit_price": _pi_money(b["unit_price"], currency, "price"),
+              "amount": _pi_money(main_amount, currency)}]
+    extra_total = Decimal(0)
+    for i, item in enumerate(req["extra_items"], start=2):
+        amount = round_to(item["unit_price"] * item["qty"], amount_places)
+        extra_total += amount
+        lines.append({"no": i, "description": item["description"] or "—", "detail": "",
+                      "hs_code": req["hs_code"], "qty": f"{item['qty']:,}",
+                      "unit_price": "FOC" if item["unit_price"] == 0 else _pi_money(item["unit_price"], currency, "price"),
+                      "amount": _pi_money(amount, currency)})
+    total = main_amount + extra_total                                                        # A_total
+    terms = PAYMENT_TERMS[req["payment_terms"]]
+    deposit = round_to(total * pct(terms["deposit_pct"]), amount_places)                      # A_dep
+    balance = total - deposit                                                                # A_bal
+
+    placeholder = "—"
+    issue, validity = req["issue_date"], req["validity_date"]
+    fmt_date = lambda d: _pi_date(d) if d else placeholder  # noqa: E731
+    term_values = {
+        "validity_date": fmt_date(validity),
+        "lead_time_days": req["lead_time_days"],
+        "moq": f"{MARGIN_MOQ:,}",
+        "incoterm": b["incoterm"],
+        "named_place": b["named_place"] or placeholder,
+        "currency": currency,
+    }
+    return {
+        "pi_no": req["pi_no"] or placeholder,
+        "version": req["version"],
+        "issue_date": fmt_date(issue),
+        "validity_date": fmt_date(validity),
+        "seller": {k: v or placeholder for k, v in req["seller"].items()},
+        "buyer": {k: v or placeholder for k, v in req["buyer"].items()},
+        "bank": {k: v or placeholder for k, v in req["bank"].items()},
+        "shipment": {
+            "port_loading": req["port_loading"] or placeholder,
+            "port_discharge": req["port_discharge"] or placeholder,
+            "incoterm": f"{b['incoterm']} {b['named_place']}".strip(),
+            "shipment_date": fmt_date(req["shipment_date"]) if req["shipment_date"]
+            else f"Within {req['lead_time_days']} days after deposit",
+            "transport_mode": {"SEA_LCL": "By Sea (LCL)", "SEA_FCL20": "By Sea (FCL 20ft)",
+                               "SEA_FCL40": "By Sea (FCL 40ft)", "AIR": "By Air"}.get(b["transport_mode"], placeholder),
+        },
+        "currency": currency,
+        "lines": lines,
+        "total_label": f"TOTAL {b['incoterm']} {b['named_place']}".strip(),
+        "total": _pi_money(total, currency),
+        "total_words": amount_to_words(total, currency),
+        "payment_text": terms["pi_text"],
+        "deposit_pct": _fmt(terms["deposit_pct"]),
+        "balance_pct": _fmt(100 - terms["deposit_pct"]),
+        "deposit": _pi_money(deposit, currency) if terms["deposit_pct"] > 0 else None,
+        "balance": _pi_money(balance, currency),
+        "packing": _pi_packing(b["carton"], b["qty"], b["transport_mode"]),
+        "terms": [t.format(**term_values) for t in PI_STANDARD_TERMS],
+        "remarks": req["remarks"],
+        "_total_display": f"{currency} {_pi_money(total, currency)}",  # 응답 헤더용 (템플릿에서 쓰지 않음)
+    }
+
+
+def render_pi_pdf(html):
+    """HTML → PDF bytes (xhtml2pdf). 미설치 시 MarginPdfUnavailableError (§6.4.8)"""
+    try:
+        from xhtml2pdf import pisa
+    except ImportError as exc:
+        raise MarginPdfUnavailableError() from exc
+    buffer = io.BytesIO()
+    result = pisa.CreatePDF(src=html, dest=buffer, encoding="utf-8")
+    if result.err:
+        raise RuntimeError(f"xhtml2pdf error count={result.err}")
+    return buffer.getvalue()
+
+
+def _safe_filename(text):
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", text).strip("-") or "PI"
+
+
+def handle_pi(payload, render, *, as_pdf=False):
+    """POST render-pi / export-pi-pdf 공통 처리. render(context) → HTML 문자열 (§6.4.7, §6.4.8)"""
+    if not isinstance(payload, dict):
+        return jsonify(_error_body("INVALID_JSON", "요청 형식이 올바르지 않아요")), 400
+    strict = as_pdf or payload.get("mode") != "preview"
+    try:
+        context = build_pi_context(payload, strict=strict)
+        html = render(context)
+        headers = {"X-Margin-PI-Total": context["_total_display"]}
+        if not as_pdf:
+            return Response(html, headers=headers, content_type="text/html; charset=utf-8")
+        pdf = render_pi_pdf(html)
+    except MarginValidationError as exc:
+        return jsonify(_error_body(exc.code, exc.message, exc.fields)), 422
+    except MarginPdfUnavailableError:
+        return jsonify(_error_body("PDF_ENGINE_UNAVAILABLE",
+                                   "PDF 엔진이 없어 인쇄 창으로 열어요. 인쇄 대상에서 'PDF로 저장'을 선택해 주세요")), 501
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("margin PI render error")
+        code, message = ("PDF_RENDER_FAILED", "PDF를 만들지 못했어요. 인쇄 창에서 'PDF로 저장'을 이용해 주세요") if as_pdf \
+            else ("INTERNAL_ERROR", "견적서를 만들지 못했어요. 잠시 후 다시 시도해 주세요")
+        return jsonify(_error_body(code, message)), 500
+    filename = f"PI_{_safe_filename(context['pi_no'])}_v{_safe_filename(context['version'])}.pdf"
+    return Response(pdf, mimetype="application/pdf",
+                    headers={**headers, "Content-Disposition": f'attachment; filename="{filename}"'})
