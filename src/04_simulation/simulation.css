@@ -33,7 +33,7 @@
 .simulation-hud .stat-tile > span { display: flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 500; letter-spacing: -.2px; color: #64748b; white-space: nowrap; }
 .simulation-hud strong { font-size: 16px; font-weight: var(--font-weight-bold); color: #1e293b; font-variant-numeric: tabular-nums; white-space: nowrap; line-height: 1.3; letter-spacing: -.2px; }
 #simulation-texture { padding: 4px 9px; max-width: 100%; font-size: 12px; font-weight: 600; line-height: 1.3; white-space: normal; word-break: keep-all; letter-spacing: -.3px; border: 1px solid #dbeafe; border-radius: 12px; color: #2563eb; background: #eff6ff; }
-.simulation-metric-value { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; }
+.simulation-metric-value { display: flex; flex-wrap: nowrap; align-items: baseline; gap: 4px; }
 .simulation-metric-value small { font-size: 12px; font-weight: var(--font-weight-regular); color: #94a3b8; }
 .simulation-hud meter { appearance: none; display: block; width: 100%; height: 3px; border: 0; border-radius: var(--radius-pill); background: #e2e8f0; }
 .simulation-hud meter::-webkit-meter-bar { height: 3px; border: 0; border-radius: var(--radius-pill); background: #e2e8f0; }
@@ -87,22 +87,21 @@
 .simulation-slider input[type=range]:hover::-moz-range-thumb, .simulation-slider input[type=range]:active::-moz-range-thumb { transform: scale(1.1); }
 .simulation-slider input[type=range]:focus-visible { outline: 2px solid var(--color-primary-light); outline-offset: 2px; border-radius: var(--radius-xs); }
 .simulation-packaging select { width: auto; max-width: 48%; }
-.simulation-status-card { --diagnosis-tone: #2563eb; --diagnosis-soft: #eff6ff; --diagnosis-border: #bfdbfe; display: grid; grid-template-columns: 100px minmax(0, 1fr); align-items: center; gap: 16px; height: 100%; }
+.simulation-status-card { --diagnosis-tone: #2563eb; --diagnosis-soft: #eff6ff; --diagnosis-border: #bfdbfe; display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 14px; height: 100%; }
 .simulation-status-card[data-state=caution] { --diagnosis-tone: #b45309; --diagnosis-soft: #fffbeb; --diagnosis-border: #fde68a; }
 .simulation-status-card[data-state=incompatible] { --diagnosis-tone: #be123c; --diagnosis-soft: #fff1f2; --diagnosis-border: #fecdd3; }
-.simulation-score-column { display: flex; flex-direction: column; align-items: center; gap: 7px; }
-.simulation-score-ring { width: 78px; aspect-ratio: 1; padding: 5px; border-radius: 50%; background: conic-gradient(var(--diagnosis-tone) var(--simulation-score, 0%), #e8edf3 0); }
+.simulation-score-ring { width: 64px; aspect-ratio: 1; padding: 5px; border-radius: 50%; background: conic-gradient(var(--diagnosis-tone) var(--simulation-score, 0%), #e8edf3 0); }
 .simulation-score-ring > div { height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 50%; background: white; }
-#simulation-status-score { font-size: 25px; line-height: 1.1; font-weight: var(--font-weight-bold); font-variant-numeric: tabular-nums; color: var(--diagnosis-tone); }
-.simulation-score-ring small, .simulation-score-caption { font-size: 10px; color: #64748b; }
-.simulation-state-chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--diagnosis-border); border-radius: 6px; padding: 3px 9px; color: var(--diagnosis-tone); background: var(--diagnosis-soft); font-size: 12px; }
-.simulation-diagnosis { min-width: 0; padding-left: 16px; border-left: 1px solid #e2e8f0; }
-.simulation-diagnosis-heading { display: block; font-size: 11px; font-weight: var(--font-weight-bold); color: var(--diagnosis-tone); margin-bottom: 6px; }
-.simulation-diagnosis p { font-size: 13px; line-height: 1.6; color: var(--color-text-body); word-break: keep-all; }
-.simulation-recommendation { display: flex; flex-direction: column; align-items: start; gap: 6px; margin-top: 12px; }
-.simulation-recommendation > span { font-size: 11px; }
+#simulation-status-score { font-size: 21px; line-height: 1.1; font-weight: var(--font-weight-bold); font-variant-numeric: tabular-nums; color: var(--diagnosis-tone); }
+.simulation-score-ring small { font-size: 9.5px; color: #64748b; }
+.simulation-state-chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--diagnosis-border); border-radius: var(--radius-pill); padding: 1px 8px; color: var(--diagnosis-tone); background: var(--diagnosis-soft); font-size: 11px; line-height: 1.5; }
+.simulation-diagnosis { min-width: 0; padding-left: 14px; border-left: 1px solid #e2e8f0; }
+.simulation-diagnosis-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 11px; font-weight: var(--font-weight-bold); color: var(--diagnosis-tone); }
+.simulation-diagnosis p { font-size: 13px; line-height: 1.5; color: var(--color-text-body); word-break: keep-all; }
+.simulation-recommendation { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 8px; }
+.simulation-recommendation > span { flex-shrink: 0; font-size: 11px; }
 .simulation-recommendations { display: flex; flex-wrap: wrap; gap: 5px; }
-.simulation-pack-option { height: auto; min-height: 28px; padding: 5px 8px; gap: 5px; font-size: 11px; border-radius: 20px; border: 1px solid #dce5ee; transition: border-color .15s, background .15s; }
+.simulation-pack-option { height: auto; min-height: 26px; padding: 3px 9px; gap: 5px; font-size: 11px; border-radius: 20px; border: 1px solid #dce5ee; transition: border-color .15s, background .15s; }
 .simulation-pack-option:hover { border-color: #93c5fd; background: #eff6ff; }
 .simulation-pack-option[aria-pressed=true] { border-color: #93c5fd; }
 .simulation-pack-option svg { width: 14px; height: 14px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; }
@@ -128,7 +127,20 @@
 .simulation-controls .simulation-help-button:hover, .simulation-controls .simulation-help-button:focus-visible, .simulation-controls .simulation-help-button[aria-expanded=true] { color: #64748b; }
 /* Desktop: available viewport height is assigned to the preview, never clipped. */
 @media (min-width: 1200px) and (min-height: 700px) {
-  .simulation-page { height: calc(100dvh - var(--layout-page-padding-y) - var(--layout-footer-height)); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: var(--space-3); }
+  /* 상단 시뮬레이션 8 : 하단 용기·제안 2. 하단 행은 용기 적합성 카드가 필요로 하는 높이 아래로 줄지 않습니다. */
+  .simulation-page { height: calc(100dvh - var(--layout-page-padding-y) - var(--layout-footer-height)); display: grid; grid-template-rows: auto minmax(0, 8fr) minmax(max-content, 2fr); gap: var(--space-3); overflow: clip; overflow-clip-margin: var(--space-3); }
+  .simulation-bottom-grid .card-header { padding-top: 10px; }
+  .simulation-bottom-grid .card-header + .card-body { padding-top: 8px; padding-bottom: 10px; }
+  .simulation-bottom-grid .card-title { font-size: var(--font-size-body); }
+  .simulation-bottom-grid .form-control-sm, .simulation-bottom-grid .btn-sm { height: 32px; }
+  /* 제안 가이드는 행 높이 계산에서 빠지고(contain: size) 남는 높이 안에서 스크롤합니다. */
+  .simulation-pitch { contain: size; }
+  .simulation-pitch .card-body { min-height: 0; overflow-y: auto; }
+  .simulation-report-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+  .simulation-report + .simulation-report { padding-top: 0; padding-left: var(--space-4); border-top: 0; border-left: var(--border-default); }
+  .simulation-report h3 { font-size: 13px; }
+  .simulation-report p { font-size: 13px; line-height: 1.45; }
+  .simulation-pitch .card-body { padding-bottom: 6px; }
   .simulation-page .page-header, .simulation-bottom-grid { margin: 0; }
   .simulation-top-grid { min-height: 0; }
   .simulation-preview { min-height: 0; }
@@ -266,3 +278,5 @@
 @media (max-width: 760px) {
   .simulation-brief-drop { min-height: 220px; }
 }
+/* 1280px 이하처럼 배합 조절 패널이 아주 좁으면 농도 단위(ppm)를 다음 줄로 내립니다. */
+@container mix (max-width: 200px) { .simulation-metric-value { flex-wrap: wrap; } }
