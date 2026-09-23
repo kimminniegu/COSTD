@@ -42,6 +42,13 @@
 .requisition-panel-actions > p { text-align: left; }
 .requisition-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .requisition-options { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.requisition-choice-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.requisition-choice { position: relative; cursor: pointer; }
+.requisition-choice input { position: absolute; opacity: 0; pointer-events: none; }
+.requisition-choice span { display: flex; align-items: center; justify-content: center; min-height: 56px; padding: 0 var(--space-4); border: 1px solid transparent; border-radius: var(--radius-md); background: var(--color-background); color: var(--color-text-body); font-weight: var(--font-weight-bold); transition: background var(--transition-base), border-color var(--transition-base), color var(--transition-base), box-shadow var(--transition-base); }
+.requisition-choice:hover span { background: var(--color-border-strong); color: var(--color-text-primary); }
+.requisition-choice.is-selected span { border-color: var(--color-primary-bright); background: var(--color-primary-soft); color: var(--color-primary); }
+.requisition-choice input:focus-visible + span { border-color: var(--color-primary-bright); box-shadow: var(--shadow-focus); }
 .requisition-drop { min-height: 280px; gap: var(--space-4); justify-content: center; }
 .requisition-drop:focus-within, .requisition-drop:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
 .requisition-center { text-align: center; }
@@ -52,6 +59,7 @@
 .requisition-summary dd { margin: 0; font-weight: var(--font-weight-bold); text-align: right; }
 .requisition-panel-section { padding-top: var(--space-6); border-top: var(--border-default); overflow-wrap: anywhere; }
 .requisition-panel-actions { display: grid; gap: var(--space-3); }
+.requisition-pdf-actions { display: grid; gap: var(--space-2); }
 .requisition-loading { min-height: 410px; text-align: center; }
 .requisition-chip-entry { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
 .requisition-chip-entry input { min-width: 0; flex: 1; }

@@ -2,7 +2,8 @@
 
 SECTIONS = [
     ("01 기본정보", [
-        ("customer", "고객사", "text"), ("product_name", "제품명", "text"),
+        ("customer", "고객사", "text"), ("product_name", "품명(가칭)", "text"),
+        ("sample_request_type", "샘플 구분", "sample_type"),
         ("product_type", "제품 유형", "type"), ("target_price_tier", "목표 가격대", "tier"),
         ("export_countries", "수출 대상국", "list"),
         ("buyer_prohibited_ingredients", "수출 금지 원료", "list"),

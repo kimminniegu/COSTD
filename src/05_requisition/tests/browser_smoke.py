@@ -88,6 +88,7 @@ def main():
             assert js('document.getElementById("requisition-input-customer").value') == "테스트 고객사"
             assert "미국" in js('document.getElementById("requisition-field-export_countries").textContent')
             fill("product_name", "<img src=x onerror=alert(1)> 테스트 제품")
+            fill("sample_request_type", "신규 샘플")
             fill("product_type", "기타")
             click("primary")
             assert js('document.activeElement.id') == "requisition-input-product_type_custom"
@@ -108,7 +109,7 @@ def main():
             assert js('document.getElementById("requisition-version") === null')
             # 인쇄 대화상자를 대신해 생성된 실제 iframe 문서의 최종값을 검증합니다.
             js('window.printWatch = new MutationObserver(() => {const f=document.querySelector(".requisition-print-frame");if(f){f.contentWindow.print=()=>{};}});printWatch.observe(document.body,{childList:true});')
-            click("primary")
+            click("pdf-internal")
             for _ in range(50):
                 if js('Boolean(document.querySelector(".requisition-print-frame")?.contentDocument?.body?.textContent.includes("최종 제품명"))'):
                     break

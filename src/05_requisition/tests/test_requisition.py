@@ -43,6 +43,7 @@ class RequisitionTest(unittest.TestCase):
     def test_full_schema_and_raw_data_are_separate(self):
         result = extracted()
         fields = {
+            "sample_request_type": "신규 샘플",
             "benchmark_product_name": "Reference Product",
             "product_development.texture": "가벼운 파우더",
             "product_development.other_requirements": "충진 시 기포 최소화",

@@ -30,7 +30,7 @@
   const blank = () => ({
     document_id: crypto.randomUUID ? crypto.randomUUID() : "request-" + Date.now(),
     creation_method: "manual", customer: "", source_language: "", target_language: $("target-language").value,
-    product_name: "", product_type: "", product_type_custom: "", target_price_tier: "",
+    product_name: "", sample_request_type: "", product_type: "", product_type_custom: "", target_price_tier: "",
     export_countries: [], buyer_prohibited_ingredients: [], regulatory_restricted_ingredients: [],
     benchmark_product_name: "", review_status: "needs_review",
     source_file: "", version: 1, field_provenance: [], raw_extracted_data: {}, reference_files: [],
@@ -44,7 +44,7 @@
     $("notice").hidden = !message;
   }
   function missing(data) {
-    return ["customer", "product_name", "product_type", "export_countries"].filter((key) =>
+    return ["customer", "product_name", "sample_request_type", "product_type", "export_countries"].filter((key) =>
       !filled(data[key]) || (key === "product_type" && data.product_type === "기타" && !filled(data.product_type_custom)));
   }
   function reviews(data) {
@@ -77,7 +77,7 @@
       (isCountry ? '<p class="form-help" id="requisition-country-help">목록에서 선택하거나, 없는 국가는 직접 입력한 뒤 Enter 또는 추가 버튼을 눌러 주세요.</p>' : "");
   }
   function field(key) {
-    const data = current(), required = ["customer", "product_name", "product_type", "export_countries"].includes(key);
+    const data = current(), required = ["customer", "product_name", "sample_request_type", "product_type", "export_countries"].includes(key);
     let control;
     if (!editing()) {
       let value = fieldValue(data, key);
@@ -90,6 +90,9 @@
       control = '<select class="form-control" id="requisition-input-product_type" data-field="product_type" aria-required="true"><option value="">선택하세요</option>' +
         types.map((value) => '<option value="' + value + '"' + (data[key] === value ? " selected" : "") + ">" + (value === "기타" ? "기타 / 직접 입력" : value) + "</option>").join("") +
         '</select><div id="requisition-custom-wrap" class="mt-4"' + (data.product_type === "기타" ? "" : " hidden") + '><label class="form-label" for="requisition-input-product_type_custom">제품 유형 직접 입력 *</label>' + input("product_type_custom", "제품 유형을 입력하세요") + "</div>";
+    } else if (key === "sample_request_type") {
+      control = '<div class="requisition-choice-buttons" role="radiogroup" aria-label="샘플 구분">' + ["신규 샘플", "개선 샘플"].map((value, index) =>
+        '<label class="requisition-choice' + (data[key] === value ? ' is-selected' : '') + '"><input type="radio"' + (index === 0 ? ' id="requisition-input-sample_request_type"' : '') + ' name="requisition-sample-type" data-field="sample_request_type" value="' + value + '"' + (data[key] === value ? ' checked' : '') + '><span>' + value + '</span></label>').join("") + "</div>";
     } else if (key === "target_price_tier") {
       control = '<div class="requisition-options" role="group" aria-label="목표 가격대">' + [["", "미정"], ...Object.entries(tiers)].map(([value, name]) =>
         '<label class="form-check"><input type="radio" name="requisition-tier" data-field="target_price_tier" value="' + value + '"' + (data[key] === value ? " checked" : "") + ">" + name + "</label>").join("") + "</div>";
@@ -176,6 +179,8 @@
     $("form-help").textContent = editing() ? "* 표시된 항목은 필수 입력이에요." : "개발에 필요한 핵심 정보를 확인해요.";
     $("secondary").textContent = state === "result" ? "수정" : state === "edit" ? "수정 취소" : "작성 취소";
     $("primary").textContent = state === "result" ? "PDF로 저장" : state === "edit" ? "수정 완료" : "작성 완료";
+    $("primary").hidden = state === "result";
+    $("pdf-actions").hidden = state !== "result";
     $("pdf-help").hidden = editing();
     updateSummary();
   }
@@ -217,6 +222,7 @@
     if (get(draft, key).length >= 50) return notice("한 항목에 최대 50개까지 추가할 수 있어요.");
     if (!get(draft, key).some((item) => item.toLocaleLowerCase() === value.toLocaleLowerCase())) get(draft, key).push(value);
     markEdited(key);
+    if (key === "sample_request_type") render();
     $("field-" + key).outerHTML = field(key);
     updateSummary();
     $("input-" + key).focus();
@@ -401,7 +407,7 @@
   });
   $("document").addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (state === "result") { await printPDF(); return; }
+    if (state === "result") { await printPDF("internal"); return; }
     // 추가 버튼을 누르지 않은 마지막 국가/원료도 완료 시 반영합니다.
     const pendingChips = chipFields.map((key) => [key, $("input-" + key).value.trim()]);
     for (const [key, value] of pendingChips) {
@@ -489,14 +495,17 @@
     event.preventDefault(); dragDepth = 0; $("drop").classList.remove("is-dragover");
     convert([...event.dataTransfer.files]);
   });
-  async function printPDF() {
+  async function printPDF(audience = "internal") {
     if (!saved || state !== "result") return;
     $("primary").disabled = true;
+    $("pdf-internal").disabled = true;
+    $("pdf-external").disabled = true;
     try {
       const data = clone(saved);
       const date = new Date(), datePart = [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("");
       const safePart = (value) => String(value || "Unknown").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "").replace(/\s+/g, "").slice(0, 70);
-      const filename = "DevelopmentRequest_" + safePart(data.customer) + "_" + safePart(data.product_name) + "_" + data.target_language.toUpperCase() + "_" + datePart + "_v" + data.version;
+      const internal = audience === "internal";
+      const filename = "DevelopmentRequest_" + safePart(data.customer) + "_" + safePart(data.product_name) + "_" + (internal ? "Internal" : "External") + "_" + datePart + "_v" + data.version;
       const pdfValue = (key) => {
         const provenance = data.field_provenance.find((item) => item.field_key === key);
         if (provenance?.review_status === "not_applicable") return "해당 없음";
@@ -508,20 +517,21 @@
         ].filter(Boolean).join("\n") || pdfValue("buyer_prohibited_ingredients");
       const issuedDate = [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join(".");
       const row = (label, value) => '<tr><th scope="row">' + escape(label) + '</th><td>' + escape(value) + '</td></tr>';
+      const externalHiddenFields = new Set(["customer", "target_price_tier"]);
       const printHtml = '<main><header class="document-header"><div class="brand">COSTD <span>COSMOA</span></div>' +
-        '<p class="document-type">연구소 전달용</p><h1>제품 개발 요청서</h1><p class="subtitle">PRODUCT DEVELOPMENT REQUEST</p></header>' +
+        '<p class="document-type">' + (internal ? '사내보관용' : '외부 전달용') + '</p><h1>제품 개발 요청서</h1><p class="subtitle">PRODUCT DEVELOPMENT REQUEST</p></header>' +
         '<table class="document-meta"><caption>문서 정보</caption><tbody>' +
-        '<tr><th scope="row">문서 ID</th><td colspan="3">' + escape(data.document_id || "미지정") + '</td></tr>' +
+        (internal ? '<tr><th scope="row">문서 ID</th><td colspan="3">' + escape(data.document_id || "미지정") + '</td></tr>' : '') +
         '<tr><th scope="row">출력일</th><td>' + issuedDate + '</td><th scope="row">문서 버전</th><td>v' + escape(data.version) + '</td></tr>' +
-        '<tr><th scope="row">수신</th><td>연구소</td><th scope="row">작성 방식</th><td>' + escape(methods[data.creation_method] || "미지정") + '</td></tr></tbody></table>' +
+        (internal ? '<tr><th scope="row">보관 구분</th><td>사내</td><th scope="row">작성 방식</th><td>' + escape(methods[data.creation_method] || "미지정") + '</td></tr>' : '<tr><th scope="row">발신</th><td colspan="3">COSTD · COSMOA</td></tr>') + '</tbody></table>' +
         sections.map(([title, fields], index) => '<section><h2>' + escape(title) + '</h2><table class="requirements"><colgroup><col class="label-column"><col></colgroup><thead><tr><th scope="col">항목</th><th scope="col">요청 내용</th></tr></thead><tbody>' +
-          fields.map(([key, label]) => row(label, key === "buyer_prohibited_ingredients" ? prohibitedIngredients : pdfValue(key))).join('') +
+          fields.filter(([key]) => internal || !externalHiddenFields.has(key)).map(([key, label]) => row(label, key === "buyer_prohibited_ingredients" ? prohibitedIngredients : pdfValue(key))).join('') +
           '</tbody></table></section>').join('') +
         '<section class="references"><h2>06 참고자료</h2>' + (referenceMarkup(data, true) || '<p class="empty-reference">등록된 참고자료 없음</p>') + '</section>' +
-        '<section class="review-signoff"><h2>연구소 검토</h2><table class="requirements"><colgroup><col class="label-column"><col></colgroup><tbody>' +
+        (internal ? '<section class="review-signoff"><h2>사내 검토</h2><table class="requirements"><colgroup><col class="label-column"><col></colgroup><tbody>' +
         row("검토 담당자 / 검토일", "담당자:                         검토일:          년       월       일") +
-        '<tr><th scope="row">검토 의견</th><td class="review-space"></td></tr></tbody></table></section>' +
-        '<footer><strong>COSTD · COSMOA</strong><span>수출 대상국별 규제 적합성은 별도 확인이 필요합니다.</span></footer></main>';
+        '<tr><th scope="row">검토 의견</th><td class="review-space"></td></tr></tbody></table></section>' : '') +
+        '<footer><strong>COSTD · COSMOA</strong><span>' + (internal ? '수출 대상국별 규제 적합성은 별도 확인이 필요합니다.' : '외부 전달용 · 무단 배포 금지') + '</span></footer></main>';
       const printStyles = `
         @page { size: A4; margin: 14mm 14mm 16mm; }
         * { box-sizing: border-box; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
@@ -573,8 +583,12 @@
       notice("인쇄 창을 열지 못했어요. 다시 시도해 주세요.");
     } finally {
       $("primary").disabled = false;
+      $("pdf-internal").disabled = false;
+      $("pdf-external").disabled = false;
     }
   }
+  $("pdf-internal").addEventListener("click", () => printPDF("internal"));
+  $("pdf-external").addEventListener("click", () => printPDF("external"));
   window.addEventListener("beforeunload", (event) => {
     if (saved || editing() || state === "loading" || originalFile) { event.preventDefault(); event.returnValue = ""; }
   });
