@@ -83,30 +83,20 @@ def dev_request():
 
 
 # [C] 원가 경쟁력 및 마진 시뮬레이션 — 접두사: /api/margin-calculator/...
-# ==============================================================================
-# [C] 원가 경쟁력 및 마진 시뮬레이션 – 접두사: /api/margin-calculator/...
-# ==============================================================================
+# 계산·검증 로직은 src/03_margin/service.py, 명세는 src/03_margin/margin.md §6
 import importlib
 margin_service = importlib.import_module("src.03_margin.service")
 
 
-@app.route("/api/margin-calculator/init", methods=["GET"])
-def margin_init():
-    return jsonify(margin_service.MARGIN_DATA)
+@app.route("/api/margin-calculator/master", methods=["GET"])
+def margin_get_master():
+    return margin_service.handle(margin_service.get_master_data, needs_payload=False)
 
 
-@app.route("/api/margin-calculator/simulate", methods=["POST"])
-def margin_simulate():
-    data = request.json or {}
-    result = margin_service.calculate_simulation(data)
-    return jsonify(result)
+@app.route("/api/margin-calculator/calculate-tiers", methods=["POST"])
+def margin_calculate_tiers():
+    return margin_service.handle(margin_service.calculate_tiers, request.get_json(silent=True))
 
-
-@app.route("/api/margin-calculator/quotations/save", methods=["POST"])
-def margin_save_quotation():
-    data = request.json or {}
-    _, history = margin_service.save_pi_version(data)
-    return jsonify({"success": True, "history": history})
 
 # [D] AI 제형/샘플 시뮬레이션 — 접두사: /api/ai-formulation/...
 

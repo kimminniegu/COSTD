@@ -10,23 +10,341 @@
 {% block content %}
 <div class="page-header">
   <div>
+    <p class="page-eyebrow">원가 · 마진 시뮬레이션</p>
     <h1 class="page-title">원가 경쟁력 및 마진 시뮬레이션</h1>
+    <p class="page-description">원가부터 수출 단가, 견적서 발행까지 한 번에 계산해요.</p>
   </div>
   <div class="page-actions">
     <a class="btn btn-surface" href="{{ url_for('home') }}">← 홈으로</a>
   </div>
 </div>
 
-<section class="section">
-  <div class="card">
+<!-- 서브 탭 + 확정 조건 요약 (margin.md §2.2) -->
+<section class="section" id="margin-context-section">
+  <div class="card" id="margin-context-card">
     <div class="card-body">
-      <div class="placeholder">
-        <p class="placeholder-title">원가 경쟁력 및 마진 시뮬레이션</p>
-        <p>이 영역은 margin.md를 기준으로 담당자가 구현합니다.</p>
+      <div class="tabs" id="margin-tabs" role="tablist">
+        <button type="button" class="tab is-active" id="margin-tab-btn-tier" role="tab" aria-selected="true" data-tab-target="margin-panel-tier">1. 수량별 단가·마진</button>
+        <button type="button" class="tab" id="margin-tab-btn-export" role="tab" aria-selected="false" data-tab-target="margin-panel-export" disabled title="먼저 수량 구간을 선택해 주세요">2. 수출 조건·환율·역제안</button>
+        <button type="button" class="tab" id="margin-tab-btn-pi" role="tab" aria-selected="false" data-tab-target="margin-panel-pi" disabled title="먼저 수출 조건을 계산해 주세요">3. 견적서(PI)·협상 히스토리</button>
+      </div>
+
+      <div class="grid grid-auto-sm mt-6" id="margin-summary-bar">
+        <div class="stat-tile" id="margin-summary-qty">
+          <span class="stat-tile__label">발주 수량</span>
+          <span class="stat-tile__value">—</span>
+        </div>
+        <div class="stat-tile" id="margin-summary-krw-price">
+          <span class="stat-tile__label">공급단가(EXW)</span>
+          <span class="stat-tile__value">—</span>
+        </div>
+        <div class="stat-tile" id="margin-summary-margin">
+          <span class="stat-tile__label">영업 마진율</span>
+          <span class="stat-tile__value">—</span>
+        </div>
+        <div class="stat-tile" id="margin-summary-incoterm">
+          <span class="stat-tile__label">인코텀즈</span>
+          <span class="stat-tile__value">—</span>
+        </div>
+        <div class="stat-tile" id="margin-summary-fx-price">
+          <span class="stat-tile__label">외화 단가</span>
+          <span class="stat-tile__value">—</span>
+        </div>
+        <div class="stat-tile" id="margin-summary-fx-rate">
+          <span class="stat-tile__label">적용 환율</span>
+          <span class="stat-tile__value">—</span>
+        </div>
       </div>
     </div>
   </div>
 </section>
+
+<!-- Tab 1 — 수량별 공급 단가 및 마진 시뮬레이터 (margin.md §2.3) -->
+<div class="tab-panel is-active" id="margin-panel-tier" role="tabpanel">
+  <div class="grid grid-2-1">
+    <div class="card" id="margin-cost-card">
+      <div class="card-header">
+        <div>
+          <h3 class="card-title">기본 제조원가</h3>
+          <p class="card-subtitle">MOQ 1,500ea 기준 개당 원가를 입력해 주세요</p>
+        </div>
+      </div>
+      <div class="card-body stack">
+        <div class="grid grid-2">
+          <div class="form-group">
+            <label class="form-label" for="margin-product-name">제품명</label>
+            <input class="form-control" type="text" id="margin-product-name" maxlength="80" placeholder="예: Hydra Essence 50ml">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="margin-product-volume">용량</label>
+            <div class="input-group">
+              <input type="number" id="margin-product-volume" min="0" max="5000" step="any" value="50">
+              <span class="input-group__suffix">ml</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="form-group">
+            <label class="form-label" for="margin-product-category">제형 카테고리</label>
+            <select class="form-control" id="margin-product-category"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="margin-moq">MOQ</label>
+            <div class="input-group">
+              <input type="text" id="margin-moq" value="1,500" readonly aria-readonly="true" aria-describedby="margin-moq-help">
+              <span class="input-group__suffix">ea</span>
+            </div>
+            <p class="form-help" id="margin-moq-help">MOQ는 1,500ea로 고정돼요</p>
+          </div>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="form-group">
+            <label class="form-label" for="margin-cost-bulk">① 벌크 (내용물 원료비) <span class="is-required">*</span></label>
+            <div class="input-group">
+              <input type="number" id="margin-cost-bulk" data-margin-cost="bulk" min="0" step="any" inputmode="decimal" placeholder="예: 850">
+              <span class="input-group__suffix">원/ea</span>
+            </div>
+            <p class="form-error" data-margin-error-for="margin-cost-bulk" hidden></p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="margin-cost-container">② 용기 (부자재비) <span class="is-required">*</span></label>
+            <div class="input-group">
+              <input type="number" id="margin-cost-container" data-margin-cost="container" min="0" step="any" inputmode="decimal" placeholder="예: 420">
+              <span class="input-group__suffix">원/ea</span>
+            </div>
+            <p class="form-error" data-margin-error-for="margin-cost-container" hidden></p>
+          </div>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="form-group">
+            <label class="form-label" for="margin-cost-packaging">③ 단상자·라벨·설명서 <span class="is-required">*</span></label>
+            <div class="input-group">
+              <input type="number" id="margin-cost-packaging" data-margin-cost="packaging" min="0" step="any" inputmode="decimal" placeholder="예: 180">
+              <span class="input-group__suffix">원/ea</span>
+            </div>
+            <p class="form-error" data-margin-error-for="margin-cost-packaging" hidden></p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="margin-cost-processing">④ 충진·포장·검수 <span class="is-required">*</span></label>
+            <div class="input-group">
+              <input type="number" id="margin-cost-processing" data-margin-cost="processing" min="0" step="any" inputmode="decimal" placeholder="예: 250">
+              <span class="input-group__suffix">원/ea</span>
+            </div>
+            <p class="form-error" data-margin-error-for="margin-cost-processing" hidden></p>
+          </div>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="form-group">
+            <label class="form-label" for="margin-fixed-cost">1회 고정비</label>
+            <div class="input-group">
+              <input type="number" id="margin-fixed-cost" min="0" step="any" inputmode="decimal">
+              <span class="input-group__suffix">원/발주</span>
+            </div>
+            <p class="form-help">인쇄 동판·라인 셋업·QC 시험비 등 발주 1회당 비용이에요</p>
+            <p class="form-error" data-margin-error-for="margin-fixed-cost" hidden></p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="margin-loss-rate">원부자재 로스율</label>
+            <div class="input-group">
+              <input type="number" id="margin-loss-rate" min="0" max="30" step="any" inputmode="decimal">
+              <span class="input-group__suffix">%</span>
+            </div>
+            <p class="form-help">①②③에만 적용해요</p>
+            <p class="form-error" data-margin-error-for="margin-loss-rate" hidden></p>
+          </div>
+        </div>
+
+        <p class="form-error" id="margin-cost-error" hidden></p>
+
+        <div class="grid grid-3">
+          <div class="stat-tile" id="margin-cost-preview-material">
+            <span class="stat-tile__label">MOQ 기준 재료비</span>
+            <span class="stat-tile__value">—</span>
+          </div>
+          <div class="stat-tile" id="margin-cost-preview-processing">
+            <span class="stat-tile__label">임가공비</span>
+            <span class="stat-tile__value">—</span>
+          </div>
+          <div class="stat-tile" id="margin-cost-preview-total">
+            <span class="stat-tile__label">MOQ 기준 총 제조원가</span>
+            <span class="stat-tile__value">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="margin-tier-setting-card">
+      <div class="card-header">
+        <div>
+          <h3 class="card-title">목표 마진 · 수량 구간</h3>
+          <p class="card-subtitle">비교할 수량을 자유롭게 추가해 보세요</p>
+        </div>
+      </div>
+      <div class="card-body stack">
+        <div class="form-group">
+          <label class="form-label" for="margin-target-margin">목표 마진율</label>
+          <div class="input-group">
+            <input type="number" id="margin-target-margin" min="0" max="80" step="0.1" inputmode="decimal">
+            <span class="input-group__suffix">%</span>
+          </div>
+          <p class="form-error" data-margin-error-for="margin-target-margin" hidden></p>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="margin-min-margin">마진 방어선</label>
+          <div class="input-group">
+            <input type="number" id="margin-min-margin" min="0" max="80" step="0.1" inputmode="decimal">
+            <span class="input-group__suffix">%</span>
+          </div>
+          <p class="form-help">이 값 아래로 내려가면 경고해요</p>
+          <p class="form-error" data-margin-error-for="margin-min-margin" hidden></p>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="margin-tier-input">수량 구간</label>
+          <div class="multi-select" id="margin-tier-chips">
+            <input class="multi-select__input" type="text" id="margin-tier-input" inputmode="numeric" autocomplete="off" placeholder="수량 입력 후 Enter" aria-describedby="margin-tier-help margin-tier-error">
+          </div>
+          <p class="form-help" id="margin-tier-help">MOQ 1,500ea는 항상 포함돼요 · <span id="margin-tier-count">1/8</span>개</p>
+          <p class="form-error" id="margin-tier-error" role="alert" hidden></p>
+          <div class="row mt-2">
+            <button type="button" class="btn btn-soft btn-sm" id="margin-tier-add-btn">추가</button>
+            <span class="text-caption">빠른 추가</span>
+            <button type="button" class="btn btn-secondary btn-sm" id="margin-tier-preset-3000" data-margin-tier-preset="3000">3,000</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="margin-tier-preset-5000" data-margin-tier-preset="5000">5,000</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="margin-tier-preset-10000" data-margin-tier-preset="10000">10,000</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-6" id="margin-tier-result-card">
+    <div class="card-header">
+      <div>
+        <h3 class="card-title">수량 구간별 공급단가 비교</h3>
+        <p class="card-subtitle" id="margin-tier-result-subtitle">목표 마진 30% · 10원 단위 올림</p>
+      </div>
+      <span class="badge" id="margin-tier-status" hidden></span>
+    </div>
+    <div class="card-body">
+      <div class="alert mb-6" id="margin-tier-alert" hidden>
+        <div>
+          <p class="alert-title" id="margin-tier-alert-title"></p>
+          <ul class="margin-alert-list" id="margin-tier-alert-list"></ul>
+        </div>
+      </div>
+
+      <div class="state state-empty" id="margin-tier-empty">
+        <p class="state-title">아직 계산 결과가 없어요</p>
+        <p>원가 4대 요소를 입력하면 수량별 단가를 계산해요</p>
+      </div>
+
+      <div class="table-wrap" id="margin-tier-table-wrap" hidden>
+        <table class="table" id="margin-tier-table">
+          <thead>
+            <tr>
+              <th>선택</th>
+              <th class="is-numeric">수량(ea)</th>
+              <th>적용 할인</th>
+              <th class="is-numeric">총 제조원가(원/ea)</th>
+              <th class="is-numeric">제안 공급단가(원/ea)</th>
+              <th class="is-numeric">영업 마진액(원/ea)</th>
+              <th class="is-numeric">총 마진액(원)</th>
+              <th class="is-numeric">영업 마진율</th>
+              <th>상태</th>
+              <th><span class="margin-sr-only">상세</span></th>
+            </tr>
+          </thead>
+          <tbody id="margin-tier-tbody"></tbody>
+        </table>
+      </div>
+      <p class="text-caption mt-4" id="margin-tier-note" hidden>공급단가를 직접 고치면 수동 단가로 계산해요. 칸을 비우면 제안 단가로 돌아가요. 할인율은 모의 기준값이에요.</p>
+    </div>
+  </div>
+
+  <div class="card mt-6" id="margin-tier-chart-card">
+    <div class="card-header">
+      <div>
+        <h3 class="card-title">단가 · 마진 추세</h3>
+        <p class="card-subtitle">점을 누르면 그 수량을 선택해요</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="row mb-4" id="margin-tier-chart-legend">
+        <span class="margin-chart-legend__item"><span class="margin-chart-legend__swatch"></span>총 제조원가</span>
+        <span class="margin-chart-legend__item"><span class="margin-chart-legend__swatch margin-chart-legend__swatch--line"></span>제안 공급단가</span>
+        <span class="margin-chart-legend__item">점 위 숫자: 영업 마진율</span>
+      </div>
+      <div class="margin-chart" id="margin-tier-chart" role="img" aria-label="수량 구간별 총 제조원가와 공급단가 추세"></div>
+      <div class="state state-empty" id="margin-tier-chart-empty">
+        <p class="state-title">표시할 데이터가 없어요</p>
+        <p>계산이 끝나면 추세 차트가 나타나요</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="row mt-6 margin-actions-end">
+    <button type="button" class="btn btn-primary" id="margin-go-export-btn" disabled>이 수량으로 수출 조건 계산하기</button>
+  </div>
+</div>
+
+<!-- Tab 2 — 수출 조건 및 환율/역제안 시뮬레이터 (margin.md §2.4, §8.2 9단계에서 구현) -->
+<div class="tab-panel" id="margin-panel-export" role="tabpanel">
+  <div class="card">
+    <div class="card-body">
+      <div class="placeholder">
+        <p class="placeholder-title">수출 조건 · 환율 · 역제안</p>
+        <p>이 영역은 margin.md §2.4 기준으로 다음 단계에서 구현해요.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tab 3 — 견적서(PI) 발행 및 협상 히스토리 (margin.md §2.5, §8.2 10~12단계에서 구현) -->
+<div class="tab-panel" id="margin-panel-pi" role="tabpanel">
+  <div class="card">
+    <div class="card-body">
+      <div class="placeholder">
+        <p class="placeholder-title">견적서(PI) · 협상 히스토리</p>
+        <p>이 영역은 margin.md §2.5 기준으로 다음 단계에서 구현해요.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 원가 구성 상세 Modal (margin.md §2.6) -->
+<div class="modal-backdrop" id="margin-cost-breakdown-modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="margin-cost-breakdown-title">
+    <div class="modal-header">
+      <h2 class="modal-title" id="margin-cost-breakdown-title">원가 구성 상세</h2>
+      <button type="button" class="modal-close" data-modal-close aria-label="닫기">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-caption mb-4" id="margin-cost-breakdown-caption"></p>
+      <div class="table-wrap">
+        <table class="table" id="margin-cost-breakdown-table">
+          <thead>
+            <tr>
+              <th>항목</th>
+              <th class="is-numeric">MOQ 기준</th>
+              <th class="is-numeric">할인</th>
+              <th class="is-numeric">적용(원/ea)</th>
+            </tr>
+          </thead>
+          <tbody id="margin-cost-breakdown-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-modal-close>닫기</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block page_js %}

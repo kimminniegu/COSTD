@@ -8,6 +8,7 @@
 |---|---|---|---|
 | 1.0 | 2026-09-23 | 3대 서브 탭(수량별 단가 / 수출 조건·환율·역제안 / PI·협상 히스토리) 전체 명세 작성 | C |
 | 1.1 | 2026-09-23 | API 접두사를 README 규칙 9에 맞춰 `/api/margin/` → `/api/margin-calculator/`로 변경 | C |
+| 1.2 | 2026-09-23 | MOQ 1,500ea 고정(읽기 전용, 서버 `MOQ_FIXED`), 수량 구간 사용자 정의 Chip 입력 규칙 확정(§2.3, §3.1.3, §4.2.1, §7.1) | C |
 
 **문서 표기 규칙**
 
@@ -142,7 +143,8 @@ Modal × 4 (§2.6)
  │   ├─ .card-header  h3.card-title "기본 제조원가" / p.card-subtitle "MOQ 1,500ea 기준 개당 원가를 입력해 주세요"
  │   └─ .card-body.stack
  │       ├─ .grid.grid-2      제품명 #margin-product-name / 용량 #margin-product-volume (input-group, "ml")
- │       ├─ .grid.grid-2      제형 카테고리 select #margin-product-category / MOQ #margin-moq (input-group, "ea")
+ │       ├─ .grid.grid-2      제형 카테고리 select #margin-product-category / MOQ #margin-moq (input-group, "ea", readonly "1,500")
+ │       │                     + .form-help #margin-moq-help "MOQ는 1,500ea로 고정돼요"
  │       ├─ .grid.grid-2      ① 벌크 #margin-cost-bulk / ② 용기 #margin-cost-container      (input-group, "원/ea")
  │       ├─ .grid.grid-2      ③ 단상자·라벨·설명서 #margin-cost-packaging / ④ 충진·포장·검수 #margin-cost-processing
  │       ├─ .grid.grid-2      1회 고정비 #margin-fixed-cost ("원/발주") / 원부자재 로스율 #margin-loss-rate ("%")
@@ -155,9 +157,11 @@ Modal × 4 (§2.6)
          ├─ 수량 구간 목록 .multi-select#margin-tier-chips
          │     .multi-select__chip "1,500ea (MOQ)" (삭제 버튼 없음, 고정)
          │     .multi-select__chip "3,000ea" [×] …
-         │     input.multi-select__input#margin-tier-input placeholder "수량 입력 후 Enter"
-         ├─ p.form-error#margin-tier-error (MOQ 미만·중복·최대 개수 초과 시)
-         └─ .row  프리셋 .btn.btn-secondary.btn-sm × 3: #margin-tier-preset-3000 / -5000 / -10000
+         │     input.multi-select__input#margin-tier-input placeholder "수량 입력 후 Enter" (8개 도달 시 "최대 8개까지 추가했어요")
+         ├─ p.form-help#margin-tier-help "MOQ 1,500ea는 항상 포함돼요 · {n}/8개" (span#margin-tier-count)
+         ├─ p.form-error#margin-tier-error (정수 아님·MOQ 미만·상한 초과·최대 개수 초과 시)
+         └─ .row  .btn.btn-soft.btn-sm#margin-tier-add-btn "추가" / .text-caption "빠른 추가" /
+                  프리셋 .btn.btn-secondary.btn-sm × 3: #margin-tier-preset-3000 / -5000 / -10000 (data-margin-tier-preset)
 
 .card#margin-tier-result-card.mt-6            "수량 구간별 공급단가 비교"
  ├─ .card-header  h3 / p.card-subtitle "목표 마진 30% · 10원 단위 올림"  +  .badge#margin-tier-status (계산 중/완료/오류)
@@ -326,6 +330,11 @@ Modal × 4 (§2.6)
 | `.margin-pi-frame` | PI 미리보기 iframe 높이(`min-height: 960px`), 배경 `--color-surface-muted` |
 | `.margin-row-muted` | 매수인 부담 등 계산 제외 행 텍스트를 `--color-text-placeholder` |
 | `.margin-diff-up` / `.margin-diff-down` | 비교 Modal 변동 셀 — `--color-up` / `--color-down` |
+| `.margin-tier-chip` / `.margin-tier-chip__remove` / `.margin-tier-chip-fixed` / `.margin-tier-chip-flash` | 수량 구간 Chip(공통 `.multi-select__chip`에 덧붙임): MOQ 고정 Chip `--color-primary` 배경, 중복 입력 강조 `--color-primary-bright` |
+| `.margin-chart__hit` / `.margin-chart__baseline` / `.margin-chart__axis-text` / `.margin-chart__label--negative` / `--below-defense` | 차트 Hover 영역·기준선·축 글자·상태별 라벨 색 |
+| `.margin-chart-legend__item` / `__swatch` / `__swatch--line` | 차트 범례 |
+| `.margin-alert-list` / `.margin-actions-end` / `.margin-sr-only` | Alert 안 목록, 우측 정렬 버튼 줄, 화면 낭독기 전용 텍스트 |
+| `[id^="margin-"][hidden]` 등 | 공통 CSS에 `[hidden]` 규칙이 없어 `.alert`·`.state`·`.badge`에서 `hidden`이 무시되므로, **이 페이지 요소에 한해** `display: none !important` 보장 |
 
 ---
 
@@ -353,7 +362,7 @@ Modal × 4 (§2.6)
 | `cost.processing` | `margin-cost-processing` | 원/ea | ○ | – | 0 ≤ x ≤ 1,000,000 | ④ 충진·포장·검수(임가공비) |
 | `cost.fixed_per_order` | `margin-fixed-cost` | 원/발주 | – | `600000` | 0 ≤ x ≤ 1,000,000,000 | 인쇄 동판·라인 셋업·QC 시험비 등 발주 1회당 고정비(수량에 분산) |
 | `cost.loss_rate` | `margin-loss-rate` | % | – | `2` | 0 ≤ x ≤ 30 | 원부자재(①②③) 로스율. 임가공비에는 미적용 |
-| `moq` | `margin-moq` | ea | ○ | `1500` | 정수, **≥ 1,500** (§7.1) | 최소 발주 수량 |
+| `moq` | `margin-moq` | ea | – | `1500` **고정** | 화면은 읽기 전용. 요청에서 생략하면 1,500. 1,500 미만 → 422 `MOQ_BELOW_MINIMUM`, 1,500 초과 → 422 `MOQ_FIXED` (§7.1) | 최소 발주 수량 |
 
 > 4대 요소 합계가 0이면 계산하지 않습니다(§7.2).
 
@@ -363,9 +372,25 @@ Modal × 4 (§2.6)
 |---|---|---|---|---|
 | `target_margin` | `margin-target-margin` | % | `30` | 0 ≤ x ≤ 80 (소수 1자리) |
 | `min_margin` | `margin-min-margin` | % | `15` | 0 ≤ x ≤ `target_margin` |
-| `tiers` | `margin-tier-chips` | ea[] | `[3000, 5000, 10000]` | 정수, 각 값 ≥ `moq`, ≤ 1,000,000, 중복 제거, 오름차순, **MOQ 행 포함 최대 8개** |
+| `tiers` | `margin-tier-chips` | ea[] | `[3000, 5000, 10000]` | MOQ를 **제외한** 사용자 수량 배열. 정수, 각 값 ≥ 1,500, ≤ 1,000,000, **MOQ 포함 최대 8개**. 서버가 MOQ 자동 포함·중복 제거·오름차순 정렬 후 응답 `tiers`로 반환 (아래 Chip 규칙) |
 | `price_overrides` | `.margin-tier-price-input` | `{qty: 원/ea}` | `{}` | x > 0, 10원 단위 아니어도 허용(그대로 사용) |
 | `selected_qty` | radio `margin-tier-select` | ea | 계산 후 첫 사용자 Tier(없으면 MOQ) | `tiers ∪ {moq}` 중 하나 |
+
+**수량 구간 Chip 입력 규칙** (`#margin-tier-chips`)
+
+| 규칙 | 동작 |
+|---|---|
+| MOQ Chip | `1,500ea (MOQ)`는 항상 첫 번째, 자물쇠 Icon + `.margin-tier-chip-fixed`, 삭제 버튼 없음 |
+| 사용자 정의 입력 | `#margin-tier-input`에 수량 입력 후 **Enter**(한글 IME 조합 중 Enter는 무시) 또는 **추가** 버튼. `2,500` · `2500` · `2,500ea` 형식 모두 허용. 프리셋에 없는 임의 수량(2,500 / 7,000 / 15,000 등)도 그대로 추가·계산 |
+| 프리셋 | 3,000 / 5,000 / 10,000 버튼은 같은 `addTier()`를 호출하는 **빠른 추가**일 뿐, 별도 규칙 없음 |
+| 정수 아님 | 추가 차단, "수량은 정수로 입력해 주세요 (예: 2,500)", 입력값 유지 |
+| MOQ 미만 | 추가 차단, "1,000ea는 MOQ(1,500ea) 미만이라 추가할 수 없어요", 입력값 유지 |
+| 상한 초과 | 추가 차단, "수량은 최대 1,000,000ea까지 입력할 수 있어요", 입력값 유지 |
+| 중복(MOQ 포함) | 오류 없이 입력칸만 비우고 기존 Chip을 0.9초 강조(`.margin-tier-chip-flash`) |
+| 개수 초과 | MOQ 포함 8개에서 추가 차단, "수량 구간은 MOQ 포함 최대 8개까지 비교할 수 있어요" |
+| 정렬 | 입력 순서와 관계없이 Chip·표·차트 모두 **오름차순** |
+| 삭제 | Chip의 × 버튼. 해당 수량의 수동 단가(`price_overrides`)도 함께 삭제 |
+| 재계산 | Chip 추가·삭제마다 정규화된 `tiers`로 `calculate-tiers`를 **300ms Debounce** 호출 → 표·차트 갱신. 선택 수량이 삭제되면 첫 사용자 구간(없으면 MOQ)을 선택 |
 
 #### 3.1.4 포장·물류 (Tab 2)
 
@@ -662,6 +687,14 @@ INCOTERMS = {
 ```
 d_k(q) = VOLUME_DISCOUNTS에서 min_qty ≤ q 인 행 중 min_qty가 가장 큰 행의 rate_k / 100
 ```
+
+사용자 정의 수량도 같은 규칙으로 계단식 적용합니다(구간 사이 보간 없음). 표의 "적용 할인" 칸에 `{min_qty}ea 이상 구간`을 함께 표시합니다.
+
+| 입력 수량 | 적용 구간 | 벌크 / 용기 / 포장재 / 임가공 | 총 제조원가 C | 제안 공급단가 P | 마진율 (§4.7 입력 기준) |
+|---:|---:|---|---:|---:|---:|
+| 2,500 | 1,500 | 0 / 0 / 0 / 0% | 1,969.00 | 2,820 | 30.18% |
+| 7,000 | 5,000 | 5 / 8 / 8 / 12% | 1,692.40 | 2,420 | 30.07% |
+| 15,000 | 10,000 | 8 / 12 / 12 / 18% | 1,581.20 | 2,260 | 30.04% |
 
 #### 4.2.2 총 제조원가
 
@@ -1183,7 +1216,7 @@ get_fx_rates(currencies, force=False)
 
 (`breakdown.loss`는 로스 반영분 = `(할인 후 재료비 합) × λ`)
 
-**검증 오류 코드**: `INVALID_JSON` `REQUIRED_FIELD` `OUT_OF_RANGE` `MOQ_BELOW_MINIMUM`(moq < 1,500) `MOQ_VIOLATION` `TOO_MANY_TIERS` `ZERO_COST` `INVALID_MARGIN`(target ≥ 80 초과 또는 min > target)
+**검증 오류 코드**: `INVALID_JSON` `REQUIRED_FIELD` `OUT_OF_RANGE`(정수 아닌 수량, 1,000,000 초과 포함) `MOQ_BELOW_MINIMUM`(moq < 1,500) `MOQ_FIXED`(moq > 1,500) `MOQ_VIOLATION` `TOO_MANY_TIERS` `ZERO_COST` `INVALID_MARGIN`(target ≥ 80 초과 또는 min > target)
 
 **경고 코드**: `OVERRIDE_NEGATIVE_MARGIN`(수동 단가가 원가 미만) `OVERRIDE_BELOW_DEFENSE` `HIGH_TARGET_MARGIN`(target > 60)
 
@@ -1571,13 +1604,14 @@ xhtml2pdf>=0.2.11
 
 > 원칙: **클라이언트에서 먼저 막고(즉시 피드백), 서버에서 다시 검증**합니다(서버가 최종 기준). 오류 표시는 입력 오류 → `.form-control.is-error` + `.form-error`, 영역 경고 → `.alert`, 영역 전체 실패 → `.state.state-error`(다시 시도 버튼)를 사용합니다.
 
-### 7.1 MOQ 미만 입력
+### 7.1 MOQ 고정 및 수량 구간 입력
 
 | 상황 | 클라이언트 | 서버 |
 |---|---|---|
-| MOQ 필드에 1,500 미만 입력 | `#margin-moq.is-error` + "MOQ는 1,500ea 이상이어야 해요. 1,500ea 미만 소량 생산은 별도 협의가 필요해요" / 계산 요청 보내지 않음 / 포커스 아웃 시 값은 유지(자동 보정하지 않음) | 422 `MOQ_BELOW_MINIMUM` |
-| Tier Chip에 MOQ 미만 수량 입력 | Chip을 추가하지 않고 `#margin-tier-error` "1,000ea는 MOQ(1,500ea) 미만이에요" + 입력값 유지 | 422 `MOQ_VIOLATION` (`fields`에 인덱스) |
-| MOQ를 올려서 기존 Tier가 MOQ 미만이 됨 | 해당 Chip을 `.badge-warning` 스타일 문구로 표시하고 계산에서 제외, Alert "MOQ보다 작은 구간 2개를 제외했어요" | — |
+| MOQ 변경 시도 | `#margin-moq`는 `readonly`(값 `1,500`), 요청에는 항상 1,500을 보냄 | 1,500 미만 → 422 `MOQ_BELOW_MINIMUM`, 1,500 초과 → 422 `MOQ_FIXED` |
+| Tier Chip에 MOQ 미만 수량 입력 | Chip을 추가하지 않고 `#margin-tier-error` "1,000ea는 MOQ(1,500ea) 미만이라 추가할 수 없어요" + 입력값 유지 | 422 `MOQ_VIOLATION` (`fields`에 인덱스) |
+| MOQ Chip 삭제 시도 | 삭제 버튼을 렌더링하지 않음. JS `removeTier()`도 MOQ는 무시 | 요청 `tiers`에 없어도 MOQ를 자동 포함 |
+| 정수 아님·상한 초과·9번째 구간 | §3.1.3 Chip 입력 규칙대로 추가 차단 + `#margin-tier-error` | `OUT_OF_RANGE` / `TOO_MANY_TIERS` |
 | 역제안 기준 수량이 MOQ 미만 | `#margin-counter-qty.is-error` | 422 `MOQ_VIOLATION` |
 | 끝수 수량(카톤 입수량의 배수가 아님) | 계산은 진행, Tab 2에 "마지막 카톤은 20ea만 들어가요. 수량을 5,040ea로 맞추면 카톤이 꽉 차요" 안내 | 경고 `PARTIAL_CARTON` |
 

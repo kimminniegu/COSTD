@@ -1,4 +1,116 @@
 /* 원가 경쟁력 및 마진 시뮬레이션 전용 CSS (담당자 C)
    이 페이지에서만 필요한 스타일만 작성합니다.
    Button / Card / Form 등 공통 요소는 src/common/style.css 를 사용하고 다시 정의하지 않습니다.
-   충돌 방지를 위해 class 이름은 "margin-" 접두사를 사용합니다. */
+   충돌 방지를 위해 class 이름은 "margin-" 접두사를 사용합니다. (허용 목록: margin.md §2.7) */
+
+/* hidden 속성 보장 — .alert / .state / .badge 는 공통 CSS에서 display 를 지정하므로
+   이 페이지 요소에 한해 hidden 이 항상 우선하게 합니다. */
+[id^="margin-"][hidden],
+[data-margin-error-for][hidden],
+.margin-chart-tooltip[hidden] { display: none !important; }
+
+.margin-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.margin-actions-end { justify-content: flex-end; }
+
+.margin-alert-list {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-5);
+}
+
+/* 수량 구간 Chip ---------------------------------------------------------- */
+.margin-tier-chip { transition: background var(--transition-base), color var(--transition-base); }
+.margin-tier-chip__remove { font-size: var(--font-size-body); }
+.margin-tier-chip-fixed { background: var(--color-primary); color: var(--color-text-inverse); }
+.margin-tier-chip-fixed svg { flex: none; }
+.margin-tier-chip-flash { background: var(--color-primary-bright); color: var(--color-text-inverse); }
+
+/* 수량 구간 비교 표 ------------------------------------------------------- */
+.margin-tier-row { cursor: pointer; }
+.margin-tier-row .form-check { gap: 0; }
+.margin-tier-price-input {
+  max-width: 132px;
+  margin-left: auto;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.margin-tier-price-input.is-overridden {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-bold);
+}
+
+/* 단가 · 마진 추세 차트 (inline SVG) -------------------------------------- */
+.margin-chart { position: relative; }
+.margin-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.margin-chart__grid { stroke: var(--color-border); stroke-width: 1; }
+.margin-chart__baseline { stroke: var(--color-border-strong); stroke-width: 1; }
+.margin-chart__axis-text {
+  fill: var(--color-text-secondary);
+  font-size: var(--font-size-caption);
+  font-variant-numeric: tabular-nums;
+}
+.margin-chart__hit { fill: transparent; cursor: pointer; transition: fill var(--transition-base); }
+.margin-chart__hit:hover,
+.margin-chart__hit.is-active { fill: var(--color-surface-muted); }
+.margin-chart__bar { fill: var(--color-primary-light); pointer-events: none; }
+.margin-chart__line { fill: none; stroke: var(--color-primary-bright); stroke-width: 2.5; stroke-linejoin: round; pointer-events: none; }
+.margin-chart__point { fill: var(--color-surface); stroke: var(--color-primary-bright); stroke-width: 2.5; pointer-events: none; }
+.margin-chart__point.is-selected { fill: var(--color-primary-bright); }
+.margin-chart__label {
+  fill: var(--color-text-secondary);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  text-anchor: middle;
+  pointer-events: none;
+}
+.margin-chart__label--negative { fill: var(--color-danger); }
+.margin-chart__label--below-defense { fill: var(--color-warning); }
+
+.margin-chart-tooltip {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-overlay);
+  font-size: var(--font-size-caption);
+  color: var(--color-text-body);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - var(--space-3)));
+}
+.margin-chart-tooltip strong { font-size: var(--font-size-label); color: var(--color-text-primary); }
+
+.margin-chart-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-right: var(--space-4);
+  font-size: var(--font-size-label);
+  color: var(--color-text-secondary);
+}
+.margin-chart-legend__swatch {
+  width: var(--space-3);
+  height: var(--space-3);
+  border-radius: var(--space-1);
+  background: var(--color-primary-light);
+}
+.margin-chart-legend__swatch--line {
+  width: var(--space-4);
+  height: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-bright);
+}
