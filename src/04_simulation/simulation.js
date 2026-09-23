@@ -150,7 +150,13 @@ for (const [key, p] of Object.entries(PACKS)) {
   detail.textContent = p.detail;
 
   group.append(name, detail);
-  button.append(group, action);
+  const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  icon.setAttribute('viewBox', '0 0 20 20');
+  icon.setAttribute('aria-hidden', 'true');
+  const outline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  outline.setAttribute('d', key === 'jar' ? 'M4 7h12v9H4z M3 4h14v3H3z' : key === 'dropper' ? 'M8 3h4v5l2 3v6H6v-6l2-3z' : 'M6 8h8v9H6z M10 8V3h6 M8 3h5');
+  icon.append(outline);
+  button.append(icon, group, action);
 
   button.addEventListener('click', () => {
     $('pack').value = key;
@@ -214,17 +220,29 @@ function update() {
   $('oil-out').textContent = o + '\%';$('hum-out').textContent = h + '%';
 
   $('viscosity').textContent = fmt(v);$('flow').textContent = flow + ' / 100';
-  $('water').textContent = water.toFixed(2) + '\%';$('active-val').textContent = `${fmt(activePpm)} ppm`;
+  $('water').textContent = water.toFixed(2) + '\%';$('active-val').textContent = fmt(activePpm);
+  $('flow-gauge').value = flow;
+  $('water-gauge').value = water;
+  $('lab-flow').textContent = `${flow} / 100`;
+  $('lab-cycle').textContent = `${(.9 / (1 + v / 9000) + .08).toFixed(2)} /s`;
 
   $('texture').textContent = v < 2500 ? '묽은 워터리' : v < 9000 ? '산뜻한 점성' : v < 25000 ? '농축 리치' : '고밀도 밤(Balm)';
   $('flow-caption').textContent = v < 9000 ? '빠른 유동성 · 얇은 퍼짐성' : v < 25000 ? '완만한 레벨링 · 보습 밀착' : '형태 유지 · 높은 응집력';
 
 
-  $('status-card').className = 'alert simulation-status-card alert-' + ({ optimal: 'info', caution: 'warning', incompatible: 'danger' }[state]);
+  $('status-card').className = 'simulation-status-card';
   $('status-label').textContent = STATES[state].label;
   $('status-card').dataset.state = state;
   $('status-icon').textContent = { optimal: '✓', caution: '!', incompatible: '×' }[state];
-  $('status-score').textContent = `호환도 ${score}점`;
+  $('status-score').textContent = score;
+  $('score-ring').style.setProperty('--simulation-score', `${score}%`);
+  $('score-ring').setAttribute('aria-label', `예측 호환도 ${score}점 / 100, ${STATES[state].label}`);
+  const packName = PACKS[key].name.split(' (')[0];
+  $('diagnosis').textContent = state === 'optimal'
+    ? `${fmt(v)} cPs · ${packName}의 권장 점도 범위입니다. 실제 토출량과 안정성 시험으로 최종 확인하세요.`
+    : v < PACKS[key].min
+      ? `저점도 제형(${fmt(v)} cPs)으로 ${packName} 사용 시 누액·비산 가능성이 있습니다.`
+      : `고점도 제형(${fmt(v)} cPs)으로 ${packName} 사용 시 흡입 불량·토출 저항 및 노즐 막힘 위험이 있습니다.`;
 
   // 권장 대체 용기 버튼 갱신
   const eligible = getEligiblePacks(v);
@@ -328,7 +346,23 @@ function drawScene(){
  const thick=Math.min(1,current.v/50000),dropTime=.58+thick*.16;
  const spread=100*(1-thick*.7),domeHeight=18+thick*30;
  const maxNeck=(floor-tip-domeHeight)*(.18+thick*.3);
- // Contact shadow has no guide outlines or opaque background.
+ // Faint reference scales are illustrative, not a calibrated measurement.
+ ctx.save();ctx.strokeStyle='#e2e8f0';ctx.fillStyle='#94a3b8';ctx.lineWidth=.7;ctx.font='9px monospace';
+ const rulerX=x-100;
+ ctx.beginPath();ctx.moveTo(rulerX,140);ctx.lineTo(rulerX,300);
+ for(let i=0;i<=8;i++){const yy=140+i*20;ctx.moveTo(rulerX,yy);ctx.lineTo(rulerX+(i%2?5:10),yy);if(i%2===0)ctx.fillText(`${(i*.05).toFixed(1)}`,rulerX-25,yy+3);}
+ ctx.stroke();ctx.fillText('mL REF',rulerX-25,125);
+ ctx.beginPath();ctx.setLineDash([2,7]);ctx.moveTo(x,145);ctx.lineTo(x,floor-55);ctx.stroke();ctx.setLineDash([]);
+ for(const yy of [160,250]){ctx.beginPath();ctx.moveTo(x+88,yy);ctx.lineTo(x+98,yy);ctx.moveTo(x+93,yy-5);ctx.lineTo(x+93,yy+5);ctx.stroke();}
+ ctx.beginPath();for(let i=-5;i<=5;i++){const xx=x+i*20;ctx.moveTo(xx,floor+40);ctx.lineTo(xx,floor+40+(i%5===0?7:4));}ctx.stroke();ctx.fillText('0',x-3,floor+59);ctx.fillText('10 mm REF',x+70,floor+59);
+ // Clear quartz dish: back rim, glass sidewall and a refracted front lip.
+ const plate=ctx.createLinearGradient(0,floor-9,0,floor+30);
+ plate.addColorStop(0,'rgba(255,255,255,.72)');plate.addColorStop(.55,'rgba(210,227,238,.18)');plate.addColorStop(1,'rgba(155,184,205,.32)');
+ ctx.fillStyle=plate;ctx.beginPath();ctx.ellipse(x,floor+11,135,23,0,0,Math.PI*2);ctx.fill();
+ ctx.strokeStyle='rgba(148,175,195,.4)';ctx.lineWidth=1;ctx.stroke();
+ ctx.beginPath();ctx.ellipse(x,floor+3,135,23,0,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,.32)';ctx.fill();ctx.stroke();
+ ctx.beginPath();ctx.ellipse(x,floor+4,127,19,0,0,Math.PI);ctx.strokeStyle='rgba(255,255,255,.95)';ctx.lineWidth=2;ctx.stroke();ctx.restore();
+ // Contact shadow grounds the serum on the quartz surface.
  ctx.save();ctx.translate(x,floor+8);ctx.scale(1,.18);
  const shadow=ctx.createRadialGradient(0,0,spread*.12,0,0,spread*1.2);
  shadow.addColorStop(0,'rgba(41,75,98,.19)');shadow.addColorStop(.65,'rgba(41,75,98,.06)');shadow.addColorStop(1,'rgba(41,75,98,0)');
@@ -382,7 +416,7 @@ function drawScene(){
 }
 function tick(time){frame=0;if(paused||document.hidden){last=0;return;}const dt=last?Math.min((time-last)/1000,.05):0;last=time;phase=(phase+dt*(.9/(1+current.v/9000)+.08))%1;drawScene();frame=requestAnimationFrame(tick);}
 function start(){if(!paused&&!document.hidden&&!frame)frame=requestAnimationFrame(tick);}
-function motionLabel(){$('motion').textContent=paused?'시연 재생':'시연 일시정지';$('motion').setAttribute('aria-pressed',String(paused));}
+function motionLabel(){$('lab-status').textContent=paused?'Ⅱ PAUSED':'● ANALYZING';$('motion').textContent=paused?'시연 재생':'시연 일시정지';$('motion').setAttribute('aria-pressed',String(paused));}
 $('motion').addEventListener('click',()=>{paused=!paused;motionLabel();if(paused){cancelAnimationFrame(frame);frame=0;last=0;}else start();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelAnimationFrame(frame);frame=0;last=0;}else start();});
 loadPreset();motionLabel();new ResizeObserver(resize).observe(canvas);resize();start();

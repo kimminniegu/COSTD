@@ -24,7 +24,10 @@
         <div class="simulation-sim-value"><span class="text-caption">예측 점도</span><strong id="simulation-viscosity"></strong><small>cPs</small></div>
       </div>
       <div class="card-body">
-        <div class="simulation-stage"><canvas id="simulation-canvas">배합에 따른 점도와 유동성은 아래 지표에서 확인할 수 있습니다.</canvas></div>
+        <div class="simulation-chamber">
+          <div class="simulation-chamber-hud"><span>OPTICAL CHAMBER <small>배합 기반 시뮬레이션 · 기준 눈금</small></span><span id="simulation-lab-status">● ANALYZING</span></div>
+          <div class="simulation-chamber-data"><span>FLOW INDEX <b id="simulation-lab-flow"></b></span><span>CYCLE <b id="simulation-lab-cycle"></b></span></div>
+          <div class="simulation-stage"><canvas id="simulation-canvas">배합에 따른 점도와 유동성은 아래 지표에서 확인할 수 있습니다.</canvas></div></div>
         <div class="simulation-sim-foot"><span id="simulation-phase-status">실시간 배합 100% 동기화</span><span id="simulation-flow-caption"></span></div>
 
       </div>
@@ -49,9 +52,9 @@
         </div>
         <div class="simulation-hud" aria-label="제형 지표">
           <div class="stat-tile"><span>예상 질감 {{ help('texture', '예상 질감', '예측 점도를 사용감 표현으로 바꾼 지표입니다. 원하는 제형이 묽은지, 풍부하고 되직한지 비교하기 위해 표시합니다. 실제 관능평가 결과는 아닙니다.') }}</span><strong id="simulation-texture"></strong></div>
-          <div class="stat-tile"><span>상대 유동성 {{ help('flow', '상대 유동성', '점도로 계산한 0~100 상대 지수입니다. 높을수록 잘 흐르는 방향이며, 배합별 퍼짐과 토출 특성을 비교하기 위해 표시합니다. 실측 유량이나 백분율은 아닙니다.') }}</span><strong id="simulation-flow"></strong></div>
-          <div class="stat-tile"><span>유효 성분 농도 {{ help('concentration', '유효 성분 농도', '유효 활성 성분 함량을 ppm으로 환산합니다. 1% = 10,000 ppm이며 바이어의 농도 요구와 배합을 같은 단위로 비교하기 위해 표시합니다. 효능의 크기를 뜻하지는 않습니다.') }}</span><strong id="simulation-active-val"></strong></div>
-          <div class="stat-tile"><span>정제수 잔량비 {{ help('water', '정제수 잔량비', '100%에서 네 가지 배합 성분의 합을 뺀 값입니다. 배합 총량이 100%인지, 성분을 늘릴 때 물의 비중이 얼마나 줄어드는지 확인하기 위해 표시합니다.') }}</span><strong id="simulation-water"></strong></div>
+          <div class="stat-tile"><span>상대 유동성 {{ help('flow', '상대 유동성', '점도로 계산한 0~100 상대 지수입니다. 높을수록 잘 흐르는 방향이며, 배합별 퍼짐과 토출 특성을 비교하기 위해 표시합니다. 실측 유량이나 백분율은 아닙니다.') }}</span><strong id="simulation-flow"></strong><meter id="simulation-flow-gauge" min="0" max="100" value="0" aria-label="상대 유동성"></meter></div>
+          <div class="stat-tile"><span>유효 성분 농도 {{ help('concentration', '유효 성분 농도', '유효 활성 성분 함량을 ppm으로 환산합니다. 1% = 10,000 ppm이며 바이어의 농도 요구와 배합을 같은 단위로 비교하기 위해 표시합니다. 효능의 크기를 뜻하지는 않습니다.') }}</span><div class="simulation-metric-value"><strong id="simulation-active-val"></strong><small>ppm</small></div></div>
+          <div class="stat-tile"><span>정제수 잔량비 {{ help('water', '정제수 잔량비', '100%에서 네 가지 배합 성분의 합을 뺀 값입니다. 배합 총량이 100%인지, 성분을 늘릴 때 물의 비중이 얼마나 줄어드는지 확인하기 위해 표시합니다.') }}</span><strong id="simulation-water"></strong><meter id="simulation-water-gauge" min="0" max="100" value="0" aria-label="정제수 잔량비"></meter></div>
         </div>
       </div>
     </section>
@@ -60,10 +63,18 @@
     <section class="simulation-packaging" aria-label="용기 적합성 확인">
       <div class="card-header"><h2 class="card-title">용기 적합성 확인</h2><select class="form-control form-control-sm" id="simulation-pack" aria-label="타깃 용기"><option value="dropper">스포이드</option><option value="pump">디스펜서 펌프</option><option value="airless">에어리스 펌프</option><option value="jar">크림 자</option></select></div>
       <div class="card-body">
-        <div id="simulation-status-card" class="alert simulation-status-card alert-info" role="status" aria-live="polite" data-state="optimal">
-          <div class="simulation-status-top"><div class="simulation-verdict"><span id="simulation-status-icon" aria-hidden="true">✓</span><strong id="simulation-status-label">적합</strong></div><span id="simulation-status-score"></span></div>
+        <div id="simulation-status-card" class="simulation-status-card" role="status" aria-live="polite" data-state="optimal">
+          <div class="simulation-score-column">
+            <div class="simulation-score-ring" id="simulation-score-ring" role="img" aria-label="용기 호환도"><div><strong id="simulation-status-score"></strong><small>/ 100</small></div></div>
+            <span class="simulation-state-chip"><span id="simulation-status-icon" aria-hidden="true">✓</span><strong id="simulation-status-label">적합</strong></span>
+            <small class="simulation-score-caption">예측 호환도</small>
+          </div>
+          <div class="simulation-diagnosis">
+            <span class="simulation-diagnosis-heading">패키징 진단</span>
+            <p id="simulation-diagnosis"></p>
+            <div class="simulation-recommendation"><span class="text-caption">대체 권장 용기</span><div id="simulation-recommendations" class="simulation-recommendations"></div></div>
+          </div>
         </div>
-        <div class="simulation-recommendation"><span class="text-caption">추천 용기</span><div id="simulation-recommendations" class="simulation-recommendations"></div></div>
 
       </div>
     </section>
