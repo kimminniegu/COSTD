@@ -15,6 +15,8 @@
 import importlib
 import logging
 import os
+import re
+from importlib import import_module
 from datetime import timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -148,7 +150,7 @@ def simulation():
 @app.route("/dev-request")
 @login_required
 def dev_request():
-    return render_template("05_requisition/requisition.html")
+    return render_template("05_requisition/requisition.html", request_sections=requisition_service.SECTIONS)
 
 
 # ---------------------------------------------------------------------------
@@ -160,16 +162,19 @@ def dev_request():
 
 @app.template_filter("home_highlight")
 def home_highlight(text, q):
-    """검색어와 일치하는 부분을 <mark>로 감쌉니다 (제목은 먼저 escape 해서 안전하게)"""
-    out = str(escape(text))
-    for term in sorted({t for t in (q or "").split() if t}, key=len, reverse=True)[:5]:
-        t = str(escape(term))
-        low, lt, res, i = out.lower(), t.lower(), [], 0
-        while (j := low.find(lt, i)) != -1:
-            res += [out[i:j], "<mark>", out[j:j + len(t)], "</mark>"]
-            i = j + len(t)
-        out = "".join(res) + out[i:]
-    return Markup(out)
+    """원문에서 검색어를 찾고 각 조각을 escape 해서 안전하게 강조합니다."""
+    terms = sorted(set((q or "").split()), key=lambda term: (-len(term), term))[:5]
+    if not terms:
+        return Markup(escape(text))
+    pattern = re.compile("|".join(re.escape(term) for term in terms), re.IGNORECASE)
+    source = str(text)
+    parts, start = [], 0
+    for match in pattern.finditer(source):
+        parts.extend((str(escape(source[start:match.start()])), "<mark>",
+                      str(escape(match.group())), "</mark>"))
+        start = match.end()
+    parts.append(str(escape(source[start:])))
+    return Markup("".join(parts))
 
 
 def _arg(name, allowed=None):
@@ -221,6 +226,20 @@ def home_api_regulations():
 
 
 # [E] 개발요청서 — 접두사: /api/dev-request/...
+
+# 숫자로 시작하는 폴더명은 일반 import 문으로 불러올 수 없으므로
+# import_module을 사용해 개발요청서 자동변환 API를 등록합니다.
+# 공통 스키마로 자동변환·직접작성·수정·최종값 PDF 출력을 연결합니다.
+requisition_service = import_module("src.05_requisition.service")
+
+
+@requisition_service.blueprint.before_request
+def require_requisition_user():
+    if not auth.current_user():
+        return jsonify(error="로그인 후 다시 이용해 주세요."), 401
+
+
+app.register_blueprint(requisition_service.blueprint)
 
 
 if __name__ == "__main__":
