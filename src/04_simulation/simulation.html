@@ -20,24 +20,20 @@
   <div class="simulation-top-grid">
     <section class="card simulation-preview" aria-label="실시간 샘플 미리보기">
       <div class="card-header">
-        <div><p class="text-caption">실시간 샘플 미리보기</p><h2 class="card-title" id="simulation-sample-name">고농축 앰플</h2></div>
+        <div><p class="text-caption">실시간 샘플 미리보기 · <span id="simulation-modified">기본 배합</span></p><h2 class="card-title" id="simulation-sample-name">고농축 앰플</h2></div>
+        <div class="simulation-preset-row"><label class="form-label" for="simulation-preset">샘플 제형</label><select class="form-control form-control-sm" id="simulation-preset"><option value="serum">세럼</option><option value="ampoule" selected>고농축 앰플</option><option value="lotion">로션</option><option value="cream">크림</option></select></div>
         <div class="simulation-sim-value"><span class="text-caption">예측 점도</span><strong id="simulation-viscosity"></strong><small>cPs</small></div>
       </div>
       <div class="card-body">
         <div class="simulation-stage"><canvas id="simulation-canvas">배합에 따른 점도와 유동성은 아래 지표에서 확인할 수 있습니다.</canvas></div>
         <div class="simulation-sim-foot"><span id="simulation-phase-status">실시간 배합 100% 동기화</span><span id="simulation-flow-caption"></span></div>
-        <div class="simulation-hud" aria-label="제형 지표">
-          <div class="stat-tile"><span>예상 질감 {{ help('texture', '예상 질감', '예측 점도를 사용감 표현으로 바꾼 지표입니다. 원하는 제형이 묽은지, 풍부하고 되직한지 비교하기 위해 표시합니다. 실제 관능평가 결과는 아닙니다.') }}</span><strong id="simulation-texture"></strong></div>
-          <div class="stat-tile"><span>상대 유동성 {{ help('flow', '상대 유동성', '점도로 계산한 0~100 상대 지수입니다. 높을수록 잘 흐르는 방향이며, 배합별 퍼짐과 토출 특성을 비교하기 위해 표시합니다. 실측 유량이나 백분율은 아닙니다.') }}</span><strong id="simulation-flow"></strong></div>
-          <div class="stat-tile"><span>유효 성분 농도 {{ help('concentration', '유효 성분 농도', '유효 활성 성분 함량을 ppm으로 환산합니다. 1% = 10,000 ppm이며 바이어의 농도 요구와 배합을 같은 단위로 비교하기 위해 표시합니다. 효능의 크기를 뜻하지는 않습니다.') }}</span><strong id="simulation-active-val"></strong></div>
-          <div class="stat-tile"><span>정제수 잔량비 {{ help('water', '정제수 잔량비', '100%에서 네 가지 배합 성분의 합을 뺀 값입니다. 배합 총량이 100%인지, 성분을 늘릴 때 물의 비중이 얼마나 줄어드는지 확인하기 위해 표시합니다. 상성 토글은 별도의 시연 조건입니다.') }}</span><strong id="simulation-water"></strong></div>
-        </div>
+
       </div>
     </section>
     <section class="card simulation-controls" aria-label="배합 조절">
-      <div class="card-header"><h2 class="card-title">배합 조절</h2><span class="badge" id="simulation-modified">기본 배합</span></div>
+      <div class="card-header"><h2 class="card-title">배합 조절</h2></div>
       <div class="card-body">
-        <div class="simulation-preset-row"><label class="form-label" for="simulation-preset">타깃 제형</label><select class="form-control form-control-sm" id="simulation-preset"><option value="serum">세럼</option><option value="ampoule" selected>고농축 앰플</option><option value="lotion">로션</option><option value="cream">크림</option></select></div>
+
         <div class="simulation-sliders">
           {% for id, label, min, max, step, value, description in [
             ('active', '유효 활성 성분', 0, 15, 0.5, 3, '제품의 주요 목적에 맞춰 넣는 성분군입니다. 예: 나이아신아마이드, 아데노신, 펩타이드류. 원료마다 적정 함량과 안정성 조건은 다릅니다.'),
@@ -48,16 +44,16 @@
           <div class="simulation-slider">
             <div class="simulation-slider-heading"><div><label for="simulation-{{ id }}">{{ label }}</label>{{ help(id, label, description, true) }}</div><output id="simulation-{{ id }}-out" for="simulation-{{ id }}"></output></div>
             <input id="simulation-{{ id }}" type="range" min="{{ min }}" max="{{ max }}" step="{{ step }}" value="{{ value }}">
-            <div class="simulation-range-ends"><span>{{ min }}%</span>{% if id == 'active' %}<span id="simulation-active-ppm">30,000 ppm</span>{% endif %}<span>{{ max }}%</span></div>
+
           </div>
           {% endfor %}
         </div>
         <div class="simulation-stress-box">
           <h3>성분 상성 · 안정화</h3>
           <div class="simulation-stress-options">
-            <label class="form-check"><input type="checkbox" id="simulation-chk-vitaminc"><span>비타민 C 15% <small>산성 조건</small></span></label>
-            <label class="form-check"><input type="checkbox" id="simulation-chk-oilphase"><span>고농도 유상 <small>상분리 조건</small></span></label>
-            <label class="form-check"><input type="checkbox" id="simulation-chk-capsule"><span>마이크로 캡슐화 <small>안정화 적용</small></span></label>
+            <label class="form-check"><input type="checkbox" id="simulation-chk-vitaminc"><span title="산성 조건 시연">비타민 C 15%</span></label>
+            <label class="form-check"><input type="checkbox" id="simulation-chk-oilphase"><span title="상분리 조건 시연">고농도 유상</span></label>
+            <label class="form-check"><input type="checkbox" id="simulation-chk-capsule"><span title="안정화 적용">마이크로 캡슐화</span></label>
           </div>
         </div>
       </div>
@@ -72,6 +68,12 @@
           <p id="simulation-reason"></p>
         </div>
         <div class="simulation-recommendation"><span class="text-caption">추천 용기</span><div id="simulation-recommendations" class="simulation-recommendations"></div></div>
+        <div class="simulation-hud" aria-label="제형 지표">
+          <div class="stat-tile"><span>예상 질감 {{ help('texture', '예상 질감', '예측 점도를 사용감 표현으로 바꾼 지표입니다. 원하는 제형이 묽은지, 풍부하고 되직한지 비교하기 위해 표시합니다. 실제 관능평가 결과는 아닙니다.') }}</span><strong id="simulation-texture"></strong></div>
+          <div class="stat-tile"><span>상대 유동성 {{ help('flow', '상대 유동성', '점도로 계산한 0~100 상대 지수입니다. 높을수록 잘 흐르는 방향이며, 배합별 퍼짐과 토출 특성을 비교하기 위해 표시합니다. 실측 유량이나 백분율은 아닙니다.') }}</span><strong id="simulation-flow"></strong></div>
+          <div class="stat-tile"><span>유효 성분 농도 {{ help('concentration', '유효 성분 농도', '유효 활성 성분 함량을 ppm으로 환산합니다. 1% = 10,000 ppm이며 바이어의 농도 요구와 배합을 같은 단위로 비교하기 위해 표시합니다. 효능의 크기를 뜻하지는 않습니다.') }}</span><strong id="simulation-active-val"></strong></div>
+          <div class="stat-tile"><span>정제수 잔량비 {{ help('water', '정제수 잔량비', '100%에서 네 가지 배합 성분의 합을 뺀 값입니다. 배합 총량이 100%인지, 성분을 늘릴 때 물의 비중이 얼마나 줄어드는지 확인하기 위해 표시합니다. 상성 토글은 별도의 시연 조건입니다.') }}</span><strong id="simulation-water"></strong></div>
+        </div>
       </div>
     </section>
     <section class="card simulation-pitch" aria-label="바이어 제안 가이드">

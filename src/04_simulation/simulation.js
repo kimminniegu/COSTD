@@ -217,7 +217,7 @@ function update() {
   $('sample-name').textContent = PRESETS[$('preset').value].name;
   $('modified').textContent = modified ? '사용자 조정 배합' : '기본 배합';
 
-  $('active-out').textContent = a.toFixed(1) + '\%';$('active-ppm').textContent = `${fmt(activePpm)} ppm`;
+  $('active-out').textContent = a.toFixed(1) + '\%';
   $('carb-out').textContent = c.toFixed(2) + '%';
   $('oil-out').textContent = o + '\%';$('hum-out').textContent = h + '%';
 
@@ -523,29 +523,15 @@ function drawScene() {
   const floor = height * .76;
 
   const thick = clamp(Math.log(1 + displayViscosity / 2000) / Math.log(26), 0, 1);
-  const scale = Math.min(width / 480, height / 460, 1.45);
-  const r = 17 * scale;
-  const neckMax = lerp(22, 92, thick) * scale;
+  const scale = Math.min(width / 400, height / 340, 1.6);
+  const r = 22 * scale;
+  const neckMax = Math.min(lerp(22, 92, thick) * scale, (floor - tip) * .65);
   const formEnd = .54;
   const hit = .76;
   const impact = phase >= hit ? (phase - hit) / (1 - hit) : 0;
 
   ctx.clearRect(0, 0, width, height);
 
-  // 밝은 스튜디오의 곡면 배경: UI 배경과 재질 렌더링을 분리합니다.
-  const light = ctx.createLinearGradient(0, 0, width * .6, height);
-  light.addColorStop(0, '#f6f9fd');
-  light.addColorStop(.5, '#e8f0f8');
-  light.addColorStop(.72, '#f3f7fb');
-  light.addColorStop(1, '#e1eaf4');
-  ctx.fillStyle = light;
-  ctx.fillRect(0, 0, width, height);
-
-  const glow = ctx.createRadialGradient(width * .32, height * .22, 0, x, height * .4, width * .65);
-  glow.addColorStop(0, 'rgba(255,255,255,.95)');
-  glow.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, width, height);
   const plateW = Math.min(width * .33, 235);
   drawSamplePlatform(x, floor + 6, plateW, scale);
 
@@ -609,7 +595,7 @@ function drawScene() {
     ctx.restore();
   }
 
-  drawGlassPipette(x, height * .2, tip, scale, thick);
+  drawGlassPipette(x, height * .17, tip, scale, thick);
 
   // 액적 물리 애니메이션 (Bézier Necking Tail & Droplet)
   let stageText = '액적 형성';
