@@ -13,6 +13,12 @@
 #regulatory-results [hidden],
 #regulatory-detail-modal [hidden] { display: none !important; }
 
+/* 페이지 상단 간격 -------------------------------------------------------
+   공통 .page-header 는 하단 margin 이 섹션 간격(--layout-section-gap, 72px)이라 소제목과 안내 배너 사이가 넓습니다.
+   이 페이지의 헤더에만 페이지 접두사 class 를 더해 24px 로 줄입니다. 음수 margin·위치 이동 없이 문서 흐름 그대로 두어
+   배너와 그 아래 조회 카드가 함께 올라오고, 소제목이 여러 줄이 되어도 겹치지 않습니다. 공통 CSS 는 수정하지 않습니다. */
+.page-header.regulatory-page-header { margin-bottom: var(--space-6); }
+
 /* 자동완성 후보 목록 -----------------------------------------------------
    공통 규격이 없어 페이지 전용으로 둡니다. 세부 배치·접근성 표현은 PM 협의 사항 (regulatory.md 12항) */
 .regulatory-autocomplete { position: relative; }
