@@ -35,6 +35,7 @@
     moq: 5000, moqMode: "surcharge", moqSur: 10,
     qtyRows: [{ q: 3000, l: 800000 }, { q: 5000, l: 1000000 }, { q: 10000, l: 1200000 }, { q: 20000, l: 2000000 }, { q: 50000, l: 4000000 }],
     tierData: null,
+    quote: null,
   };
 
   /* 선택 버튼 묶음 (.tabs 모양, Panel 없이 페이지 JS에서 .is-active 토글) */
@@ -216,38 +217,132 @@
     $("abs-warn").innerHTML = extM < 0 ? '<span class="badge badge-danger">마진 초과 흡수</span>'
       : (aC / r.C > 0.2 ? '<span class="badge badge-warning">원가 +20% 초과</span>' : "");
 
-    /* 견적서 */
+    /* 견적서 — 화면 미리보기와 PDF 가 같은 값(st.quote)을 씁니다 */
     const qty = p.qty, fx = p.fx, U = Math.round(r.usd * 100) / 100;
-    const today = new Date().toISOString().slice(0, 10);
-    let body = "";
-    if (st.qMode === "one") {
-      body = `<table class="table"><thead><tr><th>Description</th><th class="is-numeric">Q'ty (pcs)</th><th class="is-numeric">Unit price (${p.inco})</th><th class="is-numeric">Amount</th></tr></thead><tbody>
-        <tr><td>Toner 150ml</td>${n(qty.toLocaleString())}${n(usd(U))}${n(money(U * qty))}</tr>
-        <tr class="margin-total"><td>Total</td><td></td><td></td>${n(money(U * qty))}</tr></tbody></table>`;
-    } else if (st.qMode === "split") {
+    const product = $("q-product").value.trim() || "Product";
+    const lines = [], breakdown = [];
+    if (st.qMode === "split") {
       const logiU = (r.L + aL) / fx;
       const prodU = Math.round((r.usd - logiU - r.freightU - r.insU) * 100) / 100;
-      const lines = [["Toner 150ml (EXW)", qty.toLocaleString(), usd(prodU), prodU * qty],
-        ["Local logistics to FOB", "1 lot", "", logiU * qty]];
-      if (r.freightU) lines.push(["Ocean freight", "1 lot", "", r.freightU * qty]);
-      if (r.insU) lines.push(["Marine insurance", "1 lot", "", r.insU * qty]);
-      const sum = lines.reduce((s, l) => s + l[3], 0);
-      body = '<table class="table"><thead><tr><th>Description</th><th class="is-numeric">Q\'ty</th><th class="is-numeric">Unit price</th><th class="is-numeric">Amount</th></tr></thead><tbody>'
-        + lines.map((l) => `<tr><td>${l[0]}</td>${n(l[1])}${n(l[2])}${n(money(l[3]))}</tr>`).join("")
-        + `<tr class="margin-total"><td>Total</td><td></td><td></td>${n(money(sum))}</tr></tbody></table>`;
+      lines.push({ description: `${product} (EXW)`, qty: `${qty.toLocaleString()} pcs`, unit_price: prodU, amount: prodU * qty });
+      if (logiU > 0) lines.push({ description: "Local logistics to port of loading", qty: "1 lot", unit_price: "", amount: logiU * qty });
+      if (r.freightU) lines.push({ description: "Ocean freight", qty: "1 lot", unit_price: "", amount: r.freightU * qty });
+      if (r.insU) lines.push({ description: "Marine insurance", qty: "1 lot", unit_price: "", amount: r.insU * qty });
     } else {
-      const c = (r.C + aC) / fx, l = (r.L + aL) / fx, m = extM / fx;
-      body = `<table class="table"><thead><tr><th>Cost breakdown (per pc)</th><th class="is-numeric">USD</th><th class="is-numeric">Share</th></tr></thead><tbody>
-        <tr><td>Product cost (materials, filling, packaging)</td>${n(usd(c))}${n(pct((c * fx) / r.P4))}</tr>
-        <tr><td>Logistics to FOB</td>${n(usd(l))}${n(pct((l * fx) / r.P4))}</tr>
-        <tr><td>Margin</td>${n(usd(m))}${n(pct(extM / r.P4))}</tr>
-        ${r.freightU ? `<tr><td>Ocean freight</td>${n(usd(r.freightU))}<td></td></tr>` : ""}
-        ${r.insU ? `<tr><td>Marine insurance</td>${n(usd(r.insU))}<td></td></tr>` : ""}
-        <tr class="margin-total"><td>Unit price (${p.inco})</td>${n(usd(r.usd))}<td></td></tr></tbody></table>`;
+      lines.push({ description: product, qty: `${qty.toLocaleString()} pcs`, unit_price: U, amount: U * qty });
+      if (st.qMode === "open") {
+        const c = (r.C + aC) / fx, l = (r.L + aL) / fx, m = extM / fx;
+        breakdown.push({ label: "Product cost (materials, filling, packaging)", usd: c, share: pct((c * fx) / r.P4) });
+        if (l > 0) breakdown.push({ label: "Logistics to port of loading", usd: l, share: pct((l * fx) / r.P4) });
+        breakdown.push({ label: "Margin", usd: m, share: pct(extM / r.P4) });
+        if (r.freightU) breakdown.push({ label: "Ocean freight", usd: r.freightU, share: "" });
+        if (r.insU) breakdown.push({ label: "Marine insurance", usd: r.insU, share: "" });
+      }
     }
-    $("quote").innerHTML = `<div class="margin-quote__head"><strong>QUOTATION</strong><span class="text-caption">${today} · Validity 30 days</span></div>${body}
-      <p class="text-caption margin-quote__terms">Terms: ${p.inco} Korea · Payment T/T · MOQ ${st.moq.toLocaleString()} pcs${r.d > 0 ? ` · Volume discount ${pct(r.d)} included` : ""}</p>`;
+    lines.forEach((l) => { l.amount = Math.round(l.amount * 100) / 100; });
+    st.quote = {
+      mode: st.qMode, incoterm: p.inco, lines, breakdown,
+      total: lines.reduce((sum, l) => sum + l.amount, 0),
+      moq: `${st.moq.toLocaleString()} pcs`,
+      discount_note: r.d > 0 ? `Volume discount of ${pct(r.d)} is included in the unit price.` : "",
+    };
+
+    const today = new Date().toISOString().slice(0, 10);
+    const rowsHtml = lines.map((l) => `<tr><td>${esc(l.description)}</td>${n(esc(l.qty))}${n(l.unit_price === "" ? "" : usd(l.unit_price))}${n(money(l.amount))}</tr>`).join("");
+    const bdHtml = breakdown.length
+      ? '<table class="table margin-table-compact"><thead><tr><th>Cost breakdown (per pc)</th><th class="is-numeric">USD</th><th class="is-numeric">Share</th></tr></thead><tbody>'
+        + breakdown.map((b) => `<tr><td>${b.label}</td>${n(usd(b.usd))}${n(b.share)}</tr>`).join("") + "</tbody></table>"
+      : "";
+    $("quote").innerHTML = `<div class="margin-quote__head"><strong>QUOTATION</strong><span class="text-caption">${today} · Validity 30 days</span></div>
+      <table class="table"><thead><tr><th>Description</th><th class="is-numeric">Q'ty</th><th class="is-numeric">Unit price (${p.inco})</th><th class="is-numeric">Amount</th></tr></thead>
+      <tbody>${rowsHtml}<tr class="margin-total"><td>Total</td><td></td><td></td>${n(money(st.quote.total))}</tr></tbody></table>${bdHtml}
+      <p class="text-caption margin-quote__terms">Terms: ${p.inco} · Payment T/T · MOQ ${st.moq.toLocaleString()} pcs${r.d > 0 ? ` · Volume discount ${pct(r.d)} included` : ""}</p>`;
+    renderQuoteSummary();
   }
+
+  /* ---------- 견적서 PDF 팝업 ---------- */
+  const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ESC[c]);
+  const qv = (id) => $(id).value.trim();
+  const MODE_NAMES = { one: "통합형", split: "분리형", open: "오픈북형" };
+  let profileLoaded = false;
+
+  function renderQuoteSummary() {
+    const q = st.quote;
+    if (!q) return;
+    $("q-summary").textContent = `${MODE_NAMES[q.mode]} · ${q.incoterm} · ${q.lines[0].qty} · 합계 ${money(q.total)} — 견적 계산 값이 그대로 들어가요`;
+  }
+
+  async function loadProfile() {
+    if (profileLoaded) return;
+    try {
+      const res = await fetch(root.dataset.profileUrl, { headers: { Accept: "application/json" } });
+      if (!res.ok || !(res.headers.get("Content-Type") || "").includes("json")) throw new Error();
+      const data = await res.json();
+      $("q-company").value = data.company.name;
+      if (!qv("q-contact-name")) $("q-contact-name").value = data.contact.name || "";
+      if (!qv("q-contact-email")) $("q-contact-email").value = data.contact.email || "";
+      profileLoaded = true;
+    } catch (e) {
+      $("q-err").textContent = "회사 정보를 불러오지 못했어요. 다시 로그인한 뒤 열어 주세요.";
+    }
+  }
+
+  async function downloadQuotePdf() {
+    const q = st.quote, btn = $("q-pdf"), err = $("q-err");
+    const required = [["q-buyer-company", "고객사 회사명"], ["q-no", "견적 번호"], ["q-product", "품목명"]];
+    const missing = required.filter(([id]) => !qv(id));
+    required.forEach(([id]) => $(id).classList.toggle("is-error", !qv(id)));
+    if (missing.length) { err.textContent = missing.map((m) => m[1]).join(", ") + "을(를) 입력하세요."; $(missing[0][0]).focus(); return; }
+    if (!q) return;
+    err.textContent = "";
+    const payload = {
+      ...q,
+      quote_no: qv("q-no"), issue_date: new Date().toISOString().slice(0, 10),
+      validity_days: parseInt(qv("q-validity"), 10) || 30,
+      contact: { name: qv("q-contact-name"), email: qv("q-contact-email") },
+      buyer: { company: qv("q-buyer-company"), country: qv("q-buyer-country"), attn: qv("q-buyer-attn"), address: qv("q-buyer-address"), email: qv("q-buyer-email") },
+      payment: qv("q-payment"), named_place: qv("q-place"), lead_time: qv("q-lead"), remarks: qv("q-remarks"),
+    };
+    const label = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner spinner-sm"></span> 만드는 중';
+    try {
+      const res = await fetch(root.dataset.pdfUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const type = res.headers.get("Content-Type") || "";
+      if (!res.ok || !type.includes("pdf")) {
+        let msg = type.includes("html") ? "로그인이 만료됐어요. 다시 로그인해 주세요." : "PDF를 만들지 못했어요.";
+        try { msg = (await res.json()).error || msg; } catch (e) { /* JSON 이 아니면 기본 문구 */ }
+        throw new Error(msg);
+      }
+      const name = (res.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/);
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name ? name[1] : "Quotation.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      window.Common.closeModal("margin-quote-modal");
+    } catch (e) {
+      err.textContent = e.message;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = label;
+    }
+  }
+
+  /* .container 는 Container Query 기준이라 fixed 요소가 화면이 아닌 본문 기준으로 배치됩니다.
+     팝업이 화면 가운데에 뜨도록 body 바로 아래로 옮깁니다. (열기·닫기는 common.js 가 document 에서 처리) */
+  document.body.appendChild($("quote-modal"));
+  $("q-no").value = "QT-" + new Date().toISOString().slice(0, 10).replace(/-/g, "") + "-01";
+  $("q-open").addEventListener("click", loadProfile);   // 팝업 열기는 common.js(data-modal-open)가 처리
+  $("q-pdf").addEventListener("click", downloadQuotePdf);
+  $("quote-modal").querySelectorAll("input, textarea").forEach((e) => e.addEventListener("input", () => {
+    e.classList.remove("is-error");
+    if (e.id === "margin-q-product") render();
+  }));
 
   function renderReverse(p, r) {
     const t = num("target"), floor = num("item-floor") / 100;
@@ -570,7 +665,6 @@
     render();
   }));
   $("adj-reset").addEventListener("click", () => { st.adj = {}; render(); });
-  $("print").addEventListener("click", () => window.print());
 
   /* 입력 Card 전체 + 탭별 입력 (할인 구간 입력은 drawTiers 에서 따로 연결) */
   $("inputs").querySelectorAll("input, select").forEach((e) => e.addEventListener("input", render));

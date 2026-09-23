@@ -133,6 +133,16 @@
 .margin-quote__head strong { font-size: var(--font-size-card-title); letter-spacing: 0.04em; }
 .margin-quote__terms { margin-top: var(--space-4); }
 
+/* 견적서 PDF 팝업 */
+#margin-quote-modal .margin-modal-section:first-of-type { margin-top: var(--space-5); }
+.margin-modal-summary { padding: var(--space-3) var(--space-4); background: var(--color-primary-soft); border-radius: var(--radius-sm); font-size: var(--font-size-label); color: var(--color-primary); font-weight: var(--font-weight-bold); }
+.margin-modal-section { display: flex; align-items: baseline; gap: var(--space-2); margin: var(--space-6) 0 var(--space-3); font-size: var(--font-size-sub); }
+.margin-modal-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-3); }
+.margin-modal-grid__wide { grid-column: 1 / -1; }
+.margin-modal-grid .form-control[readonly] { color: var(--color-text-secondary); cursor: default; }
+textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; font-size: var(--font-size-sub); }
+#margin-q-err { margin-top: var(--space-3); }
+
 /* 판정 박스 (역제안 · 환율 · 수량 요약 · 직접 조정 결과) */
 .margin-verdict { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: var(--space-1); padding: var(--space-4) var(--space-5); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
 .margin-verdict.is-good { background: var(--margin-zone-good-soft); }
@@ -241,13 +251,6 @@
   .margin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @container page (max-width: 560px) {
-  .margin-head--reverse, .margin-head--tier, .margin-head--fx, .margin-thr-grid { grid-template-columns: 1fr; }
+  .margin-head--reverse, .margin-head--tier, .margin-head--fx, .margin-thr-grid, .margin-modal-grid { grid-template-columns: 1fr; }
   .margin-sec-title .btn { margin-left: 0; }
-}
-
-/* 견적서 인쇄: 견적서 영역만 출력 */
-@media print {
-  body * { visibility: hidden; }
-  #margin-quote, #margin-quote * { visibility: visible; }
-  #margin-quote { position: absolute; top: 0; left: 0; width: 100%; background: none; }
 }

@@ -220,7 +220,29 @@ def home_api_regulations():
 
 
 # [C] 원가 경쟁력 및 마진 시뮬레이션 — 접두사: /api/margin-calculator/...
-# (현재 계산은 모두 브라우저 margin.js 에서 처리해 Backend Route 없음)
+# 계산은 브라우저 margin.js 에서 하고, 서버는 견적서 PDF 생성만 합니다. (src/03_margin/service.py)
+margin_service = importlib.import_module("src.03_margin.service")
+
+
+@app.route("/api/margin-calculator/quote-profile", methods=["GET"])
+@login_required
+def margin_quote_profile():
+    return jsonify(margin_service.quote_profile(auth.current_user()))
+
+
+@app.route("/api/margin-calculator/quote-pdf", methods=["POST"])
+@login_required
+def margin_quote_pdf():
+    try:
+        context = margin_service.build_quote_context(request.get_json(silent=True), auth.current_user())
+        pdf = margin_service.html_to_pdf(render_template("03_margin/margin_quote_document.html", **context))
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    except RuntimeError as e:
+        return jsonify(error=str(e)), 500
+    filename = margin_service.quote_filename(context["quote_no"])
+    return app.response_class(pdf, mimetype="application/pdf",
+                              headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 # [D] AI 제형/샘플 시뮬레이션 — 접두사: /api/ai-formulation/...
