@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, abort, render_template, send_from_directory
+from flask import Flask, abort, render_template, send_from_directory,request, jsonify
 
 BASE_DIR = Path(__file__).resolve().parent
 SRC_DIR = BASE_DIR / "src"
