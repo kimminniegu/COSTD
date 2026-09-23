@@ -595,9 +595,31 @@
   var LOOKUP_LABEL = {
     found: { text: "규제 정보 조회됨", variant: "" },
     no_data: { text: "규제 데이터 미확인", variant: "warning" },
+    not_listed: { text: "규제 목록 미등재", variant: "warning" },
     hold: { text: "판단 보류 (미확인 응답)", variant: "warning" },
     api_error: { text: "API 오류", variant: "danger" },
+    access: { text: "접근 제한", variant: "danger" },
   };
+
+  /* 오류 종류 → 화면 분류. access/auth/rate_limit 은 '접근 제한', 나머지는 'API 오류' */
+  var ACCESS_KINDS = { access: "요금제(구독)·인증 확인 필요", auth: "인증 실패", rate_limit: "호출 한도 초과" };
+  function errorCategory(err) { return err && ACCESS_KINDS[err.kind] ? "access" : "api_error"; }
+  function errorBadge(err) {
+    var cat = errorCategory(err);
+    return badge(cat === "access" ? "접근 제한 · " + ACCESS_KINDS[err.kind] : "API 오류", "danger");
+  }
+
+  /* 데이터 없음 응답의 이유를 쉬운 한국어로. 확인된 문구만 근거로 쓰고 의미를 단정하지 않는다 */
+  function noDataReason(res) {
+    if (!res) return "";
+    if (res.lookup_status === "not_listed") return "API 소스에 이 성분의 제한·금지 항목이 없다고 안내했어요. 허용·안전을 뜻하지 않아요.";
+    if (res.lookup_status === "no_data") {
+      return res.note_mentions_plan
+        ? "선택한 시장의 항목이 없어요. API 안내문에 ‘현재 요금제 밖 시장에만 항목이 있다’는 문구가 있어요 (요금제 범위는 관리자 확인 필요)."
+        : "선택한 시장의 항목이 API 소스에 없어요. 다른 시장 항목 유무는 아래 API 안내를 참고하세요.";
+    }
+    return "";
+  }
 
   function lookupBadge(status) {
     var m = LOOKUP_LABEL[status] || { text: "미조회", variant: "" };
@@ -651,13 +673,14 @@
     set("match-updated", sel.record_updated_at ? sel.record_updated_at + " (API 레코드 updated_at)" : "미제공");
 
     var statusNode = el("span");
-    statusNode.appendChild(lookupBadge(res ? res.lookup_status : "api_error"));
+    statusNode.appendChild(res ? lookupBadge(res.lookup_status) : errorBadge(err));
     if (err && err.message) statusNode.appendChild(document.createTextNode(" " + err.message));
+    if (res && noDataReason(res)) statusNode.appendChild(el("p", "text-caption text-secondary", noDataReason(res)));
     set("lookup-status", statusNode);
     set("lookup-result-status", res ? res.result_status : (err && err.kind ? "오류 종류: " + err.kind : "—"));
     set("lookup-type", joinEntries(res, "regulate_type") || (res ? "미제공" : "—"));
     set("lookup-notice-name", joinEntries(res, "notice_ingr_name") || (res ? "미제공" : "—"));
-    set("lookup-raw", joinEntries(res, "limit_condition") || (res && res.lookup_status === "found" ? "미제공" : (res ? "규제 데이터 없음" : "—")));
+    set("lookup-raw", joinEntries(res, "limit_condition") || (res && res.lookup_status === "found" ? "미제공" : (res ? "규제 데이터 없음 (응답 상태값: " + (res.result_status || "—") + ")" : "—")));
     set("lookup-proviso", joinEntries(res, "proviso") || (res ? "미제공" : "—"));
     set("lookup-scope", scopeText(res, ctx));
     set("lookup-note", res && res.result_note ? res.result_note : "없음");
@@ -679,7 +702,7 @@
     replaceChildren($("regulatory-single-status"), lookupBadge(res.lookup_status));
     var statusNote = "";
     if (res.lookup_status === "found") statusNote = "규제 항목 " + res.entries.length + "건 반환";
-    else if (res.lookup_status === "no_data") statusNote = "응답 상태값: " + (res.result_status || "—");
+    else if (res.lookup_status === "no_data" || res.lookup_status === "not_listed") statusNote = "응답 상태값: " + (res.result_status || "—");
     else statusNote = "응답 상태값: " + (res.result_status || "—") + " (확인되지 않은 값)";
     setText($("regulatory-single-status-note"), statusNote);
 
@@ -687,11 +710,14 @@
     setText($("regulatory-single-type"), res.entries.length ? types.join(", ") : "—");
     setText($("regulatory-single-type-note"), res.entries.length
       ? "API 원문 표기"
-      : (res.lookup_status === "no_data" ? "규제 데이터 없음" : "판단 보류"));
+      : (res.lookup_status === "no_data" ? "시장 항목 없음" : (res.lookup_status === "not_listed" ? "목록 미등재" : "판단 보류")));
 
-    show($("regulatory-single-nodata"), res.lookup_status === "no_data");
+    var noData = res.lookup_status === "no_data" || res.lookup_status === "not_listed";
+    show($("regulatory-single-nodata"), noData);
+    setText($("regulatory-single-nodata-title"), res.lookup_status === "not_listed" ? "API 규제 목록에 이 성분이 등재되어 있지 않아요" : "선택한 시장의 규제 데이터가 확인되지 않았어요");
+    setText($("regulatory-single-nodata-body"), (noDataReason(res) || "허용되거나 안전하다는 뜻은 아니에요.") + " 다른 자료로 추가 확인이 필요해요.");
     var nodataNote = $("regulatory-single-nodata-note");
-    if (nodataNote) { setText(nodataNote, res.result_note ? "API 안내: " + res.result_note : ""); show(nodataNote, !!res.result_note); }
+    if (nodataNote) { setText(nodataNote, res.result_note ? "API 안내(원문): " + res.result_note : ""); show(nodataNote, !!res.result_note); }
     show($("regulatory-single-hold"), res.lookup_status === "hold");
     setText($("regulatory-single-hold-note"), "응답 상태값 '" + (res.result_status || "—") + "'은 확인된 값이 아니에요. 임의로 해석하지 않았어요.");
     show($("regulatory-asean-notice"), ctx.marketCode === "ASEAN");
@@ -708,8 +734,8 @@
     setText($("regulatory-result-time"), "—");
     setText($("regulatory-result-error-reason"), (err && err.message) || "잠시 후 다시 시도해 주세요.");
     setText($("regulatory-result-error-kind"),
-      "오류 종류: " + ((err && err.kind) || "unknown") + (err && err.http_status ? " · 외부 API HTTP " + err.http_status : "") +
-      " · 입력한 조건은 그대로 남아 있어요.");
+      (errorCategory(err) === "access" ? "접근 제한 (" + ACCESS_KINDS[err.kind] + ")" : "API 오류") + " · 오류 종류: " + ((err && err.kind) || "unknown") +
+      (err && err.http_status ? " · 외부 API HTTP " + err.http_status : "") + " · 입력한 조건은 그대로 남아 있어요.");
     fillModal(null, ctx, err);
     setResult("error");
   }
@@ -1188,8 +1214,10 @@
   var BATCH_LABEL = {
     found: { text: "규제 정보 조회됨", variant: "" },
     no_data: { text: "규제 데이터 미확인", variant: "warning" },
+    not_listed: { text: "규제 목록 미등재", variant: "warning" },
     hold: { text: "판단 보류 (미확인 응답)", variant: "warning" },
     api_error: { text: "API 오류", variant: "danger" },
+    access: { text: "접근 제한", variant: "danger" },
     choose: { text: "성분 확인 필요", variant: "warning" },
     not_found: { text: "성분 매칭 실패", variant: "warning" },
     error: { text: "성분 확인 실패", variant: "danger" },
@@ -1201,6 +1229,7 @@
     if (!x.match) return "unmatched";
     if (x.match.status !== "confirmed") return x.match.status;
     if (!x.result || x.result.market !== market) return "pending";
+    if (x.result.status === "api_error") return errorCategory(x.result.err);   // access | api_error
     return x.result.status;
   }
 
@@ -1218,7 +1247,7 @@
 
   function renderBatch(market) {
     var rows = includedRows();
-    var counts = { total: 0, found: 0, review: 0, fail: 0 };
+    var counts = { total: 0, found: 0, nodata: 0, access: 0, error: 0, unconfirmed: 0, hold: 0, fail: 0 };
     var body = $("regulatory-result-body");
     if (body) body.innerHTML = "";
     var reviewNames = [];
@@ -1226,8 +1255,13 @@
       var st = rowStatus(x, market);
       counts.total++;
       if (st === "found") counts.found++;
-      if (st !== "found") { counts.review++; reviewNames.push(x.name.trim()); }
-      if (st === "api_error") counts.fail++;
+      else if (st === "no_data" || st === "not_listed") counts.nodata++;
+      else if (st === "access") counts.access++;
+      else if (st === "api_error") counts.error++;
+      else if (st === "hold" || st === "pending") counts.hold++;
+      else counts.unconfirmed++;                                   // choose · not_found · error(성분 확인 실패) · unmatched
+      if (st !== "found") reviewNames.push(x.name.trim());
+      if (st === "api_error" || st === "access") counts.fail++;
       if (!body) return;
       var tr = el("tr");
       var tdName = el("td");
@@ -1239,9 +1273,14 @@
       tr.appendChild(el("td", null, fileMarketLabel()));
       var tdStatus = el("td");
       var lab = BATCH_LABEL[st] || BATCH_LABEL.pending;
-      tdStatus.appendChild(badge(lab.text, lab.variant));
-      if (st === "api_error" && x.result && x.result.err) tdStatus.appendChild(el("p", "regulatory-result__sub", x.result.err.message || ""));
-      if (st === "no_data" && x.result && x.result.res && x.result.res.result_note) tdStatus.appendChild(el("p", "regulatory-result__sub", "API 안내: " + x.result.res.result_note));
+      if (st === "access" && x.result && x.result.err) tdStatus.appendChild(errorBadge(x.result.err));
+      else tdStatus.appendChild(badge(lab.text, lab.variant));
+      if ((st === "api_error" || st === "access") && x.result && x.result.err) tdStatus.appendChild(el("p", "regulatory-result__sub", x.result.err.message || ""));
+      if ((st === "no_data" || st === "not_listed") && x.result && x.result.res) {
+        tdStatus.appendChild(el("p", "regulatory-result__sub", noDataReason(x.result.res)));
+        if (x.result.res.result_note) tdStatus.appendChild(el("p", "regulatory-result__sub", "API 안내(원문): " + x.result.res.result_note));
+      }
+      if (st === "hold" && x.result && x.result.res) tdStatus.appendChild(el("p", "regulatory-result__sub", "확인되지 않은 응답 상태값 ‘" + (x.result.res.result_status || "—") + "’ — 임의로 해석하지 않았어요."));
       tr.appendChild(tdStatus);
       var types = x.result && x.result.res && x.result.res.entries ? x.result.res.entries.map(function (e) { return e.regulate_type || "구분 미제공"; }) : [];
       tr.appendChild(el("td", null, types.length ? types.join(", ") : "—"));
@@ -1264,13 +1303,16 @@
     setText($("regulatory-cond-scope"), "시장 코드 " + market + " · 확정 성분 " + confirmedRows().length + "건 조회");
     setText($("regulatory-kpi-total"), String(counts.total));
     setText($("regulatory-kpi-found"), String(counts.found));
-    setText($("regulatory-kpi-review"), String(counts.review));
+    setText($("regulatory-kpi-nodata"), String(counts.nodata) + (counts.hold ? " (+보류 " + counts.hold + ")" : ""));
+    setText($("regulatory-kpi-access"), String(counts.access));
+    setText($("regulatory-kpi-error"), String(counts.error));
+    setText($("regulatory-kpi-unconfirmed"), String(counts.unconfirmed));
 
     show($("regulatory-partial-fail-notice"), counts.fail > 0);
     setText($("regulatory-partial-fail-count"), String(counts.fail));
     show($("regulatory-retry-failed"), counts.fail > 0);
 
-    var allNoData = rows.length > 0 && counts.found === 0 && rows.every(function (x) { return rowStatus(x, market) === "no_data"; });
+    var allNoData = rows.length > 0 && counts.found === 0 && rows.every(function (x) { var st = rowStatus(x, market); return st === "no_data" || st === "not_listed"; });
     show($("regulatory-result-empty"), allNoData);
     var list = $("regulatory-empty-review-list");
     if (list) { list.innerHTML = ""; if (allNoData) reviewNames.forEach(function (n) { list.appendChild(el("li", null, n)); }); }

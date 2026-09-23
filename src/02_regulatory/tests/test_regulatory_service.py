@@ -175,9 +175,10 @@ class HttpErrorClassificationTest(unittest.TestCase):
     def test_connection(self):
         self.assert_error("connection", side_effect=svc.requests.exceptions.ConnectionError("x-rapidapi-key leaked?"))
 
-    def test_auth_401_and_403(self):
+    def test_auth_401_and_access_403(self):
         self.assert_error("auth", return_value=FakeResponse(401, {"message": "bad key"}))
-        self.assert_error("auth", return_value=FakeResponse(403, {"message": "forbidden"}))
+        # 403 은 RapidAPI 가 미구독·요금제 밖 엔드포인트에도 쓰므로 '접근 제한(access)' 으로 구분한다
+        self.assert_error("access", return_value=FakeResponse(403, {"message": "You are not subscribed to this API."}))
 
     def test_rate_limit_429(self):
         self.assert_error("rate_limit", return_value=FakeResponse(429, {"message": "Too many"}))
@@ -616,3 +617,47 @@ class ExtractRouteTest(unittest.TestCase):
         html = self.client.get("/regulatory").get_data(as_text=True)
         for marker in ("regulatory-file-form", "regulatory-review-body", "regulatory-review-add", "regulatory-file-result-error", "regulatory-file-empty"):
             self.assertIn(marker, html, marker)
+
+
+# ---------------------------------------------------------------------------
+# 조회 상태 보완 (2026-09-23 진단): not_listed / 요금제 안내문 / 403 접근 제한 — 저장된 실제 응답으로 검증
+# ---------------------------------------------------------------------------
+
+class LookupStatusDiagnosisTest(unittest.TestCase):
+    def test_not_listed_is_distinct_state(self):
+        r = svc.normalize_regulation_response(load_body("regulations_1941_EU_not_listed.json"), 1941, "EU")
+        self.assertEqual(r["lookup_status"], "not_listed")          # no_data 도 hold 도 아님
+        self.assertEqual(r["result_status"], "not_listed")          # 원문 상태값 보존
+        self.assertIn("No restriction or prohibition", r["result_note"])
+        self.assertFalse(r["note_mentions_plan"])
+        self.assertEqual(r["entries"], [])
+
+    def test_plan_note_flag_only_no_interpretation(self):
+        r = svc.normalize_regulation_response(load_body("regulations_1013_EU_plan_note.json"), 1013, "EU")
+        self.assertEqual(r["lookup_status"], "no_data")
+        self.assertTrue(r["note_mentions_plan"])                    # 문구 존재 여부만
+        self.assertEqual(r["markets_outside_plan"], 1)              # 원문 값 그대로
+        self.assertNotIn("plan_limited", r)                         # 요금제 제한 여부를 단정하는 필드는 없음
+        r2 = svc.normalize_regulation_response(load_body("regulations_5489_US.json"), 5489, "US")
+        self.assertEqual(r2["lookup_status"], "no_data")
+        self.assertFalse(r2["note_mentions_plan"])
+
+    def test_route_passes_status_fields(self):
+        flask_app.app.config["TESTING"] = True
+        client = flask_app.app.test_client(); _login(client)
+        with mock.patch.object(svc, "_get", return_value=load_body("regulations_1941_EU_not_listed.json")) as get:
+            res = client.get("/api/regulatory/regulations?code=1941&country=EU")
+            get.assert_called_once_with("/v1/ingredient/1941/regulations", {"country": "EU"})
+        body = res.get_json()
+        self.assertEqual(body["lookup_status"], "not_listed")
+        self.assertEqual(body["result_status"], "not_listed")
+        self.assertIn("note_mentions_plan", body)
+
+    def test_route_403_is_access_502(self):
+        flask_app.app.config["TESTING"] = True
+        client = flask_app.app.test_client(); _login(client)
+        with mock.patch.dict(os.environ, FAKE_ENV), mock.patch.object(svc.requests, "get", return_value=FakeResponse(403, {"message": "not subscribed"})):
+            res = client.get("/api/regulatory/regulations?code=5489&country=EU")
+        self.assertEqual(res.status_code, 502)
+        self.assertEqual(res.get_json()["error"]["kind"], "access")
+        self.assertNotIn("RAPIDAPI", res.get_data(as_text=True))

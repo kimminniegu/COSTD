@@ -23,8 +23,14 @@ import requests
 MARKET_CODES = ("KR", "EU", "CN", "US", "JP", "ASEAN")
 
 # 실제 호출로 확인한 result_status 값만 등록한다. 그 외 값은 hold 처리.
+#   listed                : 규제 항목 반환                                (test_data/regulations_5489_EU.json)
+#   not_listed_in_country : 요청 시장 항목 없음. result_note 에 "다른 시장에 있음" 또는 "요금제 밖 시장에만 있음" 안내
+#                           (test_data/regulations_5489_US.json, regulations_1013_EU_plan_note.json)
+#   not_listed            : 소스 데이터에 제한·금지 항목 자체가 없음 안내       (test_data/regulations_1941_EU_not_listed.json)
+# not_listed 와 markets_outside_plan 의 정확한 의미는 공개 문서에 없으므로 '허용'·'요금제 제한'으로 단정하지 않고 상태값·안내문을 그대로 전달한다.
 RESULT_STATUS_FOUND = ("listed",)
 RESULT_STATUS_NO_DATA = ("not_listed_in_country",)
+RESULT_STATUS_NOT_LISTED = ("not_listed",)
 
 MAX_CANDIDATES = 10
 MIN_QUERY_LENGTH = 2   # API 문서 기준 검색어 최소 길이 (min 2 chars). 자동완성·직접 검색 공통
@@ -43,7 +49,7 @@ READ_TIMEOUT = 15
 class RegulatoryApiError(Exception):
     """외부 API 호출 실패. kind 로 원인을 구분하며 메시지에 비밀값을 넣지 않는다.
 
-    kind: config | timeout | connection | auth | rate_limit | http | invalid_response
+    kind: config | timeout | connection | auth(401) | access(403: 인증·구독·요금제 확인 필요) | rate_limit(429) | http | invalid_response
     """
 
     def __init__(self, kind, message, http_status=None):
@@ -86,8 +92,11 @@ def _get(path, params):
         raise RegulatoryApiError("connection", "규제 API에 연결하지 못했어요. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.")
 
     status = resp.status_code
-    if status in (401, 403):
+    if status == 401:
         raise RegulatoryApiError("auth", "규제 API 인증에 실패했어요. 관리자에게 서버 설정 확인을 요청해 주세요.", status)
+    if status == 403:
+        # RapidAPI 는 미구독·요금제 밖 엔드포인트도 403 으로 응답한다(공개 README: regulations 는 PRO+ 전용). 인증 실패와 구분해 '접근 제한'으로 둔다.
+        raise RegulatoryApiError("access", "규제 API 접근이 제한됐어요 (HTTP 403). 인증 정보와 요금제(구독) 범위를 관리자에게 확인 요청해 주세요.", status)
     if status == 429:
         raise RegulatoryApiError("rate_limit", "규제 API 호출 한도를 초과했어요. 잠시 후 다시 시도해 주세요.", status)
     if status >= 400:
@@ -221,9 +230,11 @@ def normalize_regulation_response(body, code, country):
     """규제 조회 응답을 화면용 구조로 정규화한다.
 
     lookup_status
-      found   : result_status 가 확인된 '있음' 값이고 data 가 비어 있지 않음 → 규제 정보 조회됨
-      no_data : 규제 데이터가 없는 정상 응답 → 규제 데이터 미확인 (허용·안전 아님)
-      hold    : 확인하지 않은 result_status 또는 예상과 다른 조합 → 판단 보류·추가 확인 필요
+      found      : result_status 가 확인된 '있음' 값이고 data 가 비어 있지 않음 → 규제 정보 조회됨
+      no_data    : not_listed_in_country + data=[] → 요청 시장 항목 없음 = 규제 데이터 미확인 (허용·안전 아님)
+      not_listed : not_listed + data=[] → API 소스에 제한·금지 항목 없음 안내 = 규제 목록 미등재 (허용·안전 아님)
+      hold       : 확인하지 않은 result_status 또는 예상과 다른 조합 → 판단 보류·추가 확인 필요
+    note_mentions_plan : result_note 에 'outside your plan' 문구가 있으면 True (문구 존재 여부만 전달, 의미 해석 없음)
     """
     if body.get("success") is not True:
         raise RegulatoryApiError("invalid_response", "규제 조회 응답이 성공 상태가 아니에요. 잠시 후 다시 시도해 주세요.")
@@ -251,6 +262,8 @@ def normalize_regulation_response(body, code, country):
         lookup_status = "found"
     elif result_status in RESULT_STATUS_NO_DATA and not entries:
         lookup_status = "no_data"
+    elif result_status in RESULT_STATUS_NOT_LISTED and not entries:
+        lookup_status = "not_listed"
     else:
         # 미확인 값, 또는 listed 인데 data 가 비어 있는 등 예상과 다른 조합
         lookup_status = "hold"
@@ -272,6 +285,8 @@ def normalize_regulation_response(body, code, country):
         "lookup_status": lookup_status,
         "result_status": result_status,
         "result_note": body.get("result_note"),
+        "note_mentions_plan": "outside your plan" in str(body.get("result_note") or "").lower(),
+        "markets_outside_plan": body.get("markets_outside_plan"),   # 원문 값 그대로 (의미 미확인)
         "entries": entries,
         "markets_listed": body.get("markets_listed") if isinstance(body.get("markets_listed"), list) else None,
         "data_source": body.get("data_source"),          # 출처 (응답 단위 문자열)

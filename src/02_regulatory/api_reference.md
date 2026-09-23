@@ -22,7 +22,7 @@
 | 성공 200 | 아래 JSON |
 | 검증 실패 400 | `{"ok": false, "error": {"kind": "validation", "message": "..."}}` |
 | 설정 오류 503 | `error.kind = "config"` — Key/Host 미설정. 외부 호출 없음 |
-| 외부 API 오류 502 | `error.kind = timeout / connection / auth / rate_limit / http / invalid_response` |
+| 외부 API 오류 502 | `error.kind = timeout / connection / auth(401) / access(403: 인증·구독·요금제 확인 필요) / rate_limit(429) / http / invalid_response` |
 
 ```json
 {
@@ -135,12 +135,13 @@
 | 값 | 조건 | 화면 조회 상태 |
 |---|---|---|
 | `found` | `result_status = "listed"` 이고 `data`가 비어 있지 않음 | 규제 정보 조회됨 |
-| `no_data` | `result_status = "not_listed_in_country"` 이고 `data = []` | 규제 데이터 미확인 (허용·안전 아님) |
+| `no_data` | `result_status = "not_listed_in_country"` 이고 `data = []` — 요청 시장 항목 없음. `result_note` 가 "다른 시장에 있음" 또는 "요금제 밖 시장에만 있음(markets outside your plan)" 을 안내 | 규제 데이터 미확인 (허용·안전 아님). 화면은 안내문 원문과 `note_mentions_plan` 여부만 표시 |
+| `not_listed` | `result_status = "not_listed"` 이고 `data = []` — "No restriction or prohibition is listed for this ingredient in our source data" (2026-09-23 확인, `regulations_1941_EU_not_listed.json`) | 규제 목록 미등재 (허용·안전 아님) |
 | `hold` | 확인하지 않은 `result_status` 값, 또는 `listed`인데 `data = []` 등 예상 밖 조합 | 판단 보류 · 추가 확인 필요 |
-| (오류) | HTTP 오류·연결 실패·`success != true`·형식 불일치 → 502 `error` | API 오류 (미확인으로 바꾸지 않음) |
+| (오류) | HTTP 오류·연결 실패·`success != true`·형식 불일치 → 502 `error` | `error.kind` 가 `access`(403)·`auth`(401)·`rate_limit`(429) 이면 화면 ‘접근 제한’, 그 외는 ‘API 오류’ (미확인으로 바꾸지 않음) |
 
 - `ingredient.regulation_status`(예: `Restricted`)는 성분 전체 속성이라 **선택 시장의 상태로 쓰지 않으며 응답에서 제외**한다.
-- `markets_outside_plan`은 의미 미확인이라 사용·전달하지 않는다.
+- `markets_outside_plan` 은 원문 값을 그대로 전달하지만 의미가 문서에 없어 화면에서 해석하지 않는다. `note_mentions_plan` 은 `result_note` 에 "outside your plan" 문구가 있는지 여부만 나타낸다(요금제 제한으로 단정하지 않음). 응답에 `note_mentions_plan`, `markets_outside_plan` 필드가 추가되었다.
 - `limit_condition`, `proviso`, `notice_ingr_name`은 가공 없이 원문 그대로 전달한다.
 - `source_updated_at`은 응답에 규제 자료 갱신일이 없어 항상 `null`(화면 '미제공'). `queried_at`은 서버가 호출한 시각.
 
@@ -163,7 +164,10 @@
 | `search_kr_english_retinol.json` | `GET /v1/ingredient/kr?q=Retinol` | 200 | `success=true, count=0, data=[]` — 한글 엔드포인트는 영문 미지원 |
 | `search_inci_partial_retin.json` | `GET /v1/ingredient/inci?q=retin` | 200 | `count=17`, 소문자 입력으로 `Retinol`·`Retinal`·`Retinyl …` 반환 — 영문 시작 일치·대소문자 무시 확인 |
 | `regulations_5489_EU.json` | `GET /v1/ingredient/5489/regulations?country=EU` | 200 | `result_status=listed`, `count=1`, `data[0].limit_condition`에 제품 유형·최대 농도(0,05 % / 0,3 % RE)·표시 문구 원문, `source_type=limit`, `markets_listed=["EU"]` |
-| `regulations_5489_US.json` | `GET /v1/ingredient/5489/regulations?country=US` | 200 | `result_status=not_listed_in_country`, `count=0`, `data=[]`, `result_note="No entry for US in our source data. ..."` |
+| `regulations_5489_US.json` | `GET /v1/ingredient/5489/regulations?country=US` | 200 | `result_status=not_listed_in_country`, `count=0`, `data=[]`, `result_note="No entry for US in our source data. There are entries for other markets."` |
+| `regulations_1013_EU_plan_note.json` | `GET /v1/ingredient/1013/regulations?country=EU` (Glycerin) | 200 | `not_listed_in_country`, `markets_listed=[]`, `markets_outside_plan=1`, `result_note="No entry for EU in our source data. There are entries for markets outside your plan only."` — KR·CN 도 같은 응답(미저장) |
+| `regulations_1941_EU_not_listed.json` | `GET /v1/ingredient/1941/regulations?country=EU` (Niacinamide) | 200 | **`result_status=not_listed`**, `count=0`, `result_note="No restriction or prohibition is listed for this ingredient in our source data."`, `ingredient.regulation_status=Not Listed` |
+| (미저장) | `GET /v1/ingredient/3579/regulations?country=EU` (Phenoxyethanol) | 200 | `listed`, `count=1`, 최대 농도 1.0%, `markets_listed=[KR,EU,CN,JP,ASEAN]`, `markets_outside_plan=3` |
 
 응답 공통 필드: `data_source`(MFDS + EU CosIng), `disclaimer`, `available_country_codes = ["KR","EU","CN","US","JP","ASEAN"]`, `available_countries`(한글 표시명), `country.{requested, resolved, code}`.
 
@@ -174,7 +178,7 @@
 ### 아직 확인하지 않은 것 (4단계 이후)
 
 - 중간 포함 검색 `/v1/ingredient/search`(PRO+)의 실제 동작·현재 요금제 사용 가능 여부 (미호출). 동의어 검색 지원 여부
-- `result_status` 전체 값 목록, 오류 응답(4xx/5xx) 본문 형식
+- `result_status` 전체 값 목록(확인: listed / not_listed_in_country / not_listed), 오류 응답(4xx/5xx) 본문 형식. 요금제 밖 시장·미구독 엔드포인트가 403 인지 200+안내문인지는 미확인(Glycerin 사례는 200)
 - `ASEAN` 조회가 아세안 공통 기준인지 개별 국가 규정을 포함하는지
 - `markets_outside_plan` 의미, 규제 자료 갱신일 제공 여부
 - 429 초과 시 응답 형식. 자동완성은 300ms 디바운스·조합 중 미요청으로 호출을 줄이며 캐시는 없음
