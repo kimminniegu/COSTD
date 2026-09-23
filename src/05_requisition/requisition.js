@@ -20,6 +20,8 @@
   const methods = { auto: "자동변환", auto_edited: "자동변환 후 수정", manual: "직접 작성", manual_edited: "직접 작성 후 수정" };
   let state = "upload", saved = null, draft = null, originalFile = null, controller = null;
   let printFrame = null;
+  let activeSection = 0;
+  const sectionTitles = [...sections.map(([title]) => title), "06 참고자료"];
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const filled = (value) => Array.isArray(value) ? value.length > 0 : Boolean(String(value ?? "").trim());
@@ -112,6 +114,32 @@
       (editing() && key !== "target_price_tier" ? "</label>" : "</p>") + '<div class="requisition-field-content">' + control +
       '<p class="form-error" id="requisition-error-' + key + '" hidden></p></div></div>';
   }
+  $("section-tabs").innerHTML = sectionTitles.map((title, index) =>
+    '<button type="button" class="tab" id="requisition-section-tab-' + index + '" role="tab" aria-controls="requisition-section-' + index + '" aria-selected="false" tabindex="-1" data-section="' + index + '">' + escape(title) + '</button>').join("");
+  function selectSection(index, focus = false) {
+    activeSection = index;
+    sectionTitles.forEach((title, i) => {
+      const active = i === index, tab = $("section-tab-" + i);
+      tab.classList.toggle("is-active", active);
+      tab.setAttribute("aria-selected", String(active));
+      tab.tabIndex = active ? 0 : -1;
+      $("section-" + i).hidden = !active;
+    });
+    $("basic-title").textContent = sectionTitles[index];
+    if (focus) $("section-tab-" + index).focus({ preventScroll: true });
+  }
+  $("section-tabs").addEventListener("click", (event) => {
+    const tab = event.target.closest("[data-section]");
+    if (tab) selectSection(Number(tab.dataset.section));
+  });
+  $("section-tabs").addEventListener("keydown", (event) => {
+    const tab = event.target.closest("[data-section]");
+    if (!tab || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const index = Number(tab.dataset.section), count = sectionTitles.length;
+    const next = event.key === "Home" ? 0 : event.key === "End" ? count - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + count) % count;
+    selectSection(next, true);
+  });
   function render() {
     const choosingMode = state === "upload" || state === "manual";
     $("modes").hidden = !choosingMode;
@@ -141,7 +169,8 @@
       editing() ? "필수 항목을 입력하고 개발팀에 전달할 요청서를 완성해요." : "내용을 확인하고 필요하면 수정한 뒤 PDF로 저장해요.";
     if (state === "upload" || state === "loading") return;
     const data = current();
-    $("fields").innerHTML = sections.map(([title, fields]) => '<section class="requisition-section"><h2 class="card-title">' + escape(title) + '</h2><div class="requisition-fields">' + fields.map(([key]) => field(key)).join("") + '</div></section>').join("");
+    $("fields").innerHTML = sections.map(([title, fields], index) => '<section class="requisition-section" id="requisition-section-' + index + '" role="tabpanel" aria-labelledby="requisition-section-tab-' + index + '" tabindex="0"><h2 class="card-title">' + escape(title) + '</h2><div class="requisition-fields">' + fields.map(([key]) => field(key)).join("") + '</div></section>').join("");
+    selectSection(activeSection);
     renderReferences();
     $("panel-title").textContent = editing() ? "작성 상태" : "문서 정보";
     $("form-help").textContent = editing() ? "* 표시된 항목은 필수 입력이에요." : "개발에 필요한 핵심 정보를 확인해요.";
@@ -369,6 +398,7 @@
   $("new").addEventListener("click", () => {
     if (!confirm("새 요청서를 시작하면 현재 요청서가 지워져요. 계속할까요?")) return;
     saved = draft = originalFile = null;
+    activeSection = 0;
     $("file").value = "";
     transition("upload");
   });
@@ -385,6 +415,7 @@
     for (const key of ["customer", "product_name", "product_type_custom", "benchmark_product_name"]) draft[key] = draft[key].trim();
     const absent = missing(draft);
     if (absent.length) {
+      activeSection = sections.findIndex(([, fields]) => fields.some(([key]) => key === absent[0]));
       render();
       absent.forEach((key) => {
         const el = $("input-" + (key === "product_type" && draft.product_type === "기타" ? "product_type_custom" : key));
