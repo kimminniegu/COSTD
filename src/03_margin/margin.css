@@ -114,3 +114,27 @@
   border-radius: var(--radius-pill);
   background: var(--color-primary-bright);
 }
+
+/* Tab 2 — 수출 조건 · 환율 · 역제안 ------------------------------------------ */
+
+/* 인코텀즈 8종: 좁은 폭에서는 줄바꿈 (공통 .tabs 의 가로 스크롤 대신) */
+.margin-incoterm-tabs { display: flex; flex-wrap: wrap; }
+.margin-incoterm-tabs .tab { flex: 1 0 auto; }
+
+/* 물류 비용표 — 매수인 부담 행은 합계에서 빠지므로 흐리게 */
+.margin-row-muted td { color: var(--color-text-placeholder); }
+.margin-row-muted .badge { opacity: 0.8; }
+
+/* 대표 외화 단가 — Card 안에 KPI 텍스트만 배치 (.kpi-card 중첩 금지) */
+.margin-fx-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-5) var(--space-6);
+  background: var(--color-primary-soft);
+  border-radius: var(--radius-lg);
+}
+
+/* 역제안 입력 줄 — 버튼을 입력칸과 같은 줄 아래쪽에 정렬 */
+.margin-counter-submit { justify-content: flex-end; }
+

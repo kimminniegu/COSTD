@@ -3,11 +3,21 @@
 기능 명세: src/03_margin/margin.md
 - app.py 의 Route 는 입력 추출 → 이 모듈 호출 → 응답 반환만 합니다.
 - 금액 계산은 모두 Decimal 로 하고, 응답 직전에만 float 로 변환합니다. (margin.md §4.0)
-- 현재 구현 범위: §3.2 Master Data 전체 + GET master (§8.2 0~1단계), Tab 1 수량별 단가·마진 계산 (2단계)
+- 현재 구현 범위: Master Data·GET master (§8.2 0~1단계), Tab 1 수량별 단가·마진 (2단계),
+  Tab 2 물류·인코텀즈·환율·스트레스·역제안 (3~5단계)
 """
 
+import json
+import logging
+import os
+import threading
+import time
+import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal, InvalidOperation
+from email.utils import parsedate_to_datetime
+from pathlib import Path
 
 from flask import current_app, jsonify
 
@@ -717,5 +727,826 @@ def calculate_tiers(payload):
             "has_negative": any(row["status"] == "negative" for row in rows),
             "has_below_defense": any(row["status"] == "below_defense" for row in rows),
         },
+    }
+    return data, warnings
+
+
+# ---------------------------------------------------------------------------
+# Tab 2 — CBM · 물류비 · 인코텀즈 (margin.md §4.3)
+# ---------------------------------------------------------------------------
+
+COST_LABELS = {
+    "inland": "내륙운송",
+    "export_customs": "수출통관",
+    "origin_local": "선적지 부대비용",
+    "main_freight": "운임",
+    "insurance": "적하보험료",
+    "dest_charges": "도착지 비용",
+}
+MAX_CARTON_CM = Decimal("200")
+MAX_CARTON_KG = Decimal("100")
+MAX_UNITS_PER_CARTON = 10_000
+MAX_CARTON_ALLOWANCE = Decimal("50")
+MAX_FX_RATE = Decimal("100000")
+MAX_NAMED_PLACE_LEN = 60
+
+
+def _ceil_int(value):
+    """Decimal 올림 → int"""
+    return int(Decimal(value).to_integral_value(rounding=ROUND_CEILING))
+
+
+def _enum(value, allowed, field, errors, label):
+    if value not in allowed:
+        errors.add("OUT_OF_RANGE", field, f"{label} 값이 올바르지 않아요")
+        return None
+    return value
+
+
+def calc_packing(carton, qty, mode):
+    """카톤 수·CBM·중량·RT·청구중량·컨테이너 수. 수식 §4.3.1"""
+    dims = carton["length_cm"] * carton["width_cm"] * carton["height_cm"]
+    allowance = 1 + pct(carton["allowance_rate"])
+    upc = carton["units_per_carton"]
+    cartons = _ceil_int(Decimal(qty) / upc)
+    carton_cbm = dims / Decimal(1_000_000)
+    cbm_raw = carton_cbm * cartons
+    cbm = cbm_raw * allowance
+    gross = carton["gross_weight_kg"] * cartons
+    packing = {
+        "cartons": cartons,
+        "carton_cbm": carton_cbm,
+        "cbm_raw": cbm_raw,
+        "cbm": cbm,
+        "gross_weight_kg": gross,
+        "revenue_ton": None,
+        "volumetric_kg": None,
+        "chargeable_kg": None,
+        "containers": None,
+        "utilization": None,
+        "last_carton_units": qty - (cartons - 1) * upc,
+    }
+    if mode == "AIR":
+        volumetric = dims / AIR_VOLUMETRIC_DIVISOR * cartons * allowance
+        packing["volumetric_kg"] = volumetric
+        packing["chargeable_kg"] = max(gross, volumetric)
+    else:
+        packing["revenue_ton"] = max(cbm, gross / Decimal(1000))
+    if mode in CONTAINER_SPECS:
+        spec = CONTAINER_SPECS[mode]
+        containers = max(_ceil_int(cbm / spec["cbm"]), _ceil_int(gross / spec["kg"]), 1)
+        packing["containers"] = containers
+        packing["utilization"] = cbm / (spec["cbm"] * containers)
+    return packing
+
+
+def calc_logistics_costs(packing, mode, region, usd_rate):
+    """운송 방식별 물류비 항목(부담 주체 적용 전). 수식 §4.3.2"""
+    local = LOCAL_CHARGES_KRW[mode]
+    freight_rate = MAIN_FREIGHT_USD[region][mode]
+    dest = DEST_CHARGES_USD[mode]
+
+    if mode == "SEA_LCL":
+        rt = packing["revenue_ton"]
+        inland = local["inland"]["base"] + local["inland"]["per_cbm"] * packing["cbm"]
+        origin = local["origin_local"]["per_rt"] * rt + local["origin_local"]["fixed"]
+        freight = freight_rate * max(rt, MAIN_FREIGHT_MINIMUM["SEA_LCL"]["min_rt"])
+        dest_usd = dest["per_rt"] * rt + dest["fixed"]
+    elif mode in CONTAINER_SPECS:
+        n = packing["containers"]
+        inland = local["inland"]["per_container"] * n
+        origin = local["origin_local"]["per_container"] * n + local["origin_local"]["fixed"]
+        freight = freight_rate * n
+        dest_usd = dest["per_container"] * n
+    else:  # AIR
+        cw = packing["chargeable_kg"]
+        inland = local["inland"]["base"] + local["inland"]["per_kg"] * cw
+        origin = local["origin_local"]["per_kg"] * cw + local["origin_local"]["fixed"]
+        freight = max(freight_rate * cw, MAIN_FREIGHT_MINIMUM["AIR"]["min_usd"])
+        dest_usd = dest["per_kg"] * cw + dest["fixed"]
+
+    freight_label = "항공 운임" if mode == "AIR" else "해상 운임"
+    return [
+        {"key": "inland", "label": COST_LABELS["inland"], "currency": "KRW", "amount": inland, "krw": inland},
+        {"key": "export_customs", "label": COST_LABELS["export_customs"], "currency": "KRW",
+         "amount": local["export_customs"], "krw": local["export_customs"]},
+        {"key": "origin_local", "label": COST_LABELS["origin_local"], "currency": "KRW", "amount": origin, "krw": origin},
+        {"key": "main_freight", "label": freight_label, "currency": "USD", "amount": freight, "krw": freight * usd_rate},
+        {"key": "dest_charges", "label": COST_LABELS["dest_charges"], "currency": "USD", "amount": dest_usd,
+         "krw": dest_usd * usd_rate},
+    ]
+
+
+def resolve_incoterm(incoterm, mode):
+    """항공 + 해상 전용 조건(FOB·CFR·CIF) → FCA·CPT·CIP 로 변환. (effective, warnings)"""
+    term = INCOTERMS[incoterm]
+    if mode == "AIR" and term["sea_only"]:
+        effective = term["air_equivalent"]
+        return effective, [{"code": "SEA_ONLY_TERM_ON_AIR",
+                            "message": f"{incoterm}는 해상 전용 조건이라 항공은 {effective} 기준으로 계산했어요"}]
+    return incoterm, []
+
+
+def resolve_insurance_clause(incoterm, clause):
+    """보험 조건 확정. CIP 는 ICC(A) 필수, CIF 는 ICC(C) 이상. (clause | None, warnings)"""
+    if not INCOTERMS[incoterm]["seller_pays"]["insurance"]:
+        return None, []
+    minimum = INCOTERMS[incoterm]["min_insurance_clause"]
+    clause = clause if clause in INSURANCE_RATES else minimum
+    if minimum == "ICC_A" and clause != "ICC_A":
+        return "ICC_A", [{"code": "INSURANCE_CLAUSE_UPGRADED",
+                          "message": f"{incoterm}는 ICC(A) 부보가 필요해 ICC(A)로 계산했어요"}]
+    return clause, []
+
+
+def apply_incoterm(costs, incoterm):
+    """부담 주체(borne_by) 지정 후 매도인 부담 합계 K(원화 항목)·Y(외화 항목 원화 환산). 수식 §4.3.2"""
+    seller_pays = INCOTERMS[incoterm]["seller_pays"]
+    krw_total = Decimal(0)
+    fx_total = Decimal(0)
+    for item in costs:
+        item["borne_by"] = "seller" if seller_pays[item["key"]] else "buyer"
+        if item["borne_by"] == "seller":
+            if item["currency"] == "KRW":
+                krw_total += item["krw"]
+            else:
+                fx_total += item["krw"]
+    return costs, krw_total, fx_total
+
+
+def calc_insurance(cfr_value, clause):
+    """적하보험료 — 부보 110% 순환참조를 대수적으로 풉니다. V = B / (1 − 1.1r), I = V − B. 수식 §4.3.3"""
+    rate = pct(INSURANCE_RATES[clause]["rate_pct"])
+    cif_value = cfr_value / (1 - INSURANCE_COVERAGE * rate)
+    return {
+        "clause": clause,
+        "rate": rate,
+        "cfr_value": cfr_value,
+        "cif_value": cif_value,
+        "insured_value": cif_value * INSURANCE_COVERAGE,
+        "premium": cif_value - cfr_value,
+    }
+
+
+def validate_logistics_request(payload, *, require_prices=True):
+    """calculate-cbm-logistics 요청 검증 → (정규화된 입력, warnings) (§3.1.4)"""
+    errors = _Errors()
+    qty = to_quantity(payload.get("qty"))
+    if qty is None:
+        errors.add("REQUIRED_FIELD", "qty", "발주 수량을 입력해 주세요")
+    elif qty < MARGIN_MOQ:
+        errors.add("MOQ_VIOLATION", "qty", f"{qty:,}ea는 MOQ({MARGIN_MOQ:,}ea) 미만이에요")
+    elif qty > MARGIN_MAX_QTY:
+        errors.add("OUT_OF_RANGE", "qty", f"수량은 최대 {MARGIN_MAX_QTY:,}ea까지 입력할 수 있어요")
+
+    unit_cost = supply_price = None
+    if require_prices:
+        unit_cost = to_decimal(payload.get("unit_cost"), "unit_cost", errors, label="총 제조원가",
+                               min_value=Decimal(0), max_value=MAX_OVERRIDE_PRICE)
+        supply_price = to_decimal(payload.get("supply_price"), "supply_price", errors, label="공급단가",
+                                  min_value=Decimal("0.01"), max_value=MAX_OVERRIDE_PRICE)
+
+    raw = payload.get("carton") if isinstance(payload.get("carton"), dict) else {}
+    carton = {
+        "length_cm": to_decimal(raw.get("length_cm"), "carton.length_cm", errors, label="카톤 가로",
+                                min_value=Decimal("0.1"), max_value=MAX_CARTON_CM),
+        "width_cm": to_decimal(raw.get("width_cm"), "carton.width_cm", errors, label="카톤 세로",
+                               min_value=Decimal("0.1"), max_value=MAX_CARTON_CM),
+        "height_cm": to_decimal(raw.get("height_cm"), "carton.height_cm", errors, label="카톤 높이",
+                                min_value=Decimal("0.1"), max_value=MAX_CARTON_CM),
+        "gross_weight_kg": to_decimal(raw.get("gross_weight_kg"), "carton.gross_weight_kg", errors,
+                                      label="카톤 총중량", min_value=Decimal("0.01"), max_value=MAX_CARTON_KG),
+        "allowance_rate": to_decimal(raw.get("allowance_rate"), "carton.allowance_rate", errors, label="포장 여유율",
+                                     min_value=Decimal(0), max_value=MAX_CARTON_ALLOWANCE,
+                                     default=CARTON_ALLOWANCE_DEFAULT),
+    }
+    upc = to_quantity(raw.get("units_per_carton"))
+    if upc is None or not 1 <= upc <= MAX_UNITS_PER_CARTON:
+        errors.add("OUT_OF_RANGE", "carton.units_per_carton",
+                   f"카톤 입수량은 1~{MAX_UNITS_PER_CARTON:,} 사이 정수로 입력해 주세요")
+    carton["units_per_carton"] = upc
+
+    mode = _enum(payload.get("transport_mode"), TRANSPORT_MODES, "transport_mode", errors, "운송 방식")
+    region = _enum(payload.get("dest_region"), REGIONS, "dest_region", errors, "도착 권역")
+    incoterm = _enum(payload.get("incoterm"), INCOTERMS, "incoterm", errors, "인코텀즈")
+    clause = payload.get("insurance_clause")
+    if clause not in (None, "", *INSURANCE_RATES):
+        errors.add("OUT_OF_RANGE", "insurance_clause", "보험 조건 값이 올바르지 않아요")
+
+    named_place = str(payload.get("named_place") or "").strip()
+    if len(named_place) > MAX_NAMED_PLACE_LEN:
+        errors.add("OUT_OF_RANGE", "named_place", f"지정 장소는 {MAX_NAMED_PLACE_LEN}자 이내로 입력해 주세요")
+    if region and not named_place:
+        named_place = REGIONS[region]["default_place"]
+
+    usd_rate = to_decimal(payload.get("usd_rate"), "usd_rate", errors, label="USD 환율",
+                          min_value=Decimal("0.0001"), max_value=MAX_FX_RATE, required=False)
+    errors.raise_if_any()
+
+    warnings = []
+    if usd_rate is None:
+        usd_rate, fx_warnings = _default_usd_rate()
+        warnings.extend(fx_warnings)
+    return {
+        "qty": qty, "unit_cost": unit_cost, "supply_price": supply_price, "carton": carton,
+        "transport_mode": mode, "dest_region": region, "named_place": named_place,
+        "incoterm": incoterm, "insurance_clause": clause or None, "usd_rate": usd_rate,
+    }, warnings
+
+
+def _logistics_core(req, qty):
+    """수량 qty 의 포장·물류비·부담 주체. 보험료는 가액에 따라 달라지므로 호출 측에서 계산합니다."""
+    mode = req["transport_mode"]
+    effective, warnings = resolve_incoterm(req["incoterm"], mode)
+    clause, clause_warnings = resolve_insurance_clause(effective, req["insurance_clause"])
+    packing = calc_packing(req["carton"], qty, mode)
+    costs = calc_logistics_costs(packing, mode, req["dest_region"], req["usd_rate"])
+    costs, krw_total, fx_total = apply_incoterm(costs, effective)
+    return {
+        "effective_incoterm": effective,
+        "insurance_clause": clause,
+        "insurance_rate": pct(INSURANCE_RATES[clause]["rate_pct"]) if clause else Decimal(0),
+        "packing": packing,
+        "costs": costs,
+        "krw_total": krw_total,
+        "fx_total": fx_total,
+        "warnings": warnings + clause_warnings,
+    }
+
+
+def _packing_warnings(req, core):
+    packing, mode, warnings = core["packing"], req["transport_mode"], []
+    if mode == "SEA_LCL" and packing["cbm"] > LCL_SUGGEST_FCL_CBM:
+        warnings.append({"code": "LCL_TOO_LARGE",
+                         "message": f"CBM이 {_fmt(LCL_SUGGEST_FCL_CBM)}를 넘어요. FCL이 더 저렴할 수 있어요"})
+    if packing["utilization"] is not None and packing["utilization"] < FCL_LOW_UTILIZATION:
+        warnings.append({"code": "FCL_LOW_UTILIZATION",
+                         "message": f"컨테이너 적재율이 {out(packing['utilization'] * 100, 1)}%예요. LCL이 더 저렴할 수 있어요"})
+    if req["carton"]["gross_weight_kg"] > HEAVY_CARTON_KG:
+        warnings.append({"code": "HEAVY_CARTON",
+                         "message": f"카톤 1개가 {_fmt(HEAVY_CARTON_KG)}kg을 넘어요. 작업·파손 위험을 확인해 주세요"})
+    upc = req["carton"]["units_per_carton"]
+    if packing["last_carton_units"] != upc:
+        full = packing["cartons"] * upc
+        warnings.append({"code": "PARTIAL_CARTON",
+                         "message": f"마지막 카톤은 {packing['last_carton_units']:,}ea만 들어가요. "
+                                    f"수량을 {full:,}ea로 맞추면 카톤이 꽉 차요"})
+    return warnings
+
+
+def _serialize_packing(p):
+    def opt(value, places):
+        return None if value is None else out(value, places)
+    return {
+        "cartons": p["cartons"],
+        "carton_cbm": out(p["carton_cbm"], 4),
+        "cbm_raw": out(p["cbm_raw"], 3),
+        "cbm": out(p["cbm"], 3),
+        "gross_weight_kg": out(p["gross_weight_kg"], 2),
+        "revenue_ton": opt(p["revenue_ton"], 3),
+        "volumetric_kg": opt(p["volumetric_kg"], 2),
+        "chargeable_kg": opt(p["chargeable_kg"], 2),
+        "containers": p["containers"],
+        "utilization": opt(None if p["utilization"] is None else p["utilization"] * 100, 1),
+        "last_carton_units": p["last_carton_units"],
+    }
+
+
+def calculate_logistics(payload):
+    """POST /api/margin-calculator/calculate-cbm-logistics — CBM·운임·보험료·인코텀즈 원화 단가 (§6.4.4)"""
+    req, warnings = validate_logistics_request(payload)
+    qty = req["qty"]
+    core = _logistics_core(req, qty)
+    warnings = warnings + core["warnings"] + _packing_warnings(req, core)
+
+    krw_total, fx_total = core["krw_total"], core["fx_total"]
+    cfr_value = req["supply_price"] * qty + krw_total + fx_total
+    insurance = calc_insurance(cfr_value, core["insurance_clause"]) if core["insurance_clause"] else None
+    premium = insurance["premium"] if insurance else Decimal(0)
+
+    costs = [{
+        "key": item["key"], "label": item["label"], "currency": item["currency"],
+        "amount": out(item["amount"]), "krw": out(item["krw"]),
+        "per_unit": out(item["krw"] / qty), "borne_by": item["borne_by"],
+    } for item in core["costs"]]
+    # 보험료는 가액 기준이라 매수인 부담일 때는 금액을 산출하지 않습니다(null).
+    costs.insert(4, {
+        "key": "insurance", "label": COST_LABELS["insurance"], "currency": "KRW",
+        "amount": out(premium) if insurance else None, "krw": out(premium) if insurance else None,
+        "per_unit": out(premium / qty) if insurance else None,
+        "borne_by": "seller" if insurance else "buyer",
+    })
+
+    seller_total = krw_total + fx_total + premium
+    data = {
+        "qty": qty,
+        "incoterm": req["incoterm"],
+        "effective_incoterm": core["effective_incoterm"],
+        "named_place": req["named_place"],
+        "transport_mode": req["transport_mode"],
+        "dest_region": req["dest_region"],
+        "usd_rate": out(req["usd_rate"], 4),
+        "packing": _serialize_packing(core["packing"]),
+        "costs": costs,
+        "totals": {
+            "krw_costs": out(krw_total),
+            "fx_costs_krw": out(fx_total),
+            "insurance": out(premium),
+            "seller_total": out(seller_total),
+            "per_unit": out(seller_total / qty),
+        },
+        "incoterm_unit_price_krw": out(req["supply_price"] + seller_total / qty),
+        "insurance_detail": None if not insurance else {
+            "clause": insurance["clause"],
+            "rate_pct": out(INSURANCE_RATES[insurance["clause"]]["rate_pct"], 2),
+            "cfr_value": out(insurance["cfr_value"]),
+            "cif_value": out(insurance["cif_value"]),
+            "insured_value": out(insurance["insured_value"]),
+        },
+    }
+    return data, warnings
+
+
+# ---------------------------------------------------------------------------
+# Tab 2 — 환율 (margin.md §6.3)
+# 메모리 캐시 → 한국수출입은행 → open.er-api → 파일 캐시(instance/margin) → 모의 환율
+# ---------------------------------------------------------------------------
+
+FX_CACHE_DIR = Path(__file__).resolve().parents[2] / "instance" / "margin"
+FX_CACHE_FILE = FX_CACHE_DIR / "fx_cache.json"
+FX_FALLBACK_TTL_SEC = 300                  # 파일 캐시·모의 환율 사용 중이면 5분 뒤 외부 소스 재시도
+FX_MANUAL_OUTLIER = Decimal("0.3")         # 직접 입력 환율이 기준 대비 ±30% 초과 시 경고
+
+_fx_lock = threading.Lock()
+_fx_state = {"snapshot": None, "expires": 0.0, "last_force": float("-inf"), "exim_blocked_date": None}
+_logger = logging.getLogger(__name__)
+
+
+def _log(level, message, *args):
+    """앱 컨텍스트 안에서는 Flask logger, 밖(스크립트 테스트)에서는 모듈 logger 로 기록."""
+    try:
+        getattr(current_app.logger, level)(message, *args)
+    except RuntimeError:
+        getattr(_logger, level)(message, *args)
+
+
+def _env_int(name, default):
+    try:
+        return int(os.getenv(name) or default)
+    except ValueError:
+        return default
+
+
+def _http_get_json(url):
+    timeout = _env_int("MARGIN_FX_TIMEOUT_SEC", FX_TIMEOUT_SEC_DEFAULT)
+    req = urllib.request.Request(url, headers={"User-Agent": "COSMOA-margin/1.0", "Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — 고정 https URL만 호출
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def _estimated_rates(base):
+    """TTB·TTS 를 제공하지 않는 소스: base ∓ 1% 로 추정 (§4.3.5)"""
+    spread = base * TTB_ESTIMATE_SPREAD
+    return {"base": base, "ttb": base - spread, "tts": base + spread}
+
+
+def _fetch_koreaexim():
+    """한국수출입은행 현재환율. 비영업일·11시 이전 빈 응답이면 최대 7일 역조회 (§6.3.1)"""
+    key = os.getenv("MARGIN_KOREAEXIM_API_KEY")
+    today = now_kst().date()
+    if not key or _fx_state["exim_blocked_date"] == today:
+        return None
+    unit_map = {c["exim_unit"]: (code, Decimal(c["exim_divisor"])) for code, c in CURRENCIES.items()}
+    for offset in range(FX_LOOKBACK_DAYS + 1):
+        day = today - timedelta(days=offset)
+        query = urllib.parse.urlencode({"authkey": key, "searchdate": day.strftime("%Y%m%d"), "data": "AP01"})
+        try:
+            rows = _http_get_json(f"{KOREAEXIM_FX_URL}?{query}")
+        except Exception as exc:  # noqa: BLE001 — Timeout·SSL·5xx 모두 다음 소스로 넘깁니다
+            _log("warning", "koreaexim fx request failed: %s", type(exc).__name__)  # Key 는 로그에 남기지 않음
+            return None
+        if not isinstance(rows, list) or not rows:
+            continue  # 비영업일 → 전날로
+        result_code = rows[0].get("result")
+        if result_code in (2, 3, 4):
+            _log("warning", "koreaexim fx result=%s (2: DATA 코드, 3: 인증, 4: 일일 한도)", result_code)
+            if result_code == 4:
+                _fx_state["exim_blocked_date"] = today  # 당일 재호출 억제
+            return None
+        rates = {}
+        for row in rows:
+            mapped = unit_map.get(str(row.get("cur_unit", "")).strip())
+            base = _parse_decimal(row.get("deal_bas_r"))
+            if not mapped or not base or base <= 0:
+                continue
+            code, divisor = mapped
+            ttb = _parse_decimal(row.get("ttb")) or base
+            tts = _parse_decimal(row.get("tts")) or base
+            rates[code] = {"base": base / divisor, "ttb": ttb / divisor, "tts": tts / divisor}
+        if rates:
+            as_of = now_kst() if offset == 0 else datetime(day.year, day.month, day.day, 11, 0, tzinfo=KST)
+            return {"source": "koreaexim", "as_of": as_of.isoformat(timespec="seconds"),
+                    "search_date": day.strftime("%Y%m%d"), "ttb_estimated": False, "rates": rates}
+    return None
+
+
+def _fetch_open_er_api():
+    """open.er-api.com (Key 불필요). 기준율만 제공 → TTB·TTS 추정 (§6.3.2)"""
+    url = os.getenv("MARGIN_FX_OPEN_API_URL") or OPEN_ER_API_URL_DEFAULT
+    try:
+        body = _http_get_json(url)
+    except Exception as exc:  # noqa: BLE001
+        _log("warning", "open.er-api fx request failed: %s", type(exc).__name__)
+        return None
+    if not isinstance(body, dict) or body.get("result") != "success":
+        return None
+    raw = body.get("rates") or {}
+    krw = _parse_decimal(raw.get("KRW"))
+    if not krw or krw <= 0:
+        return None
+    rates = {}
+    for code in CURRENCIES:
+        per_base = _parse_decimal(raw.get(code))
+        if per_base and per_base > 0:
+            rates[code] = _estimated_rates(krw / per_base)  # KRW per X = rates.KRW / rates.X
+    try:
+        as_of = parsedate_to_datetime(body["time_last_update_utc"]).astimezone(KST)
+    except (KeyError, TypeError, ValueError):
+        as_of = now_kst()
+    return {"source": "open_er_api", "as_of": as_of.isoformat(timespec="seconds"),
+            "search_date": as_of.strftime("%Y%m%d"), "ttb_estimated": True, "rates": rates}
+
+
+def _save_file_cache(snapshot):
+    """마지막 성공 환율을 instance/margin/fx_cache.json 에 원자적으로 저장."""
+    try:
+        FX_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        data = {**snapshot, "rates": {c: {k: str(v) for k, v in r.items()} for c, r in snapshot["rates"].items()}}
+        tmp = FX_CACHE_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, FX_CACHE_FILE)
+    except OSError as exc:
+        _log("warning", "fx cache write failed: %s", exc)
+
+
+def _load_file_cache():
+    try:
+        data = json.loads(FX_CACHE_FILE.read_text(encoding="utf-8"))
+        data["rates"] = {c: {k: Decimal(v) for k, v in r.items()} for c, r in data["rates"].items()}
+        return data
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, InvalidOperation):
+        return None
+
+
+def _mock_snapshot():
+    return {"source": "mock", "as_of": f"{FALLBACK_FX_AS_OF}T00:00:00+09:00",
+            "search_date": FALLBACK_FX_AS_OF.replace("-", ""), "ttb_estimated": True,
+            "rates": {code: _estimated_rates(rate) for code, rate in FALLBACK_FX_KRW.items()}}
+
+
+def _refresh_fx():
+    """외부 소스를 순서대로 시도. 반환: (snapshot, is_fallback)"""
+    for fetch in (_fetch_koreaexim, _fetch_open_er_api):
+        snapshot = fetch()
+        if snapshot and snapshot["rates"]:
+            _save_file_cache(snapshot)
+            return snapshot, False
+    cached = _load_file_cache()
+    if cached and cached.get("rates"):
+        return cached, True
+    return _mock_snapshot(), True
+
+
+def get_fx_rates(currencies=None, force=False):
+    """GET /api/margin-calculator/fx-rates — 환율 조회(캐시·Fallback). §6.3.3, §6.4.2"""
+    warnings = []
+    if isinstance(currencies, str):
+        currencies = [c.strip().upper() for c in currencies.split(",") if c.strip()]
+    if currencies:
+        unknown = [c for c in currencies if c not in CURRENCIES]
+        if unknown:
+            warnings.append({"code": "FX_UNKNOWN_CURRENCY",
+                             "message": f"지원하지 않는 통화는 제외했어요: {', '.join(unknown)}"})
+        codes = [c for c in currencies if c in CURRENCIES]
+    else:
+        codes = list(CURRENCIES)
+
+    with _fx_lock:  # 동시 요청이 몰려도 외부 API 는 한 번만 호출
+        now = time.monotonic()
+        if force and now - _fx_state["last_force"] < FX_FORCE_MIN_INTERVAL_SEC:
+            force = False  # 60초 안의 강제 새로고침은 캐시 반환 (외부 API 남용 방지)
+        cached = _fx_state["snapshot"] is not None and now < _fx_state["expires"] and not force
+        if not cached:
+            if force:
+                _fx_state["last_force"] = now
+            snapshot, is_fallback = _refresh_fx()
+            ttl = (FX_FALLBACK_TTL_SEC if is_fallback
+                   else _env_int("MARGIN_FX_CACHE_TTL_MIN", FX_CACHE_TTL_MIN_DEFAULT) * 60)
+            _fx_state.update(snapshot={**snapshot, "is_fallback": is_fallback}, expires=now + ttl)
+        snapshot = _fx_state["snapshot"]
+
+    try:
+        stale = now_kst() - datetime.fromisoformat(snapshot["as_of"]) > timedelta(days=FX_STALE_DAYS)
+    except (TypeError, ValueError):
+        stale = True
+    if snapshot["is_fallback"]:
+        warnings.append({"code": "FX_FALLBACK", "message": (
+            "외부 환율을 불러오지 못해 모의 기준 환율을 쓰고 있어요. 직접 입력을 권장해요"
+            if snapshot["source"] == "mock" else "외부 환율을 불러오지 못해 마지막 저장값을 쓰고 있어요")})
+    if stale:
+        warnings.append({"code": "FX_STALE", "message": f"{FX_STALE_DAYS}일 넘은 환율이에요"})
+
+    data = {
+        "source": snapshot["source"],
+        "as_of": snapshot["as_of"],
+        "search_date": snapshot.get("search_date"),
+        "is_fallback": snapshot["is_fallback"],
+        "stale": stale,
+        "cached": cached,
+        "ttb_estimated": snapshot.get("ttb_estimated", False),
+        "rates": {code: {k: out(v, 4) for k, v in snapshot["rates"][code].items()}
+                  for code in codes if code in snapshot["rates"]},
+    }
+    return data, warnings
+
+
+def _snapshot_rate(code, basis):
+    """현재 스냅샷의 1 단위당 KRW. basis: base | ttb. 반환: (Decimal, fx data, warnings)"""
+    data, warnings = get_fx_rates([code])
+    rate = data["rates"].get(code)
+    if not rate:
+        raise MarginValidationError("FX_UNAVAILABLE", f"{code} 환율을 찾지 못했어요. 직접 입력해 주세요",
+                                    {"currency": f"{code} 환율 없음"})
+    return Decimal(str(rate.get(basis) or rate["base"])), data, warnings
+
+
+def _default_usd_rate():
+    rate, _, warnings = _snapshot_rate("USD", "base")
+    return rate, warnings
+
+
+def resolve_fx_rate(currency, basis, manual_rate):
+    """적용 환율 확정 (§4.3.5). 반환: ({rate, source, as_of, basis}, warnings)"""
+    if basis == "manual":
+        errors = _Errors()
+        rate = to_decimal(manual_rate, "fx_manual_rate", errors, label="직접 입력 환율",
+                          min_value=Decimal("0.0001"), max_value=MAX_FX_RATE)
+        errors.raise_if_any()
+        warnings = [{"code": "FX_MANUAL", "message": "직접 입력한 환율로 계산했어요"}]
+        try:
+            reference, _, _ = _snapshot_rate(currency, "base")
+            if abs(rate - reference) / reference > FX_MANUAL_OUTLIER:
+                warnings.append({"code": "FX_MANUAL_OUTLIER",
+                                 "message": f"입력한 환율이 기준 환율({out(reference):,})과 30% 넘게 달라요"})
+        except MarginValidationError:
+            pass
+        return {"rate": rate, "source": "manual", "as_of": now_kst().isoformat(timespec="seconds"),
+                "basis": basis}, warnings
+    rate, data, warnings = _snapshot_rate(currency, basis)
+    return {"rate": rate, "source": data["source"], "as_of": data["as_of"], "basis": basis}, warnings
+
+
+# ---------------------------------------------------------------------------
+# Tab 2 — 외화 단가 · 환율 스트레스 (margin.md §4.3.4, §4.4)
+# ---------------------------------------------------------------------------
+
+
+def _currency_quant(currency, kind):
+    """통화 소수 자리 단위. kind: price_decimals | amount_decimals"""
+    return Decimal(1).scaleb(-CURRENCIES[currency][kind])
+
+
+def calc_fx_stress(received, y_u, k_u, i_u, unit_cost, rate, steps, target, minimum):
+    """환율 변동 s 별 실수령·마진·마진율. 금액은 원/ea, target·minimum 은 소수. 수식 §4.4
+
+    외화 표시 비용(y_u)은 환율과 같이 움직이고, 원가·원화 물류비·보험료는 고정으로 봅니다.
+    """
+    fixed_krw = unit_cost + k_u + i_u
+    rows = []
+    for step in steps:
+        f = 1 + Decimal(step) / 100
+        revenue = received * f
+        margin = (received - y_u) * f - fixed_krw
+        exw_net = revenue - k_u - y_u * f - i_u
+        rate_export = margin / revenue if revenue > 0 else None
+        rate_exw = margin / exw_net if exw_net > 0 else None
+        rows.append({
+            "step": step,
+            "rate": out(rate * f),
+            "revenue_krw": out(revenue),
+            "unit_margin": out(margin),
+            "margin_rate": None if rate_export is None else out(rate_export * 100),
+            "margin_rate_exw": None if rate_exw is None else out(rate_exw * 100),
+            "status": "negative" if rate_exw is None else classify_margin(rate_exw, target, minimum),
+        })
+    return rows
+
+
+def calc_breakeven_rates(received, y_u, fixed_krw, rate, min_margin):
+    """손익분기 환율 R_be·방어선 환율 R_def (min_margin 은 소수). 분모 ≤ 0 이면 None. 수식 §4.4"""
+    be_denominator = received - y_u
+    def_denominator = received * (1 - min_margin) - y_u
+    return {
+        "breakeven": rate * fixed_krw / be_denominator if be_denominator > 0 else None,
+        "defense": rate * fixed_krw / def_denominator if def_denominator > 0 else None,
+    }
+
+
+def calculate_fx_quote(payload):
+    """POST /api/margin-calculator/fx-stress — 외화 단가·총액·민감도·손익분기 환율 (§6.4.5)"""
+    errors = _Errors()
+    qty = to_quantity(payload.get("qty"))
+    if qty is None or qty < MARGIN_MOQ:
+        errors.add("MOQ_VIOLATION", "qty", f"발주 수량은 MOQ({MARGIN_MOQ:,}ea) 이상이어야 해요")
+    unit_cost = to_decimal(payload.get("unit_cost"), "unit_cost", errors, label="총 제조원가",
+                           min_value=Decimal(0), max_value=MAX_OVERRIDE_PRICE)
+    price_krw = to_decimal(payload.get("incoterm_unit_price_krw"), "incoterm_unit_price_krw", errors,
+                           label="인코텀즈 원화 단가", min_value=Decimal("0.01"), max_value=MAX_OVERRIDE_PRICE)
+    logistics = payload.get("logistics") if isinstance(payload.get("logistics"), dict) else {}
+    krw_costs, fx_costs, insurance = (
+        to_decimal(logistics.get(key), f"logistics.{key}", errors, label=label, min_value=Decimal(0),
+                   max_value=MAX_FIXED_COST, default=Decimal(0))
+        for key, label in (("krw_costs", "원화 물류비"), ("fx_costs_krw", "외화 물류비"), ("insurance", "보험료"))
+    )
+    currency = _enum(payload.get("currency") or "USD", CURRENCIES, "currency", errors, "통화")
+    basis = _enum(payload.get("fx_basis") or "base", ("base", "ttb", "manual"), "fx_basis", errors, "환율 기준")
+    target = to_decimal(payload.get("target_margin"), "target_margin", errors, label="목표 마진율",
+                        min_value=Decimal(0), max_value=MAX_TARGET_MARGIN, default=DEFAULT_TARGET_MARGIN,
+                        range_code="INVALID_MARGIN")
+    minimum = to_decimal(payload.get("min_margin"), "min_margin", errors, label="마진 방어선",
+                         min_value=Decimal(0), max_value=MAX_TARGET_MARGIN, default=DEFAULT_MIN_MARGIN,
+                         range_code="INVALID_MARGIN")
+    steps = payload.get("stress_steps") or STRESS_STEPS
+    parsed_steps = [to_quantity(s) for s in steps] if isinstance(steps, list) else [None]
+    if len(parsed_steps) > 9 or any(s is None or not -30 <= s <= 30 for s in parsed_steps):
+        errors.add("OUT_OF_RANGE", "stress_steps", "변동률은 -30~30 사이 정수로 최대 9개까지 넣을 수 있어요")
+    errors.raise_if_any()
+    steps = sorted(set(parsed_steps) | {0})
+
+    fx, warnings = resolve_fx_rate(currency, basis, payload.get("fx_manual_rate"))
+    rate = fx["rate"]
+    k_u, y_u, i_u = krw_costs / qty, fx_costs / qty, insurance / qty
+    price_decimals = CURRENCIES[currency]["price_decimals"]
+    amount_decimals = CURRENCIES[currency]["amount_decimals"]
+
+    unit_price_fx = ceil_to(price_krw / rate, _currency_quant(currency, "price_decimals"))   # P_fx (올림)
+    total_fx = round_to(unit_price_fx * qty, amount_decimals)                               # A_fx
+    received = unit_price_fx * rate                                                         # X
+    unit_margin = received - unit_cost - k_u - y_u - i_u                                    # G_exp
+    exw_net = received - k_u - y_u - i_u
+    rate_exw = unit_margin / exw_net if exw_net > 0 else None
+    target_f, minimum_f = pct(target), pct(minimum)
+    breakeven = calc_breakeven_rates(received, y_u, unit_cost + k_u + i_u, rate, minimum_f)
+
+    data = {
+        "currency": currency,
+        "fx_rate": out(rate, 4),
+        "fx_basis": basis,
+        "fx_source": fx["source"],
+        "fx_as_of": fx["as_of"],
+        "unit_price_fx": out(unit_price_fx, price_decimals),
+        "total_amount_fx": out(total_fx, amount_decimals),
+        "received_krw_per_unit": out(received),
+        "unit_margin_krw": out(unit_margin),
+        "margin_rate_export": out(unit_margin / received * 100),
+        "margin_rate_exw": None if rate_exw is None else out(rate_exw * 100),
+        "status": "negative" if rate_exw is None else classify_margin(rate_exw, target_f, minimum_f),
+        "stress": calc_fx_stress(received, y_u, k_u, i_u, unit_cost, rate, steps, target_f, minimum_f),
+        "breakeven_rate": None if breakeven["breakeven"] is None else out(breakeven["breakeven"]),
+        "defense_rate": None if breakeven["defense"] is None else out(breakeven["defense"]),
+    }
+    return data, warnings
+
+
+# ---------------------------------------------------------------------------
+# Tab 2 — 바이어 역제안 역산 (margin.md §4.5)
+# ---------------------------------------------------------------------------
+
+VERDICT_BY_STATUS = {"ok": "accept", "below_target": "negotiate", "below_defense": "reject", "negative": "negative"}
+
+
+def evaluate_counter(price_fx, rate, unit_cost, k_u, y_u, ins_rate, target, minimum):
+    """바이어 단가 T 의 원화 실수령·순 EXW 수입 N_T·마진율 g_T·판정. target·minimum 은 소수. 수식 §4.5.1"""
+    received = price_fx * rate
+    insurance = received * INSURANCE_COVERAGE * ins_rate
+    net = received - k_u - y_u - insurance
+    margin = net - unit_cost
+    rate_exw = margin / net if net > 0 else None
+    status = "negative" if rate_exw is None else classify_margin(rate_exw, target, minimum)
+    return {"received": received, "insurance": insurance, "net": net, "margin": margin,
+            "margin_rate": rate_exw, "status": status, "verdict": VERDICT_BY_STATUS[status]}
+
+
+def calc_cost_reduction(cost_detail, loss_rate, net_revenue, target):
+    """목표 마진 허용 원가 C_req, 절감 필요액 ΔC, 5개 요소 비례 배분. 수식 §4.5.3
+
+    재료비 3종은 로스 반영 후 금액이라 5개 요소 합계 = 총 제조원가입니다.
+    """
+    unit_cost = cost_detail["unit_cost"]
+    allowed = net_revenue * (1 - target)
+    required = max(Decimal(0), unit_cost - allowed)
+    loss_factor = 1 + pct(loss_rate)
+    components = [
+        ("bulk", "벌크", cost_detail["bulk"] * loss_factor),
+        ("container", "용기", cost_detail["container"] * loss_factor),
+        ("packaging", "단상자·라벨·설명서", cost_detail["packaging"] * loss_factor),
+        ("processing", "충진·포장·검수", cost_detail["processing"]),
+        ("fixed", "고정비 분산", cost_detail["fixed"]),
+    ]
+    by_component = []
+    for key, label, current in components:
+        share = current / unit_cost if unit_cost > 0 else Decimal(0)
+        reduce = required * share
+        by_component.append({"key": key, "label": label, "current": out(current), "share": out(share * 100),
+                             "reduce": out(reduce), "after": out(current - reduce)})
+    return {
+        "allowed_cost": out(allowed),
+        "required": out(required),
+        "required_pct": out(required / unit_cost * 100) if unit_cost > 0 else None,
+        "feasible": required < unit_cost,
+        "by_component": by_component,
+    }
+
+
+def search_required_qty(price_fx, rate, cost, logistics_req, target, minimum):
+    """바이어 단가를 그대로 받을 때 목표 마진 이상이 되는 최소 수량. 수식 §4.5.4
+
+    후보: MOQ~200,000ea 500 단위 + 할인 기준 수량. 수량마다 원가·카톤·RT·컨테이너를 다시 계산합니다.
+    """
+    candidates = set(range(MARGIN_MOQ, COUNTER_QTY_SEARCH_MAX + 1, COUNTER_QTY_SEARCH_STEP))
+    candidates |= {q for q, _ in VOLUME_DISCOUNTS if q <= COUNTER_QTY_SEARCH_MAX}
+    for qty in sorted(candidates):
+        unit_cost = calc_unit_cost(cost, qty)["unit_cost"]
+        core = _logistics_core(logistics_req, qty)
+        result = evaluate_counter(price_fx, rate, unit_cost, core["krw_total"] / qty, core["fx_total"] / qty,
+                                  core["insurance_rate"], target, minimum)
+        if result["margin_rate"] is not None and result["margin_rate"] >= target:
+            return {"required_qty": qty, "margin_at_required": out(result["margin_rate"] * 100),
+                    "searched_up_to": COUNTER_QTY_SEARCH_MAX}
+    return {"required_qty": None, "margin_at_required": None, "searched_up_to": COUNTER_QTY_SEARCH_MAX}
+
+
+def reverse_counter_offer(payload):
+    """POST /api/margin-calculator/reverse-counter-offer — 바이어 역제안 역산 (§6.4.6)"""
+    errors = _Errors()
+    currency = _enum(payload.get("currency") or "USD", CURRENCIES, "currency", errors, "통화")
+    price = to_decimal(payload.get("counter_price"), "counter_price", errors, label="바이어 희망 단가",
+                       min_value=Decimal("0.0001"), max_value=Decimal("100000"),
+                       range_code="COUNTER_PRICE_INVALID")
+    if price is not None and price != round_to(price, 4):
+        errors.add("COUNTER_PRICE_INVALID", "counter_price", "바이어 희망 단가는 소수 4자리까지 입력해 주세요")
+    fx_rate = to_decimal(payload.get("fx_rate"), "fx_rate", errors, label="적용 환율",
+                         min_value=Decimal("0.0001"), max_value=MAX_FX_RATE, required=False)
+    tier_payload = payload.get("tier_request") if isinstance(payload.get("tier_request"), dict) else {}
+    logistics_payload = payload.get("logistics_request") if isinstance(payload.get("logistics_request"), dict) else {}
+    errors.raise_if_any()
+
+    tier_req = validate_tier_request({**tier_payload, "tiers": [], "price_overrides": {}})
+    logistics_req, warnings = validate_logistics_request(
+        {**logistics_payload, "qty": payload.get("qty", logistics_payload.get("qty"))}, require_prices=False)
+    if fx_rate is None:
+        fx, fx_warnings = resolve_fx_rate(currency, "base", None)
+        fx_rate = fx["rate"]
+        warnings += fx_warnings
+
+    qty = logistics_req["qty"]
+    target, minimum = pct(tier_req["target_margin"]), pct(tier_req["min_margin"])
+    cost_detail = calc_unit_cost(tier_req["cost"], qty)
+    unit_cost = cost_detail["unit_cost"]
+    core = _logistics_core(logistics_req, qty)
+    warnings += core["warnings"]
+    k_u, y_u, ins_rate = core["krw_total"] / qty, core["fx_total"] / qty, core["insurance_rate"]
+
+    result = evaluate_counter(price, fx_rate, unit_cost, k_u, y_u, ins_rate, target, minimum)
+
+    # 목표 단가·수용 최저가 (§4.5.2) — 보험 조건이면 (1 − 1.1r) 로 가산, 통화 단가 자리로 올림
+    price_quant = _currency_quant(currency, "price_decimals")
+    price_decimals = CURRENCIES[currency]["price_decimals"]
+    gross_up = (1 - INSURANCE_COVERAGE * ins_rate) * fx_rate
+    target_price = ceil_to((unit_cost / (1 - target) + k_u + y_u) / gross_up, price_quant)
+    walkaway_price = ceil_to((unit_cost / (1 - minimum) + k_u + y_u) / gross_up, price_quant)
+
+    data = {
+        "counter_price": out(price, 4),
+        "currency": currency,
+        "fx_rate": out(fx_rate, 4),
+        "qty": qty,
+        "incoterm": core["effective_incoterm"],
+        "received_krw_per_unit": out(result["received"]),
+        "insurance_per_unit": out(result["insurance"]),
+        "net_exw_revenue": out(result["net"]),
+        "unit_cost": out(unit_cost),
+        "unit_margin": out(result["margin"]),
+        "margin_rate_exw": None if result["margin_rate"] is None else out(result["margin_rate"] * 100),
+        "verdict": result["verdict"],
+        "status": result["status"],
+        "target_margin": out(tier_req["target_margin"]),
+        "min_margin": out(tier_req["min_margin"]),
+        "target_price": out(target_price, price_decimals),
+        "walkaway_price": out(walkaway_price, price_decimals),
+        "gap_to_target": out(target_price - price, price_decimals),
+        "gap_to_target_pct": out((target_price - price) / price * 100),
+        "cost_reduction": calc_cost_reduction(cost_detail, tier_req["cost"]["loss_rate"], result["net"], target),
+        "quantity_guide": search_required_qty(price, fx_rate, tier_req["cost"], logistics_req, target, minimum),
     }
     return data, warnings

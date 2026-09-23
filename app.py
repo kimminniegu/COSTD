@@ -98,6 +98,28 @@ def margin_calculate_tiers():
     return margin_service.handle(margin_service.calculate_tiers, request.get_json(silent=True))
 
 
+@app.route("/api/margin-calculator/fx-rates", methods=["GET"])
+def margin_get_fx_rates():
+    currencies = request.args.get("currencies")
+    force = request.args.get("force") == "1"
+    return margin_service.handle(lambda: margin_service.get_fx_rates(currencies, force), needs_payload=False)
+
+
+@app.route("/api/margin-calculator/calculate-cbm-logistics", methods=["POST"])
+def margin_calculate_cbm_logistics():
+    return margin_service.handle(margin_service.calculate_logistics, request.get_json(silent=True))
+
+
+@app.route("/api/margin-calculator/fx-stress", methods=["POST"])
+def margin_fx_stress():
+    return margin_service.handle(margin_service.calculate_fx_quote, request.get_json(silent=True))
+
+
+@app.route("/api/margin-calculator/reverse-counter-offer", methods=["POST"])
+def margin_reverse_counter_offer():
+    return margin_service.handle(margin_service.reverse_counter_offer, request.get_json(silent=True))
+
+
 # [D] AI 제형/샘플 시뮬레이션 — 접두사: /api/ai-formulation/...
 
 

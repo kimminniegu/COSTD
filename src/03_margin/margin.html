@@ -294,15 +294,330 @@
   </div>
 </div>
 
-<!-- Tab 2 — 수출 조건 및 환율/역제안 시뮬레이터 (margin.md §2.4, §8.2 9단계에서 구현) -->
+<!-- Tab 2 — 수출 조건 및 환율/역제안 시뮬레이터 (margin.md §2.4) -->
 <div class="tab-panel" id="margin-panel-export" role="tabpanel">
-  <div class="card">
-    <div class="card-body">
-      <div class="placeholder">
-        <p class="placeholder-title">수출 조건 · 환율 · 역제안</p>
-        <p>이 영역은 margin.md §2.4 기준으로 다음 단계에서 구현해요.</p>
+  <div class="alert alert-info mb-6" id="margin-export-wait" hidden>
+    <div><p>환율을 불러오는 중이에요. 잠시 후 자동으로 계산해요.</p></div>
+  </div>
+
+  <div class="grid grid-2">
+    <div class="card" id="margin-logistics-card">
+      <div class="card-header">
+        <div>
+          <h3 class="card-title">포장 규격 · 물류</h3>
+          <p class="card-subtitle">카톤 규격과 운송 조건을 입력해 주세요</p>
+        </div>
+      </div>
+      <div class="card-body stack">
+        <div class="grid grid-3">
+          <div class="form-group">
+            <label class="form-label" for="margin-carton-length">카톤 가로</label>
+            <div class="input-group"><input type="number" id="margin-carton-length" data-margin-export-input min="0" max="200" step="any" inputmode="decimal"><span class="input-group__suffix">cm</span></div>
+            <p class="form-error" data-margin-error-for="margin-carton-length" hidden></p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="margin-carton-width">카톤 세로</label>
+            <div class="input-group"><input type="number" id="margin-carton-width" data-margin-export-input min="0" max="200" step="any" inputmode="decimal"><span class="input-group__suffix">cm</span></div>
+            <p class="form-error" data-margin-error-for="margin-carton-width" hidden></p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="margin-carton-height">카톤 높이</label>
+            <div class="input-group"><input type="number" id="margin-carton-height" data-margin-export-input min="0" max="200" step="any" inputmode="decimal"><span class="input-group__suffix">cm</span></div>
+            <p class="form-error" data-margin-error-for="margin-carton-height" hidden></p>
+          </div>
+        </div>
+
+        <div class="grid grid-3">
+          <div class="form-group">
+            <label class="form-label" for="margin-carton-units">카톤 입수량</label>
+            <div class="input-group"><input type="number" id="margin-carton-units" data-margin-export-input min="1" step="1" inputmode="numeric"><span class="input-group__suffix">ea</span></div>
+            <p class="form-error" data-margin-error-for="margin-carton-units" hidden></p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="margin-carton-gw">카톤 총중량</label>
+            <div class="input-group"><input type="number" id="margin-carton-gw" data-margin-export-input min="0" max="100" step="any" inputmode="decimal"><span class="input-group__suffix">kg</span></div>
+            <p class="form-error" data-margin-error-for="margin-carton-gw" hidden></p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="margin-carton-allowance">포장 여유율</label>
+            <div class="input-group"><input type="number" id="margin-carton-allowance" data-margin-export-input min="0" max="50" step="any" inputmode="decimal"><span class="input-group__suffix">%</span></div>
+            <p class="form-error" data-margin-error-for="margin-carton-allowance" hidden></p>
+          </div>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="form-group">
+            <label class="form-label" for="margin-export-qty">발주 수량</label>
+            <div class="input-group">
+              <input type="text" id="margin-export-qty" value="—" readonly aria-readonly="true" aria-describedby="margin-export-qty-help">
+              <span class="input-group__suffix">ea</span>
+            </div>
+            <p class="form-help" id="margin-export-qty-help">Tab 1에서 선택한 수량이에요 · <a href="#" id="margin-export-qty-change">변경하기</a></p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="margin-transport-mode">운송 방식</label>
+            <select class="form-control" id="margin-transport-mode" data-margin-export-input></select>
+          </div>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="form-group">
+            <label class="form-label" for="margin-dest-region">도착 권역</label>
+            <select class="form-control" id="margin-dest-region" data-margin-export-input></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="margin-named-place">지정 장소</label>
+            <input class="form-control" type="text" id="margin-named-place" data-margin-export-input maxlength="60" placeholder="예: Los Angeles, USA">
+            <p class="form-error" data-margin-error-for="margin-named-place" hidden></p>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <span class="form-label" id="margin-incoterm-label">인코텀즈 (Incoterms® 2020)</span>
+          <div class="tabs margin-incoterm-tabs" id="margin-incoterm-tabs" role="radiogroup" aria-labelledby="margin-incoterm-label"></div>
+        </div>
+
+        <div class="form-group" id="margin-insurance-group" hidden>
+          <label class="form-label" for="margin-insurance-clause">보험 조건</label>
+          <select class="form-control" id="margin-insurance-clause" data-margin-export-input></select>
+          <p class="form-help" id="margin-insurance-help"></p>
+        </div>
+
+        <div class="alert alert-info" id="margin-incoterm-help">
+          <div><p id="margin-incoterm-help-text"></p></div>
+        </div>
       </div>
     </div>
+
+    <div class="card" id="margin-logistics-result-card">
+      <div class="card-header">
+        <div>
+          <h3 class="card-title">CBM · 운임 계산 결과</h3>
+          <p class="card-subtitle" id="margin-logistics-subtitle">운임·요율은 모의 기준값이에요</p>
+        </div>
+        <span class="badge" id="margin-logistics-status" hidden></span>
+      </div>
+      <div class="card-body stack">
+        <div class="alert alert-warning" id="margin-logistics-alert" hidden>
+          <div>
+            <p class="alert-title">확인이 필요해요</p>
+            <ul class="margin-alert-list" id="margin-logistics-alert-list"></ul>
+          </div>
+        </div>
+
+        <div class="state state-empty" id="margin-logistics-empty">
+          <p class="state-title">아직 계산 결과가 없어요</p>
+          <p>Tab 1에서 수량을 선택하면 물류비를 계산해요</p>
+        </div>
+
+        <div class="stack" id="margin-logistics-body" hidden>
+          <div class="grid grid-auto-sm">
+            <div class="stat-tile" id="margin-logistics-cartons"><span class="stat-tile__label">카톤 수</span><span class="stat-tile__value">—</span></div>
+            <div class="stat-tile" id="margin-logistics-cbm"><span class="stat-tile__label">총 CBM</span><span class="stat-tile__value">—</span></div>
+            <div class="stat-tile" id="margin-logistics-weight"><span class="stat-tile__label">총 중량</span><span class="stat-tile__value">—</span></div>
+            <div class="stat-tile" id="margin-logistics-chargeable"><span class="stat-tile__label">운임 부과 기준</span><span class="stat-tile__value">—</span></div>
+            <div class="stat-tile" id="margin-logistics-containers"><span class="stat-tile__label">컨테이너 수</span><span class="stat-tile__value">—</span></div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table" id="margin-logistics-table">
+              <thead>
+                <tr>
+                  <th>항목</th>
+                  <th>부담</th>
+                  <th>통화</th>
+                  <th class="is-numeric">금액</th>
+                  <th class="is-numeric">원화 환산</th>
+                  <th class="is-numeric">원/ea</th>
+                </tr>
+              </thead>
+              <tbody id="margin-logistics-tbody"></tbody>
+            </table>
+          </div>
+
+          <div class="grid grid-2">
+            <div class="stat-tile" id="margin-logistics-total"><span class="stat-tile__label">매도인 물류비 합계</span><span class="stat-tile__value">—</span></div>
+            <div class="stat-tile" id="margin-logistics-unit-price"><span class="stat-tile__label">인코텀즈 원화 단가</span><span class="stat-tile__value">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-2 mt-6">
+    <div class="card" id="margin-fx-card">
+      <div class="card-header">
+        <div>
+          <h3 class="card-title">환율 · 외화 공급단가</h3>
+          <p class="section-meta" id="margin-fx-meta">환율을 불러오는 중이에요</p>
+        </div>
+        <span class="badge" id="margin-fx-source-badge" hidden></span>
+      </div>
+      <div class="card-body stack">
+        <div class="grid grid-2">
+          <div class="form-group">
+            <label class="form-label" for="margin-currency">통화</label>
+            <select class="form-control" id="margin-currency"></select>
+          </div>
+          <div class="form-group">
+            <span class="form-label" id="margin-fx-basis-label">환율 기준</span>
+            <div class="tabs" id="margin-fx-basis-tabs" role="radiogroup" aria-labelledby="margin-fx-basis-label">
+              <button type="button" class="tab is-active" data-margin-fx-basis="base" role="radio" aria-checked="true">매매기준율</button>
+              <button type="button" class="tab" data-margin-fx-basis="ttb" role="radio" aria-checked="false">전신환 매입률(TTB)</button>
+              <button type="button" class="tab" data-margin-fx-basis="manual" role="radio" aria-checked="false">직접 입력</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group" id="margin-fx-manual-group" hidden>
+          <label class="form-label" for="margin-fx-manual-rate">직접 입력 환율</label>
+          <div class="input-group">
+            <input type="number" id="margin-fx-manual-rate" min="0" step="any" inputmode="decimal">
+            <span class="input-group__suffix" id="margin-fx-manual-suffix">KRW/USD</span>
+          </div>
+          <p class="form-error" data-margin-error-for="margin-fx-manual-rate" hidden></p>
+        </div>
+
+        <div class="alert alert-warning" id="margin-fx-alert" hidden>
+          <div>
+            <p class="alert-title">환율 확인이 필요해요</p>
+            <ul class="margin-alert-list" id="margin-fx-alert-list"></ul>
+          </div>
+        </div>
+
+        <div class="margin-fx-kpi" id="margin-fx-kpi">
+          <p class="kpi-label" id="margin-fx-kpi-label">외화 단가</p>
+          <p class="kpi-value kpi-value-lg is-primary" id="margin-fx-kpi-value">—</p>
+          <p class="kpi-delta" id="margin-fx-kpi-delta"></p>
+        </div>
+
+        <div class="grid grid-3">
+          <div class="stat-tile" id="margin-fx-total"><span class="stat-tile__label">총 견적 금액</span><span class="stat-tile__value">—</span></div>
+          <div class="stat-tile" id="margin-fx-margin-export"><span class="stat-tile__label">수출 기준 마진율</span><span class="stat-tile__value">—</span></div>
+          <div class="stat-tile" id="margin-fx-margin-exw"><span class="stat-tile__label">EXW 기준 마진율</span><span class="stat-tile__value">—</span></div>
+        </div>
+
+        <div class="row">
+          <button type="button" class="btn btn-ghost btn-sm" id="margin-fx-refresh-btn">환율 새로고침</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="margin-fx-stress-card">
+      <div class="card-header">
+        <div>
+          <h3 class="card-title">환율 변동 민감도</h3>
+          <p class="card-subtitle">원화가 강세(환율 하락)가 되면 수출 마진이 줄어요</p>
+        </div>
+      </div>
+      <div class="card-body stack">
+        <div class="state state-empty" id="margin-fx-stress-empty">
+          <p class="state-title">아직 계산 결과가 없어요</p>
+          <p>외화 단가를 계산하면 환율 시나리오를 보여드려요</p>
+        </div>
+        <div class="table-wrap" id="margin-fx-stress-wrap" hidden>
+          <table class="table" id="margin-fx-stress-table">
+            <thead>
+              <tr>
+                <th class="is-numeric">원화 변동</th>
+                <th class="is-numeric">적용 환율</th>
+                <th class="is-numeric">원화 환산 단가</th>
+                <th class="is-numeric">영업 마진액(원/ea)</th>
+                <th class="is-numeric">영업 마진율</th>
+                <th>상태</th>
+              </tr>
+            </thead>
+            <tbody id="margin-fx-stress-tbody"></tbody>
+          </table>
+        </div>
+        <div class="grid grid-2">
+          <div class="stat-tile" id="margin-fx-breakeven"><span class="stat-tile__label">손익분기 환율</span><span class="stat-tile__value">—</span></div>
+          <div class="stat-tile" id="margin-fx-defense"><span class="stat-tile__label">마진 방어선 환율</span><span class="stat-tile__value">—</span></div>
+        </div>
+        <p class="text-caption" id="margin-fx-defense-note">환율이 이 값 아래로 내려가면 역마진(방어선 미달)이 돼요</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-6" id="margin-counter-card">
+    <div class="card-header">
+      <div>
+        <h3 class="card-title">바이어 역제안 역산</h3>
+        <p class="card-subtitle">바이어 희망 단가를 넣으면 현재 원가 구조로 마진을 계산해요</p>
+      </div>
+    </div>
+    <div class="card-body stack">
+      <div class="grid grid-3 margin-counter-form">
+        <div class="form-group">
+          <label class="form-label" for="margin-counter-price">바이어 희망 단가 <span class="is-required">*</span></label>
+          <div class="input-group">
+            <input type="number" id="margin-counter-price" min="0" step="any" inputmode="decimal" placeholder="예: 1.50">
+            <span class="input-group__suffix" id="margin-counter-currency">USD</span>
+          </div>
+          <p class="form-help" id="margin-counter-price-help">현재 인코텀즈 기준 단가예요</p>
+          <p class="form-error" data-margin-error-for="margin-counter-price" hidden></p>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="margin-counter-qty">기준 수량</label>
+          <div class="input-group">
+            <input type="number" id="margin-counter-qty" min="1500" step="1" inputmode="numeric">
+            <span class="input-group__suffix">ea</span>
+          </div>
+          <p class="form-error" data-margin-error-for="margin-counter-qty" hidden></p>
+        </div>
+        <div class="form-group margin-counter-submit">
+          <button type="button" class="btn btn-primary btn-lg btn-block" id="margin-counter-btn">역산하기</button>
+        </div>
+      </div>
+
+      <div class="stack" id="margin-counter-result" hidden>
+        <div class="alert" id="margin-counter-verdict">
+          <div>
+            <p class="alert-title" id="margin-counter-verdict-title"></p>
+            <p id="margin-counter-verdict-text"></p>
+          </div>
+        </div>
+
+        <div class="grid grid-4">
+          <div class="stat-tile" id="margin-counter-margin"><span class="stat-tile__label">EXW 기준 마진율</span><span class="stat-tile__value">—</span></div>
+          <div class="stat-tile" id="margin-counter-unit-margin"><span class="stat-tile__label">개당 마진액</span><span class="stat-tile__value">—</span></div>
+          <div class="stat-tile" id="margin-counter-target-price"><span class="stat-tile__label">목표 마진 단가</span><span class="stat-tile__value">—</span></div>
+          <div class="stat-tile" id="margin-counter-walkaway"><span class="stat-tile__label">수용 최저가(방어선)</span><span class="stat-tile__value">—</span></div>
+        </div>
+
+        <div>
+          <h4 class="mb-2">원가 절감 가이드</h4>
+          <p class="text-caption mb-4" id="margin-counter-reduction-summary"></p>
+          <div class="table-wrap">
+            <table class="table" id="margin-counter-reduction-table">
+              <thead>
+                <tr>
+                  <th>원가 요소</th>
+                  <th class="is-numeric">현재(원/ea)</th>
+                  <th class="is-numeric">비중</th>
+                  <th class="is-numeric">절감 필요액(원/ea)</th>
+                  <th class="is-numeric">절감 후(원/ea)</th>
+                </tr>
+              </thead>
+              <tbody id="margin-counter-reduction-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div>
+          <h4 class="mb-2">수량 증대 가이드</h4>
+          <p id="margin-counter-qty-guide"></p>
+        </div>
+
+        <div class="row">
+          <button type="button" class="btn btn-soft" id="margin-counter-apply-btn">이 단가로 견적서 작성</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row mt-6 margin-actions-end">
+    <button type="button" class="btn btn-primary" id="margin-go-pi-btn" disabled>이 조건으로 견적서 작성하기</button>
   </div>
 </div>
 

@@ -10,6 +10,7 @@
 | 1.1 | 2026-09-23 | API 접두사를 README 규칙 9에 맞춰 `/api/margin/` → `/api/margin-calculator/`로 변경 | C |
 | 1.2 | 2026-09-23 | MOQ 1,500ea 고정(읽기 전용, 서버 `MOQ_FIXED`), 수량 구간 사용자 정의 Chip 입력 규칙 확정(§2.3, §3.1.3, §4.2.1, §7.1) | C |
 | 1.3 | 2026-09-23 | Tab 1 원/ea 금액 소수 2자리 표시(§4.0), chart 응답에 `unit_margin` 추가(§6.4.3), 목표 마진·방어선 범위 오류 코드 `INVALID_MARGIN`으로 통일 | C |
+| 1.4 | 2026-09-23 | Tab 2 구현 반영: 매수인 부담 보험료는 금액 `null`(§6.4.4), 스트레스 표는 EXW·수출 마진율 병기, 화면 보조 요소(`#margin-export-wait`, `#margin-logistics-status`, `#margin-logistics-alert`, `#margin-fx-alert`) 및 CSS 허용 목록 추가(§2.4, §2.7) | C |
 
 **문서 표기 규칙**
 
@@ -335,6 +336,9 @@ Modal × 4 (§2.6)
 | `.margin-chart__hit` / `.margin-chart__baseline` / `.margin-chart__axis-text` / `.margin-chart__label--negative` / `--below-defense` | 차트 Hover 영역·기준선·축 글자·상태별 라벨 색 |
 | `.margin-chart-legend__item` / `__swatch` / `__swatch--line` | 차트 범례 |
 | `.margin-alert-list` / `.margin-actions-end` / `.margin-sr-only` | Alert 안 목록, 우측 정렬 버튼 줄, 화면 낭독기 전용 텍스트 |
+| `.margin-incoterm-tabs` | 인코텀즈 8종 필터 탭 줄바꿈(공통 `.tabs`의 가로 스크롤 대신 `flex-wrap`) |
+| `.margin-fx-kpi` | Card 안 대표 외화 단가 영역(`--color-primary-soft` 배경 패널, `.kpi-card` 중첩 금지 대안) |
+| `.margin-counter-submit` | 역제안 입력 줄의 [역산하기] 버튼 아래 정렬 |
 | `[id^="margin-"][hidden]` 등 | 공통 CSS에 `[hidden]` 규칙이 없어 `.alert`·`.state`·`.badge`에서 `hidden`이 무시되므로, **이 페이지 요소에 한해** `display: none !important` 보장 |
 
 ---
@@ -1271,6 +1275,9 @@ get_fx_rates(currencies, force=False)
 ```
 
 (`last_carton_units` = 마지막 카톤 입수량 `q − (N−1)×units_per_carton`, 끝수 카톤 안내용)
+
+- 적하보험료는 가액 기준이라 **매수인 부담 조건(CIF·CIP 외)에서는 `amount`·`krw`·`per_unit`을 `null`** 로 응답하고 화면에는 `—`로 표시합니다.
+- `usd_rate`를 생략하면 서버가 `get_fx_rates(["USD"])`의 매매기준율로 채웁니다.
 
 **경고 코드**: `SEA_ONLY_TERM_ON_AIR`(FOB·CFR·CIF + AIR → `effective_incoterm`을 FCA·CPT·CIP로 계산) `LCL_TOO_LARGE`(CBM > 15) `FCL_LOW_UTILIZATION`(적재율 < 60%) `HEAVY_CARTON`(카톤 > 25kg) `PARTIAL_CARTON`(끝수 카톤 존재) `INSURANCE_CLAUSE_UPGRADED`(CIP에 ICC(C) 요청 → ICC(A)로 계산)
 
