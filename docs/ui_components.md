@@ -53,7 +53,8 @@
   - 본문(`.app-main`)의 좌측 여백도 함께 줄어듭니다 (0.28s Transition)
   - 페이지 JS에서 강제로 바꿔야 할 때: `Common.setSidebarCollapsed(true | false)`
 - **상태 (≤1024px)**: 숨김 → `[data-sidebar-toggle]` 클릭 시 `.is-open` (Drawer, 항상 펼친 모양). 배경 클릭 / ESC로 닫힘. 접기 버튼은 표시되지 않습니다.
-- 사용자 영역은 로그인 구현 전까지 `[사용자명]` Placeholder입니다.
+- 사용자 영역(`.app-user`): 이름 첫 글자 아바타(`.app-user__avatar`) + 이름/소속(세션 `current_user`) + 로그아웃 링크(`.app-user__logout`, `/logout`). 접힘 상태에서는 아바타와 로그아웃 아이콘만 세로로 표시됩니다.
+- 로그인 화면은 공통 Layout 을 쓰지 않는 독립 화면입니다: `src/common/login.html` + `login.css` (Class 접두사 `login-`). 좌측 소개 패널(`--color-background`) + 우측 400px 폼, ≤1024px 에서 1열.
 
 ## 4. Button
 
