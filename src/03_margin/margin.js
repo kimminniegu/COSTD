@@ -147,6 +147,48 @@
     render();
   });
 
+  /* ---------- 약식 포장/CBM 추정 (물류비 입력 보조) ----------
+     카톤 수 = ⌈수량 ÷ 카톤당 입수⌉, CBM = 카톤 수 × 카톤 부피.
+     LCL 은 1 CBM 미만도 1 CBM 으로 청구하는 관행에 맞춰 운임 계산만 최소 1 CBM 을 적용합니다. */
+  const CBM_PRESETS = { toner: { ea: 40, box: 0.025 }, cream: { ea: 60, box: 0.025 }, mask: { ea: 200, box: 0.025 } };
+  const FCL_HINT_CBM = 15;   // 이 이상이면 20ft 컨테이너(FCL) 견적 비교를 권장
+  let cbmEst = null;
+
+  function renderCbm(p) {
+    const ea = num("cbm-ea"), box = num("cbm-box"), inland = num("cbm-inland"), lcl = num("cbm-lcl");
+    if ([ea, box, inland, lcl].some(isNaN) || ea <= 0 || box <= 0 || inland < 0 || lcl < 0) {
+      cbmEst = null;
+      $("cbm-peek").textContent = "";
+      $("cbm-out").innerHTML = '<p class="form-error">카톤당 입수·부피는 0보다 크고, 단가는 0 이상이어야 해요.</p>';
+      $("cbm-apply").disabled = true;
+      return;
+    }
+    const cartons = Math.ceil(p.qty / ea), cbm = cartons * box, billed = Math.max(1, cbm);
+    cbmEst = { logi: Math.round((billed * inland) / 10000) * 10000, freight: Math.ceil(billed * lcl) };
+    $("cbm-peek").textContent = `${cartons.toLocaleString()}카톤 · ${cbm.toFixed(2)} CBM`;
+    $("cbm-out").innerHTML = `<div class="margin-cbm-out__row"><span>카톤 ${cartons.toLocaleString()}박스</span><b>${cbm.toFixed(2)} CBM</b></div>
+      <div class="margin-cbm-out__row"><span>FOB 내륙물류비</span><b>${won(cbmEst.logi)}</b></div>
+      <div class="margin-cbm-out__row"><span>해상운임 (LCL)</span><b>$${cbmEst.freight.toLocaleString()}</b></div>
+      ${cbm < 1 ? '<p class="text-caption">1 CBM 미만은 LCL 최소 1 CBM으로 계산했어요.</p>' : ""}
+      ${cbm >= FCL_HINT_CBM ? `<p class="text-caption margin-cbm-out__hint">${FCL_HINT_CBM} CBM 이상이에요. 20ft 컨테이너(FCL) 견적과 비교해 보세요.</p>` : ""}`;
+    $("cbm-apply").disabled = false;
+  }
+
+  $("cbm-preset").addEventListener("input", () => {   // 아래 입력 Card 공통 listener(render)보다 먼저 등록
+    const pr = CBM_PRESETS[$("cbm-preset").value];
+    $("cbm-ea").value = pr.ea;
+    $("cbm-box").value = pr.box;
+  });
+  $("cbm-apply").addEventListener("click", () => {
+    if (!cbmEst) return;
+    $("logi").value = cbmEst.logi;
+    $("freight").value = cbmEst.freight;
+    render();
+    const b = $("cbm-apply");
+    b.textContent = "반영됨 · 직접 수정 가능";
+    setTimeout(() => { b.textContent = "운임 반영"; }, 1500);
+  });
+
   /* ---------- 렌더 ---------- */
   function render() {
     const p = readInputs();
@@ -156,6 +198,7 @@
     $("err").textContent = p.error || "";
     if (p.error) return;
     const r = forward(p);
+    renderCbm(p);
     renderForward(p, r);
     renderReverse(p, r);
     renderTier(p);
@@ -201,10 +244,12 @@
       + `<tr><td>물류비 <span class="text-caption">개당</span></td>${n(won(r.L))}${n(pct(p.rates.logi))}${n(won(r.Lsup))}${n(won(r.Lsup - r.L))}</tr>`
       + `<tr class="margin-total"><td>합계</td>${n(won(r.C + r.L))}${n(pct(r.m1eff))}${n(won(r.P2))}${n(won(r.P2 - r.C - r.L))}</tr></tbody>`;
 
-    /* 마진 녹이기 (내부·대외 비교) */
+    /* 마진 흡수 (견적서 발행 옵션 — 체크하지 않으면 흡수 0) */
+    const absOn = $("abs-on").checked;
+    $("abs-box").hidden = !absOn;
     const maxAbs = Math.max(0, Math.floor(r.marginTotal / 10) * 10);
     ["abs-c", "abs-l"].forEach((id) => { $(id).max = maxAbs; });
-    const aC = Math.min(num("abs-c"), maxAbs), aL = Math.min(num("abs-l"), maxAbs);
+    const aC = absOn ? Math.min(num("abs-c"), maxAbs) : 0, aL = absOn ? Math.min(num("abs-l"), maxAbs) : 0;
     $("abs-cv").textContent = won(aC);
     $("abs-lv").textContent = won(aL);
     const f = (v) => (st.absUnit === "krw" ? won(v) : usd(v / p.fx));
@@ -241,7 +286,7 @@
     }
     lines.forEach((l) => { l.amount = Math.round(l.amount * 100) / 100; });
     st.quote = {
-      mode: st.qMode, incoterm: p.inco, lines, breakdown,
+      mode: st.qMode, incoterm: p.inco, lines, breakdown, unit: U, qty,
       total: lines.reduce((sum, l) => sum + l.amount, 0),
       moq: `${st.moq.toLocaleString()} pcs`,
       discount_note: r.d > 0 ? `Volume discount of ${pct(r.d)} is included in the unit price.` : "",
@@ -324,7 +369,7 @@
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      window.Common.closeModal("margin-quote-modal");
+      $("q-done").hidden = false;   // 완료 화면: 팝업을 닫지 않고 영문 제안문 복사를 안내
     } catch (e) {
       err.textContent = e.message;
     } finally {
@@ -337,49 +382,99 @@
      팝업이 화면 가운데에 뜨도록 body 바로 아래로 옮깁니다. (열기·닫기는 common.js 가 document 에서 처리) */
   document.body.appendChild($("quote-modal"));
   $("q-no").value = "QT-" + new Date().toISOString().slice(0, 10).replace(/-/g, "") + "-01";
-  $("q-open").addEventListener("click", loadProfile);   // 팝업 열기는 common.js(data-modal-open)가 처리
+  $("q-open").addEventListener("click", () => { $("q-done").hidden = true; loadProfile(); });   // 팝업 열기는 common.js(data-modal-open)가 처리
   $("q-pdf").addEventListener("click", downloadQuotePdf);
+
+  /* ---------- 클립보드 복사 (가격표 · 영문 제안문) ---------- */
+  async function copyText(btn, txt) {
+    const label = btn.textContent;
+    try { await navigator.clipboard.writeText(txt); btn.textContent = "복사됨"; }
+    catch (e) { window.prompt("아래 내용을 복사하세요", txt); }
+    setTimeout(() => { btn.textContent = label; }, 1500);
+  }
+
+  /* 바이어용 영문 커버레터 — 팝업 입력값이 비어 있으면 [ ] 자리표시로 남깁니다 */
+  function proposalMail() {
+    const q = st.quote;
+    const or = (id, fb) => qv(id) || fb;
+    const company = or("q-buyer-company", "[Customer]");
+    const qno = or("q-no", "[Quotation No.]"), product = or("q-product", "[Product]");
+    const place = qv("q-place") || (["EXW", "FOB"].includes(q.incoterm) ? "Korea" : "Port of destination");
+    const validity = parseInt(qv("q-validity"), 10) || 30;
+    const tiers = st.tierData ? st.tierData.data.filter((x) => !x.r.belowMoq && x.q !== q.qty) : [];
+    const lines = [
+      `Subject: Quotation ${qno} - ${product} (${q.incoterm})`,
+      "",
+      `Dear ${qv("q-buyer-attn") || company},`,
+      "",
+      `Thank you for your interest in our products. Please find the attached official quotation ${qno} for ${product}.`,
+      "",
+      `- Unit price: ${usd(q.unit)} per pc (${q.incoterm} ${place})`,
+      `- Quantity: ${q.qty.toLocaleString("en-US")} pcs (Total ${money(q.unit * q.qty)})`,
+      `- MOQ: ${q.moq}`,
+    ];
+    if (tiers.length) lines.push(`- Volume pricing: ${tiers.map((x) => `${x.q.toLocaleString("en-US")} pcs ${usd(x.r.usd)}`).join(" / ")}`);
+    lines.push(`- Payment: ${qv("q-payment") || "T/T"}`);
+    if (qv("q-lead")) lines.push(`- Lead time: ${qv("q-lead")}`);
+    lines.push(`- Validity: ${validity} days from ${new Date().toISOString().slice(0, 10)}`);
+    if (q.discount_note) lines.push("", q.discount_note);
+    lines.push("", "Please feel free to contact us if you have any questions. We look forward to your feedback.", "",
+      "Best regards,", qv("q-contact-name") || "[Your name]", qv("q-company") || "[Company]");
+    if (qv("q-contact-email")) lines.push(qv("q-contact-email"));
+    return lines.join("\n");
+  }
+  ["copy-mail", "copy-mail-tier"].forEach((id) => $(id).addEventListener("click", async () => {
+    if (!st.quote) return;
+    await loadProfile();   // 수량별 단가 탭에서 바로 복사할 때도 우리 회사·담당자가 들어가도록
+    copyText($(id), proposalMail());
+  }));
   $("quote-modal").querySelectorAll("input, textarea").forEach((e) => e.addEventListener("input", () => {
     e.classList.remove("is-error");
     if (e.id === "margin-q-product") render();
   }));
 
-  function renderReverse(p, r) {
-    const t = num("target"), floor = num("item-floor") / 100;
-    const bad = isNaN(t) || t <= 0 || isNaN(floor);
-    $("r-err").textContent = bad ? "목표가와 항목별 최소 마진을 입력하세요." : "";
-    if (bad) { $("verdict").innerHTML = ""; $("gauge").innerHTML = ""; return; }
-
+  /* ---------- 역제안 공통 (판정 · Gauge · VE 미리보기가 같이 씀) ---------- */
+  function reverseCtx(p, r, t) {
     const sea = p.inco === "CFR" || p.inco === "CIF";
     const toUsd = (krw) => { let u = krw / p.fx; if (sea) u += r.freightU; if (p.inco === "CIF") u += u * 1.1 * p.ins; return u; };
     const toKrw = (u) => { let v = u; if (p.inco === "CIF") v = v / (1 + 1.1 * p.ins); if (sea) v -= r.freightU; return v * p.fx; };
-    const withM2 = (sup, m) => apply(sup, m, st.mMode);
-    const supMaxFor = (krw, m) => (st.mMode === "margin" ? krw * (1 - m) : krw / (1 + m));
+    return {
+      toUsd,
+      withM2: (sup, m) => apply(sup, m, st.mMode),
+      supMaxFor: (krw, m) => (st.mMode === "margin" ? krw * (1 - m) : krw / (1 + m)),
+      keys: ["raw", "proc", "pack", "logi"],
+      cost: { ...r.items, logi: r.L },   // 항목별 원가 (물류 포함)
+      T: t == null ? 0 : toKrw(t),
+    };
+  }
 
-    /* 항목별 원가·공급가 (물류 포함) */
-    const keys = ["raw", "proc", "pack", "logi"];
-    const cost = { ...r.items, logi: r.L }, sup = { ...r.supply, logi: r.Lsup };
-    const floorSup = {};
-    keys.forEach((k) => { floorSup[k] = apply(cost[k], Math.min(floor, p.rates[k] || 0), st.mMode); });
-
-    /* 가격 기준선 */
-    const T = toKrw(t);
-    const P = {
+  /* 가격 기준선 4개 (USD) */
+  function priceLines(p, r, floor) {
+    const { toUsd, withM2, keys, cost } = reverseCtx(p, r);
+    const floorSup = keys.reduce((a, k) => a + apply(cost[k], Math.min(floor, p.rates[k] || 0), st.mMode), 0);
+    return {
       breakeven: toUsd(r.C + r.L),
-      floor: toUsd(withM2(keys.reduce((a, k) => a + floorSup[k], 0), p.m2min)),
+      floor: toUsd(withM2(floorSup, p.m2min)),
       min: toUsd(withM2(r.P2, p.m2min)),
       goal: toUsd(withM2(r.P2, p.m2)),
     };
-    const m2now = 1 - r.P2 / T;
+  }
 
-    let z;
-    if (t >= P.goal - 1e-9) z = ["green", "수락 가능", `${usd(t)}에 받아도 영업마진 ${pct(m2now)}`, `목표 영업마진 ${pct(p.m2)} 이상이 남아요.`];
-    else if (t >= P.min - 1e-9) z = ["yellow", "영업마진 양보", `영업마진 ${pct(m2now)}로 받을 수 있어요`, `최소 영업마진(${pct(p.m2min)})은 지켜요. 1차·물류 마진은 그대로예요.`];
-    else if (t >= P.floor - 1e-9) z = ["orange", "1차·물류 마진 조정", "1차·물류 마진을 줄이면 가능해요", `영업마진 ${pct(p.m2min)}를 지키려면 1차·물류 마진에서 줄여야 해요.`];
-    else z = ["red", "마진만으로 불가", t * p.fx < r.C + r.L ? "원가와 물류비보다 낮은 가격이에요" : "모든 마진을 최소로 줄여도 부족해요", `물류 조건, 수량, 부자재 사양을 바꿔야 해요. 최대 양보가는 ${usd(P.floor)}예요.`];
-    setVerdict($("verdict"), z[0], `${badge(z[0], z[1])}<p class="margin-verdict__title">${z[2]}</p><p class="margin-verdict__desc">${z[3]}</p>`);
+  function zoneOf(t, P, p, r, m2now) {
+    if (t >= P.goal - 1e-9) return ["green", "수락 가능", `${usd(t)}에 받아도 영업마진 ${pct(m2now)}`, `목표 영업마진 ${pct(p.m2)} 이상이 남아요.`];
+    if (t >= P.min - 1e-9) return ["yellow", "영업마진 양보", `영업마진 ${pct(m2now)}로 받을 수 있어요`, `최소 영업마진(${pct(p.m2min)})은 지켜요. 1차·물류 마진은 그대로예요.`];
+    if (t >= P.floor - 1e-9) return ["orange", "1차·물류 마진 조정", "1차·물류 마진을 줄이면 가능해요", `영업마진 ${pct(p.m2min)}를 지키려면 1차·물류 마진에서 줄여야 해요.`];
+    return ["red", "마진만으로 불가", t * p.fx < r.C + r.L ? "원가와 물류비보다 낮은 가격이에요" : "모든 마진을 최소로 줄여도 부족해요", `물류 조건, 수량, 부자재 사양을 바꿔야 해요. 최대 양보가는 ${usd(P.floor)}예요.`];
+  }
 
-    /* Gauge */
+  /* 영업 승인 가이드라인(R&R): 목표 이상은 담당자 진행, 목표 미만~최소 이상은 팀장 전결, 최소 미만은 본부장/임원 */
+  function approval(m, p) {
+    if (m >= toSale(p.m2) - 1e-9) return "";
+    if (m >= toSale(p.m2min) - 1e-9) return '<span class="badge badge-info">팀장 전결 가능 (승인 권장)</span>';
+    return '<span class="badge badge-danger">본부장/임원 특별 승인 필요 (마진 방어 필수)</span>';
+  }
+
+  function drawGauge(el, P, t) {
     const pts = [P.breakeven, P.floor, P.min, P.goal, t];
     const lo = Math.min(...pts) * 0.97, hi = Math.max(...pts) * 1.03;
     const pos = (v) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100));
@@ -389,9 +484,60 @@
       .map((q) => ({ l: q[0], v: q[1], x: pos(q[1]) })).sort((a, b) => a.x - b.x);
     let lastX = -99, row = 0;
     ticks.forEach((q) => { row = q.x - lastX < 13 && row === 0 ? 1 : 0; q.r = row; lastX = q.x; });
-    $("gauge").innerHTML = `<div class="margin-gauge__track">${zones.map((q) => `<div class="${q[2]}" style="width:${((q[1] - q[0]) / (hi - lo)) * 100}%"></div>`).join("")}</div>`
+    el.innerHTML = `<div class="margin-gauge__track">${zones.map((q) => `<div class="${q[2]}" style="width:${((q[1] - q[0]) / (hi - lo)) * 100}%"></div>`).join("")}</div>`
       + ticks.map((q) => `<div class="margin-gauge__tick${q.r ? " is-row2" : ""}" style="left:${q.x}%"><b>${usd(q.v)}</b>${q.l}</div>`).join("")
       + `<div class="margin-gauge__pin" style="left:${pos(t)}%"><b>바이어 ${usd(t)}</b><i></i></div>`;
+  }
+
+  /* 사양 변경(VE) 미리보기 — 부자재 원가(개당)를 약식 절감액만큼 낮추고, 사급 전환은 부자재 1차 마진을 0으로 */
+  const VE_CUT = { coat: 30, box: 20 };
+  function renderVe(p, r, t, floor, z, P, T) {
+    const show = z[0] === "orange" || z[0] === "red";
+    $("ve-card").hidden = !show;
+    if (!show) return;
+    const sagupSave = r.supply.pack - r.items.pack;
+    $("ve-sagup").disabled = p.sagup;
+    $("ve-sagup-note").textContent = p.sagup ? "입력에서 이미 부자재 사급으로 계산 중이에요." : "바이어가 부자재를 공급 · 부자재 1차 마진 제외";
+    $("ve-save-coat").textContent = "−" + won(VE_CUT.coat);
+    $("ve-save-box").textContent = "−" + won(VE_CUT.box);
+    $("ve-save-sagup").textContent = p.sagup ? "-" : "−" + won(sagupSave);
+
+    const cut = ["coat", "box"].reduce((a, k) => a + ($("ve-" + k).checked ? VE_CUT[k] : 0), 0);
+    const sagup = $("ve-sagup").checked && !p.sagup;
+    const r2 = forward(p, { pack: Math.max(0, p.pack - cut), rates: { ...p.rates, pack: sagup ? 0 : p.rates.pack } });
+    const P2 = priceLines(p, r2, floor);
+    const m2 = 1 - r2.P2 / T;
+    const z2 = zoneOf(t, P2, p, r2, m2);
+    const saved = r.P2 - r2.P2;
+    if (saved < 0.5) {
+      $("ve-result").className = "margin-verdict margin-ve-result";
+      $("ve-result").innerHTML = '<p class="margin-verdict__desc">사양 변경안을 체크하면 절감 후 판정과 게이지를 미리 보여드려요.</p>';
+      $("ve-gauge").innerHTML = "";
+      return;
+    }
+    setVerdict($("ve-result"), z2[0], `<div class="margin-badges">${badge(z[0], z[1])}<span class="margin-arrow">→</span>${badge(z2[0], z2[1])}${approval(m2, p)}</div>
+      <p class="margin-verdict__title">개당 공급가 −${won(saved)} · 목표가에서 영업마진 ${pct(m2)}</p>
+      <p class="margin-verdict__desc">최소 마진가 ${usd(P.min)} → <b>${usd(P2.min)}</b> · 주문 전체 약 ${won(saved * p.qty)} 절감 (약식 추정, 공급사 확인 필요)</p>`);
+    $("ve-result").classList.add("margin-ve-result");
+    drawGauge($("ve-gauge"), P2, t);
+  }
+
+  function renderReverse(p, r) {
+    const t = num("target"), floor = num("item-floor") / 100;
+    const bad = isNaN(t) || t <= 0 || isNaN(floor);
+    $("r-err").textContent = bad ? "목표가와 항목별 최소 마진을 입력하세요." : "";
+    if (bad) { $("verdict").innerHTML = ""; $("gauge").innerHTML = ""; $("ve-card").hidden = true; return; }
+
+    const { toUsd, withM2, supMaxFor, keys, cost, T } = reverseCtx(p, r, t);
+    const sup = { ...r.supply, logi: r.Lsup };
+    const P = priceLines(p, r, floor);
+    const m2now = 1 - r.P2 / T;
+    const z = zoneOf(t, P, p, r, m2now);
+    setVerdict($("verdict"), z[0], `<div class="margin-badges">${badge(z[0], z[1])}${approval(m2now, p)}</div><p class="margin-verdict__title">${z[2]}</p><p class="margin-verdict__desc">${z[3]}</p>`);
+    drawGauge($("gauge"), P, t);
+
+    /* 사양 변경(VE) — 1차·물류 마진 조정 / 불가 판정일 때만 */
+    renderVe(p, r, t, floor, z, P, T);
 
     /* 마진 직접 조정 (물류 포함) */
     let supNew = 0, totalCut = 0;
@@ -415,7 +561,7 @@
     const need = supNew - supMaxFor(T, p.m2min);
     const zc = mAdj >= gSale - 1e-9 ? ["green", "목표 마진 이상"] : mAdj >= mnSale - 1e-9 ? ["yellow", "최소 마진 이상"] : mAdj >= 0 ? ["orange", "최소 마진 미달"] : ["red", "영업 손실"];
     const priceAdj = toUsd(withM2(supNew, p.m2min));
-    setVerdict($("adj-foot"), zc[0], `${badge(zc[0], zc[1])}
+    setVerdict($("adj-foot"), zc[0], `<div class="margin-badges">${badge(zc[0], zc[1])}${approval(mAdj, p)}</div>
       <p class="margin-verdict__title">${usd(t)}에서 영업마진 ${pct(mAdj)}</p>
       <p class="margin-verdict__desc">${Math.abs(totalCut) < 0.5 ? "아직 조정 없음" : `조정 마진 합계 ${totalCut > 0 ? "−" : "+"}${won(Math.abs(totalCut))}`} · ${need > 0.5
         ? `최소 영업마진까지 <b class="text-up">${won(need)}</b> 더 줄여야 해요`
@@ -636,16 +782,12 @@
     render();
   }));
 
-  $("copy-tier").addEventListener("click", async () => {
+  $("copy-tier").addEventListener("click", () => {
     if (!st.tierData) return;
     const { data, p } = st.tierData;
     const lines = [`Price list (${p.inco} Korea, USD per pc)`, `MOQ: ${st.moq.toLocaleString()} pcs`]
       .concat(data.filter((x) => !x.off).map((x) => `${x.q.toLocaleString()} pcs : ${usd(x.r.usd)}${x.r.d > 0 ? ` (volume discount ${Math.round(x.r.d * 100)}%)` : ""}${x.r.sur > 0 ? " (small-lot surcharge incl.)" : ""}`));
-    const txt = lines.join("\n");
-    const b = $("copy-tier");
-    try { await navigator.clipboard.writeText(txt); b.textContent = "복사됨"; }
-    catch (e) { window.prompt("아래 내용을 복사하세요", txt); }
-    setTimeout(() => { b.textContent = "바이어용 가격표 복사"; }, 1500);
+    copyText($("copy-tier"), lines.join("\n"));
   });
 
   $("add-qty").addEventListener("click", () => {
@@ -668,7 +810,7 @@
 
   /* 입력 Card 전체 + 탭별 입력 (할인 구간 입력은 drawTiers 에서 따로 연결) */
   $("inputs").querySelectorAll("input, select").forEach((e) => e.addEventListener("input", render));
-  ["fx", "target", "item-floor", "abs-c", "abs-l", "fx-contract", "fx-use-quote"].forEach((id) => $(id).addEventListener("input", render));
+  ["fx", "target", "item-floor", "abs-on", "abs-c", "abs-l", "fx-contract", "fx-use-quote", "ve-coat", "ve-box", "ve-sagup"].forEach((id) => $(id).addEventListener("input", render));
 
   drawTiers();
   render();

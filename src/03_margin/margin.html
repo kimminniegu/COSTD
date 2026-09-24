@@ -81,6 +81,32 @@
             <div class="form-group"><span class="form-label">해상운임 총액</span>{{ field('freight', 1500, '$', '해상운임 총액') }}</div>
             <div class="form-group" id="margin-ins-box"><span class="form-label">보험요율</span>{{ field('ins', 0.2, '%', '보험요율', 0.05) }}</div>
           </div>
+
+          <!-- 약식 포장/CBM 추정 — 운임 반영을 눌렀을 때만 위 물류비·해상운임 칸에 값이 들어가요 -->
+          <details class="margin-drawer" id="margin-cbm">
+            <summary class="margin-drawer__head">
+              <span class="margin-drawer__title">약식 포장/CBM 추정</span>
+              <span class="text-caption" id="margin-cbm-peek"></span>
+            </summary>
+            <div class="margin-drawer__body">
+              <div class="form-group"><label class="form-label" for="margin-cbm-preset">단품 용량/형태</label>
+                <select class="form-control form-control-sm" id="margin-cbm-preset">
+                  <option value="toner" selected>토너/에센스 100~150ml</option>
+                  <option value="cream">크림/단지 50ml</option>
+                  <option value="mask">마스크팩</option>
+                </select></div>
+              <div class="margin-pair">
+                <div class="form-group"><span class="form-label">카톤당 입수</span>{{ field('cbm-ea', 40, 'ea', '카톤당 입수', 10) }}</div>
+                <div class="form-group margin-unit-wide"><span class="form-label">카톤 부피</span>{{ field('cbm-box', 0.025, 'CBM', '카톤당 CBM', 0.001) }}</div>
+              </div>
+              <div class="margin-pair">
+                <div class="form-group"><span class="form-label">내륙·통관 <span class="text-caption">/CBM</span></span>{{ field('cbm-inland', 150000, '원', 'CBM당 FOB 내륙물류비', 10000) }}</div>
+                <div class="form-group"><span class="form-label">LCL 운임 <span class="text-caption">/CBM</span></span>{{ field('cbm-lcl', 50, '$', 'CBM당 LCL 해상운임', 5) }}</div>
+              </div>
+              <div class="margin-cbm-out" id="margin-cbm-out"></div>
+              <button type="button" class="btn btn-soft btn-sm btn-block" id="margin-cbm-apply">운임 반영</button>
+            </div>
+          </details>
         </div>
 
         <div class="margin-group">
@@ -142,34 +168,11 @@
             <div class="card-body">
               <div class="tabs" role="tablist" aria-label="견적 상세">
                 <button type="button" class="tab is-active" data-tab-target="margin-sub-items" role="tab" aria-selected="true">항목별 원가</button>
-                <button type="button" class="tab" data-tab-target="margin-sub-abs" role="tab" aria-selected="false">내부·대외 비교</button>
                 <button type="button" class="tab" data-tab-target="margin-sub-quote" role="tab" aria-selected="false">견적서</button>
               </div>
 
               <div class="tab-panel is-active" id="margin-sub-items">
                 <div class="table-wrap"><table class="table" id="margin-item-table"></table></div>
-              </div>
-
-              <div class="tab-panel" id="margin-sub-abs">
-                <div class="margin-sec-title">
-                  <h3 class="card-title">마진 일부를 원가·물류비로 옮겨 보여주기</h3>
-                  <div class="tabs margin-seg" id="margin-seg-absunit" role="tablist" aria-label="표시 통화">
-                    <button type="button" class="tab is-active" data-k="krw" role="tab" aria-selected="true">원화</button>
-                    <button type="button" class="tab" data-k="usd" role="tab" aria-selected="false">달러</button>
-                  </div>
-                </div>
-                <div class="margin-slider"><label for="margin-abs-c">원가에 흡수</label><input type="range" id="margin-abs-c" min="0" max="600" step="10" value="0"><output id="margin-abs-cv">0원</output></div>
-                <div class="margin-slider"><label for="margin-abs-l">물류비에 흡수</label><input type="range" id="margin-abs-l" min="0" max="300" step="10" value="0"><output id="margin-abs-lv">0원</output></div>
-                <div class="margin-two">
-                  <div class="margin-panel">
-                    <h4 class="margin-panel__title">내부 원가표</h4>
-                    <table class="table" id="margin-int-table"></table>
-                  </div>
-                  <div class="margin-panel">
-                    <h4 class="margin-panel__title">대외 견적 <span id="margin-abs-warn"></span></h4>
-                    <table class="table" id="margin-ext-table"></table>
-                  </div>
-                </div>
               </div>
 
               <div class="tab-panel" id="margin-sub-quote">
@@ -182,6 +185,31 @@
                   </div>
                   <button type="button" class="btn btn-primary btn-sm" id="margin-q-open" data-modal-open="margin-quote-modal">견적서 PDF</button>
                 </div>
+
+                <!-- 발행 옵션: 원가 구성 숨김 / 마진 흡수 (이전 '내부·대외 비교' 탭) -->
+                <label class="form-check margin-check-sm"><input type="checkbox" id="margin-abs-on"> 원가 구성 숨김 / 마진 흡수 발행</label>
+                <div class="margin-abs-box" id="margin-abs-box" hidden>
+                  <div class="margin-sec-title margin-sec-title--sub">
+                    <p class="text-caption">마진 일부를 원가·물류비로 옮겨 분리형·오픈북형 견적에 표시해요. 단가는 그대로예요.</p>
+                    <div class="tabs margin-seg" id="margin-seg-absunit" role="tablist" aria-label="표시 통화">
+                      <button type="button" class="tab is-active" data-k="krw" role="tab" aria-selected="true">원화</button>
+                      <button type="button" class="tab" data-k="usd" role="tab" aria-selected="false">달러</button>
+                    </div>
+                  </div>
+                  <div class="margin-slider"><label for="margin-abs-c">원가에 흡수</label><input type="range" id="margin-abs-c" min="0" max="600" step="10" value="0"><output id="margin-abs-cv">0원</output></div>
+                  <div class="margin-slider"><label for="margin-abs-l">물류비에 흡수</label><input type="range" id="margin-abs-l" min="0" max="300" step="10" value="0"><output id="margin-abs-lv">0원</output></div>
+                  <div class="margin-two">
+                    <div class="margin-panel">
+                      <h4 class="margin-panel__title">내부 원가표</h4>
+                      <table class="table" id="margin-int-table"></table>
+                    </div>
+                    <div class="margin-panel">
+                      <h4 class="margin-panel__title">대외 견적 <span id="margin-abs-warn"></span></h4>
+                      <table class="table" id="margin-ext-table"></table>
+                    </div>
+                  </div>
+                </div>
+
                 <div class="margin-quote" id="margin-quote"></div>
               </div>
             </div>
@@ -218,6 +246,31 @@
               </div>
             </div>
             <div class="card-body"><div class="margin-gauge" id="margin-gauge"></div></div>
+          </div>
+
+          <!-- 사양 변경(VE) — '1차·물류 마진 조정' 또는 '불가' 판정일 때만 표시 -->
+          <div class="card" id="margin-ve-card" hidden>
+            <div class="card-header">
+              <div>
+                <h3 class="card-title">사양 변경(VE) 추천</h3>
+                <p class="card-subtitle">마진만으로 맞추기 어려울 때 원가를 낮추는 OEM 사양 변경안이에요. 체크하면 개선된 판정을 미리 볼 수 있어요.</p>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="margin-ve-list">
+                <label class="form-check margin-ve-item"><input type="checkbox" id="margin-ve-coat">
+                  <span class="margin-ve-item__text"><b>부자재 코팅/후가공 생략</b><span class="text-caption">UV 코팅·박·에폭시 등 제외 · 개당 −30~50원 (하한 30원 반영)</span></span>
+                  <span class="margin-ve-item__save" id="margin-ve-save-coat"></span></label>
+                <label class="form-check margin-ve-item"><input type="checkbox" id="margin-ve-box">
+                  <span class="margin-ve-item__text"><b>단상자 지류 평량 변경 / 단일도수 인쇄</b><span class="text-caption">평량 한 단계 하향, 별색 → 1도 인쇄 · 개당 −20원</span></span>
+                  <span class="margin-ve-item__save" id="margin-ve-save-box"></span></label>
+                <label class="form-check margin-ve-item"><input type="checkbox" id="margin-ve-sagup">
+                  <span class="margin-ve-item__text"><b>부자재 사급 전환 검토</b><span class="text-caption" id="margin-ve-sagup-note">바이어가 부자재를 공급 · 부자재 1차 마진 제외</span></span>
+                  <span class="margin-ve-item__save" id="margin-ve-save-sagup"></span></label>
+              </div>
+              <div class="margin-verdict margin-ve-result" id="margin-ve-result"></div>
+              <div class="margin-gauge" id="margin-ve-gauge"></div>
+            </div>
           </div>
 
           <div class="card">
@@ -293,6 +346,7 @@
               <h3 class="card-title">가격표</h3>
               <div class="row">
                 <button type="button" class="btn btn-secondary btn-sm" id="margin-copy-tier">바이어용 가격표 복사</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="margin-copy-mail-tier">영문 이메일 제안문 복사</button>
                 <button type="button" class="btn btn-secondary btn-sm" id="margin-add-qty">수량 추가</button>
               </div>
             </div>
@@ -401,9 +455,16 @@
           <div class="form-group margin-modal-grid__wide"><label class="form-label" for="margin-q-remarks">비고</label><textarea class="form-control margin-modal-remarks" id="margin-q-remarks" rows="2" maxlength="200" placeholder="Remarks (English)"></textarea></div>
         </div>
         <p class="form-error" id="margin-q-err" role="alert"></p>
+        <div class="alert alert-success margin-q-done" id="margin-q-done" role="status" hidden>
+          <div>
+            <p class="alert-title">견적서 PDF를 저장했어요</p>
+            <p>바이어 메일에 붙일 영문 제안문도 복사해 보내세요.</p>
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-modal-close>취소</button>
+        <button type="button" class="btn btn-soft margin-modal-footer__left" id="margin-copy-mail">영문 이메일 제안문 복사</button>
+        <button type="button" class="btn btn-secondary" data-modal-close>닫기</button>
         <button type="button" class="btn btn-primary" id="margin-q-pdf">PDF 다운로드</button>
       </div>
     </div>

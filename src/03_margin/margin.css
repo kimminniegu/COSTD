@@ -62,6 +62,36 @@
 .margin-check-sm { margin-top: var(--space-1); font-size: var(--font-size-label); }
 .margin-tier-row .btn-icon { width: 44px; height: 44px; }
 
+/* hidden 속성이 class 의 display 값에 덮이지 않도록 (팝업은 body 로 옮겨지므로 따로 지정) */
+.margin-page [hidden], #margin-quote-modal [hidden] { display: none; }
+
+/* 물류 — 약식 포장/CBM 추정 (접이식) */
+.margin-drawer { margin-top: var(--space-1); background: var(--color-surface-muted); border-radius: var(--radius-lg); }
+.margin-drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0 var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  white-space: nowrap;
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--font-size-label);
+}
+.margin-drawer__head::-webkit-details-marker { display: none; }
+.margin-drawer__title { display: flex; align-items: center; gap: var(--space-2); font-weight: var(--font-weight-bold); color: var(--color-text-strong); }
+.margin-drawer__title::before { content: "▸"; color: var(--color-text-placeholder); transition: transform var(--transition-base); }
+.margin-drawer[open] .margin-drawer__title::before { transform: rotate(90deg); }
+.margin-drawer__head:focus-visible { outline: none; box-shadow: var(--shadow-focus); border-radius: var(--radius-lg); }
+.margin-drawer__body { display: flex; flex-direction: column; gap: var(--space-2); padding: 0 var(--space-4) var(--space-4); }
+.margin-drawer .form-control { background: var(--color-surface); }
+.margin-unit-wide .margin-field .form-control { padding-right: 48px; }
+.margin-cbm-out { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-3); background: var(--color-surface); border-radius: var(--radius-sm); font-size: var(--font-size-label); color: var(--color-text-secondary); }
+.margin-cbm-out__row { display: flex; justify-content: space-between; gap: var(--space-2); }
+.margin-cbm-out__row b { color: var(--color-text-primary); font-variant-numeric: tabular-nums; }
+.margin-cbm-out__hint { color: var(--color-warning); }
+
 /* 단위가 붙는 작은 숫자 입력 */
 .margin-field { position: relative; }
 .margin-field .form-control { padding-right: 34px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -118,6 +148,9 @@
 /* 상세 Tab 안 */
 .margin-sec-title { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-4); }
 .margin-sec-title .btn { margin-left: auto; }
+.margin-sec-title--sub { justify-content: space-between; margin: var(--space-3) 0 var(--space-2); }
+.margin-abs-box { margin-bottom: var(--space-4); padding-top: var(--space-1); }
+#margin-sub-quote > .form-check { margin-bottom: var(--space-4); }
 .margin-slider { display: grid; grid-template-columns: 96px minmax(0, 1fr) 80px; gap: var(--space-3); align-items: center; margin: var(--space-2) 0; font-size: var(--font-size-label); color: var(--color-text-body); }
 .margin-slider output { text-align: right; font-weight: var(--font-weight-bold); font-variant-numeric: tabular-nums; color: var(--color-text-primary); }
 .margin-two .margin-panel { margin-top: var(--space-4); }
@@ -142,6 +175,8 @@
 .margin-modal-grid .form-control[readonly] { color: var(--color-text-secondary); cursor: default; }
 textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; font-size: var(--font-size-sub); }
 #margin-q-err { margin-top: var(--space-3); }
+.margin-q-done { margin-top: var(--space-4); }
+.margin-modal-footer__left { margin-right: auto; }
 
 /* 판정 박스 (역제안 · 환율 · 수량 요약 · 직접 조정 결과) */
 .margin-verdict { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: var(--space-1); padding: var(--space-4) var(--space-5); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
@@ -154,6 +189,26 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 .margin-verdict__desc { font-size: var(--font-size-label); color: var(--color-text-secondary); }
 .margin-verdict__desc b { color: var(--color-text-primary); }
 .margin-adj-foot { margin-top: var(--space-4); }
+.margin-badges { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); }
+.margin-arrow { font-size: var(--font-size-label); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
+
+/* 역제안 — 사양 변경(VE) 추천 */
+.margin-ve-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.margin-ve-item.form-check {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-muted);
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+}
+.margin-ve-item:has(input:checked) { background: var(--color-primary-soft); border-color: var(--color-primary-light); }
+.margin-ve-item:has(input:disabled) { cursor: default; opacity: 0.6; }
+.margin-ve-item__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.margin-ve-item__text b { font-size: var(--font-size-label); color: var(--color-text-primary); }
+.margin-ve-item__save { font-size: var(--font-size-label); font-weight: var(--font-weight-bold); color: var(--color-down); font-variant-numeric: tabular-nums; }
+.margin-ve-result { margin-top: var(--space-4); }
 .margin-badge-caution { background: var(--margin-zone-caution-soft); color: var(--color-warning); box-shadow: inset 0 0 0 1px var(--margin-zone-caution); }
 .margin-card-error { padding: 0 var(--layout-card-padding) var(--space-4); }
 .margin-page .form-error:empty { display: none; }
@@ -173,6 +228,7 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 
 /* 역제안 — 목표가 위치 Gauge */
 .margin-gauge { position: relative; padding: 40px var(--space-2) 48px; }
+.margin-gauge:empty { display: none; }
 .margin-gauge__track { display: flex; gap: 2px; height: 10px; overflow: hidden; border-radius: var(--radius-pill); }
 .margin-gauge__pin { position: absolute; top: 4px; display: flex; flex-direction: column; align-items: center; transform: translateX(-50%); transition: left var(--transition-base); }
 .margin-gauge__pin b { padding: 3px 9px; border-radius: var(--radius-xs); background: var(--color-surface-inverse); color: var(--color-text-inverse); font-size: var(--font-size-caption); white-space: nowrap; }
