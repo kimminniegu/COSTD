@@ -92,6 +92,7 @@
 .home-rated__field { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
 .home-rated__field > span { font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
 .home-rated__eq { padding-bottom: 10px; color: var(--color-text-placeholder); }
+.home-rated__input { text-align: right; font-variant-numeric: tabular-nums; }
 .home-rated__foot { justify-content: space-between; align-items: center; }
 @media (max-width: 900px) {
   .home-rated { grid-template-columns: minmax(0, 1fr); }

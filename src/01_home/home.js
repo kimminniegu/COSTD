@@ -93,9 +93,9 @@
       '<div class="home-rated__section home-rated__calc">' +
         '<div class="home-rated__section-head"><span>환산 계산기</span><small>매매기준율 기준</small></div>' +
         '<div class="home-rated__calc-row">' +
-          '<label class="home-rated__field"><span>' + esc(d.code) + '</span><input class="form-control form-control-sm" id="home-rate-fx" type="number" inputmode="decimal" min="0" step="any" value="1000"></label>' +
+          '<label class="home-rated__field"><span>' + esc(d.code) + '</span><input class="form-control form-control-sm home-rated__input" id="home-rate-fx" type="text" inputmode="decimal" autocomplete="off" value="1,000"></label>' +
           '<span class="home-rated__eq" aria-hidden="true">=</span>' +
-          '<label class="home-rated__field"><span>KRW</span><input class="form-control form-control-sm" id="home-rate-krw" type="number" inputmode="decimal" min="0" step="any"></label>' +
+          '<label class="home-rated__field"><span>KRW</span><input class="form-control form-control-sm home-rated__input" id="home-rate-krw" type="text" inputmode="decimal" autocomplete="off"></label>' +
         "</div>" +
         '<p class="form-help">실제 송금·환전 금액은 은행 우대율과 수수료에 따라 달라져요. 참고용으로만 사용해 주세요.</p>' +
       "</div>";
@@ -124,9 +124,18 @@
         "</dl>" +
       "</div>" + "</div>";
     var per = d.rate / d.unit, fx = $("home-rate-fx"), krw = $("home-rate-krw");
+    /* 회계 숫자 형식: 입력 중에도 천 단위 콤마를 붙이고, 계산에는 콤마를 뺀 값을 씁니다. 외화는 소수 2자리, 원화는 정수 */
+    var formatField = function (el, maxDec) {
+      var raw = el.value.replace(/[^\d.]/g, "");
+      if (raw === "") { el.value = ""; return null; }
+      var parts = raw.split("."), intPart = parts[0].replace(/^0+(?=\d)/, "") || "0";
+      var dec = parts.length > 1 && maxDec > 0 ? parts.slice(1).join("").slice(0, maxDec) : null;
+      el.value = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (dec !== null ? "." + dec : "");
+      return Number(intPart + (dec ? "." + dec : ""));
+    };
     var sync = function (from) {
-      if (from === "fx") krw.value = fx.value === "" ? "" : Math.round(Number(fx.value) * per);
-      else fx.value = krw.value === "" ? "" : (Number(krw.value) / per).toFixed(2);
+      if (from === "fx") { var a = formatField(fx, 2); krw.value = a == null ? "" : fmt(Math.round(a * per), 0); }
+      else { var b = formatField(krw, 0); fx.value = b == null ? "" : fmt(b / per, 2); }
     };
     fx.addEventListener("input", function () { sync("fx"); });
     krw.addEventListener("input", function () { sync("krw"); });
