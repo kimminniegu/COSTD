@@ -217,93 +217,90 @@
         </div>
       </section>
 
-      <!-- 역제안 분석 -->
+      <!-- 역제안 분석 — ① 목표가·판정·게이지 → ② 솔루션 2분할(VE | 마진 조정) → ③ 대응 방안 -->
       <section class="tab-panel" id="margin-view-reverse">
         <div class="margin-stack">
-          <div class="card">
-            <div class="card-body margin-head margin-head--reverse">
-              <div class="form-group">
-                <label class="form-label" for="margin-target">바이어 목표가</label>
-                <div class="input-group"><span class="input-group__suffix">$</span><input type="number" id="margin-target" value="1.95" step="0.01"></div>
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="margin-item-floor">항목별 최소 마진</label>
-                <div class="input-group"><input type="number" id="margin-item-floor" value="5" step="0.5"><span class="input-group__suffix">%</span></div>
-              </div>
-              <div class="margin-verdict" id="margin-verdict"></div>
-            </div>
-            <p class="form-error margin-card-error" id="margin-r-err" role="alert"></p>
-          </div>
-
+          <!-- ① 목표가 입력 + 종합 판정 + 게이지 (VE·마진 조정 결과가 여기 반영) -->
           <div class="card">
             <div class="card-header">
-              <h3 class="card-title">목표가는 어디쯤일까요</h3>
-              <div class="margin-legend margin-legend--zone">
-                <span><i class="margin-swatch is-bad"></i>마진만으로 불가</span>
-                <span><i class="margin-swatch is-warn"></i>1차·물류 마진 조정</span>
-                <span><i class="margin-swatch is-caution"></i>영업마진 양보</span>
-                <span><i class="margin-swatch is-good"></i>수락</span>
-              </div>
+              <h3 class="card-title">바이어 목표가 위치 및 판정 구간</h3>
             </div>
-            <div class="card-body"><div class="margin-gauge" id="margin-gauge"></div></div>
-          </div>
-
-          <!-- 사양 변경(VE) — '1차·물류 마진 조정' 또는 '불가' 판정일 때만 표시 -->
-          <div class="card" id="margin-ve-card" hidden>
-            <div class="card-header">
-              <div>
-                <h3 class="card-title">사양 변경(VE) 추천</h3>
-                <p class="card-subtitle">마진만으로 맞추기 어려울 때 원가를 낮추는 OEM 사양 변경안이에요. 체크하면 개선된 판정을 미리 볼 수 있어요.</p>
+            <div class="card-body margin-rtop">
+              <div class="margin-rtop__row">
+                <div class="margin-rtop__inputs">
+                  <label class="form-label" for="margin-target">바이어 목표가</label>
+                  {{ field('target', 1.95, '$', '바이어 목표가 (USD)', 0.01) }}
+                  <label class="form-label" for="margin-item-floor">항목별 최소 마진</label>
+                  {{ field('item-floor', 5, '%', '항목별 최소 마진', 0.5) }}
+                </div>
+                <div class="margin-verdict" id="margin-verdict"></div>
               </div>
-            </div>
-            <div class="card-body">
-              <div class="margin-ve-list">
-                <label class="form-check margin-ve-item"><input type="checkbox" id="margin-ve-coat">
-                  <span class="margin-ve-item__text"><b>부자재 코팅/후가공 생략</b><span class="text-caption">UV 코팅·박·에폭시 등 제외 · 개당 −30~50원 (하한 30원 반영)</span></span>
-                  <span class="margin-ve-item__save" id="margin-ve-save-coat"></span></label>
-                <label class="form-check margin-ve-item"><input type="checkbox" id="margin-ve-box">
-                  <span class="margin-ve-item__text"><b>단상자 지류 평량 변경 / 단일도수 인쇄</b><span class="text-caption">평량 한 단계 하향, 별색 → 1도 인쇄 · 개당 −20원</span></span>
-                  <span class="margin-ve-item__save" id="margin-ve-save-box"></span></label>
-                <label class="form-check margin-ve-item"><input type="checkbox" id="margin-ve-sagup">
-                  <span class="margin-ve-item__text"><b>부자재 사급 전환 검토</b><span class="text-caption" id="margin-ve-sagup-note">바이어가 부자재를 공급 · 부자재 1차 마진 제외</span></span>
-                  <span class="margin-ve-item__save" id="margin-ve-save-sagup"></span></label>
+              <p class="form-error" id="margin-r-err" role="alert"></p>
+              <div class="margin-gauge" id="margin-gauge"></div>
+              <div class="margin-rtop__foot">
+                <div class="margin-legend">
+                  <span><i class="margin-swatch is-bad"></i>마진만으로 불가</span>
+                  <span><i class="margin-swatch is-warn"></i>1차·물류 마진 조정</span>
+                  <span><i class="margin-swatch is-caution"></i>영업마진 양보</span>
+                  <span><i class="margin-swatch is-good"></i>수락</span>
+                </div>
+                <span class="text-caption" id="margin-gauge-note"></span>
               </div>
-              <div class="margin-verdict margin-ve-result" id="margin-ve-result"></div>
-              <div class="margin-gauge" id="margin-ve-gauge"></div>
             </div>
           </div>
 
-          <div class="card">
+          <!-- ② 솔루션 시뮬레이션 2분할 -->
+          <div class="margin-rmid">
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title">사양 변경(VE) 추천</h3>
+                  <p class="card-subtitle" id="margin-ve-hint">체크하면 위 판정과 게이지에 바로 반영돼요.</p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="margin-ve-list">
+                  <label class="margin-ve-item"><input type="checkbox" id="margin-ve-coat">
+                    <span class="margin-ve-item__text"><b>부자재 코팅/후가공 생략</b><span class="text-caption">UV 코팅·박·에폭시 제외 · −30~50원 중 하한</span></span>
+                    <span class="margin-ve-item__save" id="margin-ve-save-coat"></span></label>
+                  <label class="margin-ve-item"><input type="checkbox" id="margin-ve-box">
+                    <span class="margin-ve-item__text"><b>단상자 지류 변경 / 단일도수</b><span class="text-caption">평량 한 단계 하향, 1도 인쇄</span></span>
+                    <span class="margin-ve-item__save" id="margin-ve-save-box"></span></label>
+                  <label class="margin-ve-item"><input type="checkbox" id="margin-ve-sagup">
+                    <span class="margin-ve-item__text"><b>부자재 사급 전환</b><span class="text-caption" id="margin-ve-sagup-note">부자재 1차 마진 제외</span></span>
+                    <span class="margin-ve-item__save" id="margin-ve-save-sagup"></span></label>
+                </div>
+                <p class="text-caption margin-rmid__foot" id="margin-ve-sum"></p>
+              </div>
+            </div>
+
+            <div class="card">
               <div class="card-header">
                 <div>
                   <h3 class="card-title">마진 직접 조정</h3>
-                  <p class="card-subtitle">조정 마진율을 바꾸면 목표가에서 남는 영업마진이 바로 계산돼요.</p>
+                  <p class="card-subtitle">조정 마진율이 위 판정과 게이지에 바로 반영돼요.</p>
                 </div>
                 <button type="button" class="btn btn-secondary btn-sm" id="margin-adj-reset">현재값으로</button>
               </div>
               <div class="card-body">
-                <div class="table-wrap">
-                  <table class="table margin-table-compact">
-                    <thead><tr><th>항목</th><th class="is-numeric">현재</th><th class="is-numeric">조정 마진율</th><th class="is-numeric">변경</th></tr></thead>
-                    <tbody>
-                      <tr><td>원재료</td><td class="is-numeric" id="margin-adj-cur-raw"></td><td class="is-numeric"><div class="margin-field margin-w-sm margin-adj-field"><input class="form-control form-control-sm" type="number" step="0.5" id="margin-adj-raw" data-k="raw" aria-label="원재료 조정 마진율"><span class="margin-field__unit">%</span></div></td><td class="is-numeric" id="margin-adj-cut-raw"></td></tr>
-                      <tr><td>임가공</td><td class="is-numeric" id="margin-adj-cur-proc"></td><td class="is-numeric"><div class="margin-field margin-w-sm margin-adj-field"><input class="form-control form-control-sm" type="number" step="0.5" id="margin-adj-proc" data-k="proc" aria-label="임가공 조정 마진율"><span class="margin-field__unit">%</span></div></td><td class="is-numeric" id="margin-adj-cut-proc"></td></tr>
-                      <tr><td>부자재</td><td class="is-numeric" id="margin-adj-cur-pack"></td><td class="is-numeric"><div class="margin-field margin-w-sm margin-adj-field"><input class="form-control form-control-sm" type="number" step="0.5" id="margin-adj-pack" data-k="pack" aria-label="부자재 조정 마진율"><span class="margin-field__unit">%</span></div></td><td class="is-numeric" id="margin-adj-cut-pack"></td></tr>
-                      <tr><td>물류비</td><td class="is-numeric" id="margin-adj-cur-logi"></td><td class="is-numeric"><div class="margin-field margin-w-sm margin-adj-field"><input class="form-control form-control-sm" type="number" step="0.5" id="margin-adj-logi" data-k="logi" aria-label="물류비 조정 마진율"><span class="margin-field__unit">%</span></div></td><td class="is-numeric" id="margin-adj-cut-logi"></td></tr>
-                    </tbody>
-                  </table>
+                <div class="margin-adj-list">
+                  <div class="margin-adj-row" id="margin-adj-row-raw"><div class="margin-adj-row__name"><b>원재료</b><span class="text-caption"><span id="margin-adj-cur-raw"></span> · <span id="margin-adj-cut-raw"></span></span></div><div class="margin-w-sm">{{ field('adj-raw', '', '%', '원재료 조정 마진율', 0.5) }}</div></div>
+                  <div class="margin-adj-row" id="margin-adj-row-proc"><div class="margin-adj-row__name"><b>임가공</b><span class="text-caption"><span id="margin-adj-cur-proc"></span> · <span id="margin-adj-cut-proc"></span></span></div><div class="margin-w-sm">{{ field('adj-proc', '', '%', '임가공 조정 마진율', 0.5) }}</div></div>
+                  <div class="margin-adj-row" id="margin-adj-row-pack"><div class="margin-adj-row__name"><b>부자재</b><span class="text-caption"><span id="margin-adj-cur-pack"></span> · <span id="margin-adj-cut-pack"></span></span></div><div class="margin-w-sm">{{ field('adj-pack', '', '%', '부자재 조정 마진율', 0.5) }}</div></div>
+                  <div class="margin-adj-row" id="margin-adj-row-logi"><div class="margin-adj-row__name"><b>물류비</b><span class="text-caption"><span id="margin-adj-cur-logi"></span> · <span id="margin-adj-cut-logi"></span></span></div><div class="margin-w-sm">{{ field('adj-logi', '', '%', '물류비 조정 마진율', 0.5) }}</div></div>
                 </div>
-                <div class="margin-verdict margin-adj-foot" id="margin-adj-foot"></div>
+                <p class="text-caption margin-rmid__foot" id="margin-adj-sum"></p>
               </div>
+            </div>
           </div>
+
+          <!-- ③ 대응 방안 -->
           <div class="card">
-              <div class="card-header">
-                <div>
-                  <h3 class="card-title">대응 방안</h3>
-                  <p class="card-subtitle">바이어에게 다시 제안할 수 있는 선택지예요.</p>
-                </div>
-              </div>
-              <div class="card-body"><div class="margin-options" id="margin-options"></div></div>
+            <div class="card-header">
+              <h3 class="card-title">대응 방안</h3>
+              <p class="text-caption">바이어에게 다시 제안할 수 있는 선택지</p>
+            </div>
+            <div class="card-body"><div class="margin-options" id="margin-options"></div></div>
           </div>
         </div>
       </section>

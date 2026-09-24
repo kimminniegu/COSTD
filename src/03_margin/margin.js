@@ -484,104 +484,97 @@
       .map((q) => ({ l: q[0], v: q[1], x: pos(q[1]) })).sort((a, b) => a.x - b.x);
     let lastX = -99, row = 0;
     ticks.forEach((q) => { row = q.x - lastX < 13 && row === 0 ? 1 : 0; q.r = row; lastX = q.x; });
+    el.classList.toggle("has-row2", ticks.some((q) => q.r));   // 기준가 라벨이 두 줄일 때만 아래 여백 추가
     el.innerHTML = `<div class="margin-gauge__track">${zones.map((q) => `<div class="${q[2]}" style="width:${((q[1] - q[0]) / (hi - lo)) * 100}%"></div>`).join("")}</div>`
       + ticks.map((q) => `<div class="margin-gauge__tick${q.r ? " is-row2" : ""}" style="left:${q.x}%"><b>${usd(q.v)}</b>${q.l}</div>`).join("")
       + `<div class="margin-gauge__pin" style="left:${pos(t)}%"><b>바이어 ${usd(t)}</b><i></i></div>`;
   }
 
-  /* 사양 변경(VE) 미리보기 — 부자재 원가(개당)를 약식 절감액만큼 낮추고, 사급 전환은 부자재 1차 마진을 0으로 */
+  /* 사양 변경(VE) 약식 절감 — 부자재 원가(개당)에서 차감. 사급 전환은 부자재 1차 마진 0 */
   const VE_CUT = { coat: 30, box: 20 };
-  function renderVe(p, r, t, floor, z, P, T) {
-    const show = z[0] === "orange" || z[0] === "red";
-    $("ve-card").hidden = !show;
-    if (!show) return;
-    const sagupSave = r.supply.pack - r.items.pack;
-    $("ve-sagup").disabled = p.sagup;
-    $("ve-sagup-note").textContent = p.sagup ? "입력에서 이미 부자재 사급으로 계산 중이에요." : "바이어가 부자재를 공급 · 부자재 1차 마진 제외";
-    $("ve-save-coat").textContent = "−" + won(VE_CUT.coat);
-    $("ve-save-box").textContent = "−" + won(VE_CUT.box);
-    $("ve-save-sagup").textContent = p.sagup ? "-" : "−" + won(sagupSave);
-
-    const cut = ["coat", "box"].reduce((a, k) => a + ($("ve-" + k).checked ? VE_CUT[k] : 0), 0);
-    const sagup = $("ve-sagup").checked && !p.sagup;
-    const r2 = forward(p, { pack: Math.max(0, p.pack - cut), rates: { ...p.rates, pack: sagup ? 0 : p.rates.pack } });
-    const P2 = priceLines(p, r2, floor);
-    const m2 = 1 - r2.P2 / T;
-    const z2 = zoneOf(t, P2, p, r2, m2);
-    const saved = r.P2 - r2.P2;
-    if (saved < 0.5) {
-      $("ve-result").className = "margin-verdict margin-ve-result";
-      $("ve-result").innerHTML = '<p class="margin-verdict__desc">사양 변경안을 체크하면 절감 후 판정과 게이지를 미리 보여드려요.</p>';
-      $("ve-gauge").innerHTML = "";
-      return;
-    }
-    setVerdict($("ve-result"), z2[0], `<div class="margin-badges">${badge(z[0], z[1])}<span class="margin-arrow">→</span>${badge(z2[0], z2[1])}${approval(m2, p)}</div>
-      <p class="margin-verdict__title">개당 공급가 −${won(saved)} · 목표가에서 영업마진 ${pct(m2)}</p>
-      <p class="margin-verdict__desc">최소 마진가 ${usd(P.min)} → <b>${usd(P2.min)}</b> · 주문 전체 약 ${won(saved * p.qty)} 절감 (약식 추정, 공급사 확인 필요)</p>`);
-    $("ve-result").classList.add("margin-ve-result");
-    drawGauge($("ve-gauge"), P2, t);
-  }
 
   function renderReverse(p, r) {
     const t = num("target"), floor = num("item-floor") / 100;
     const bad = isNaN(t) || t <= 0 || isNaN(floor);
     $("r-err").textContent = bad ? "목표가와 항목별 최소 마진을 입력하세요." : "";
-    if (bad) { $("verdict").innerHTML = ""; $("gauge").innerHTML = ""; $("ve-card").hidden = true; return; }
+    if (bad) { $("verdict").className = "margin-verdict"; $("verdict").innerHTML = ""; $("gauge").innerHTML = ""; $("gauge-note").textContent = ""; return; }
 
     const { toUsd, withM2, supMaxFor, keys, cost, T } = reverseCtx(p, r, t);
     const sup = { ...r.supply, logi: r.Lsup };
     const P = priceLines(p, r, floor);
     const m2now = 1 - r.P2 / T;
     const z = zoneOf(t, P, p, r, m2now);
-    setVerdict($("verdict"), z[0], `<div class="margin-badges">${badge(z[0], z[1])}${approval(m2now, p)}</div><p class="margin-verdict__title">${z[2]}</p><p class="margin-verdict__desc">${z[3]}</p>`);
-    drawGauge($("gauge"), P, t);
 
-    /* 사양 변경(VE) — 1차·물류 마진 조정 / 불가 판정일 때만 */
-    renderVe(p, r, t, floor, z, P, T);
+    /* ② 좌: 사양 변경(VE) 체크 */
+    const sagupSave = r.supply.pack - r.items.pack;
+    $("ve-sagup").disabled = p.sagup;
+    $("ve-sagup-note").textContent = p.sagup ? "입력에서 이미 사급으로 계산 중" : "부자재 1차 마진 제외";
+    $("ve-save-coat").textContent = "−" + won(VE_CUT.coat);
+    $("ve-save-box").textContent = "−" + won(VE_CUT.box);
+    $("ve-save-sagup").textContent = p.sagup ? "-" : "−" + won(sagupSave);
+    $("ve-hint").textContent = z[0] === "orange" || z[0] === "red"
+      ? "마진만으로 맞추기 어려워요. 체크하면 위 판정에 바로 반영돼요."
+      : "지금은 마진만으로 대응 가능해요. 체크하면 위 판정에 반영돼요.";
+    const cut = ["coat", "box"].reduce((a, k) => a + ($("ve-" + k).checked ? VE_CUT[k] : 0), 0);
+    const veSagup = $("ve-sagup").checked && !p.sagup;
+    const packCost = Math.max(0, p.pack - cut);
+    const veSaved = r.P2 - forward(p, { pack: packCost, rates: { ...p.rates, pack: veSagup ? 0 : p.rates.pack } }).P2;
+    $("ve-sum").innerHTML = veSaved < 0.5 ? "선택한 사양 변경 없음"
+      : `선택 절감 개당 <b>−${won(veSaved)}</b> · 주문 전체 약 −${won(veSaved * p.qty)} (약식 추정, 공급사 확인 필요)`;
 
-    /* 마진 직접 조정 (물류 포함) */
-    let supNew = 0, totalCut = 0;
+    /* ② 우: 마진 직접 조정 (물류 포함) — 변경 칸은 조정만의 효과 */
+    const rates = {};
+    let adjCut = 0;
     keys.forEach((k) => {
       const curR = p.rates[k] || 0;
       const inp = $("adj-" + k);
       const touched = st.adj[k] !== undefined;
       const nr = touched ? st.adj[k] : curR;
+      rates[k] = nr;
       if (document.activeElement !== inp) inp.value = +(nr * 100).toFixed(2);
-      inp.classList.toggle("is-changed", touched && Math.abs(nr - curR) > 1e-9);
-      const ns = apply(cost[k], nr, st.mMode);
-      const d = sup[k] - ns;
-      supNew += ns;
-      totalCut += d;
-      $("adj-cur-" + k).textContent = pct(curR);
-      $("adj-cut-" + k).innerHTML = Math.abs(d) < 0.5 ? '<span class="text-caption">-</span>'
-        : `<span class="${d > 0 ? "text-up" : ""}">${d > 0 ? "−" : "+"}${won(Math.abs(d))}</span>`;
+      const d = sup[k] - apply(cost[k], nr, st.mMode);
+      adjCut += d;
+      $("adj-row-" + k).classList.toggle("is-changed", touched && Math.abs(nr - curR) > 1e-9);
+      $("adj-cur-" + k).textContent = "현재 " + pct(curR);
+      $("adj-cut-" + k).innerHTML = Math.abs(d) < 0.5 ? "변경 없음"
+        : `<b class="${d > 0 ? "text-up" : ""}">${d > 0 ? "−" : "+"}${won(Math.abs(d))}</b>`;
     });
-    const mAdj = 1 - supNew / T;
-    const gSale = toSale(p.m2), mnSale = toSale(p.m2min);
-    const need = supNew - supMaxFor(T, p.m2min);
-    const zc = mAdj >= gSale - 1e-9 ? ["green", "목표 마진 이상"] : mAdj >= mnSale - 1e-9 ? ["yellow", "최소 마진 이상"] : mAdj >= 0 ? ["orange", "최소 마진 미달"] : ["red", "영업 손실"];
-    const priceAdj = toUsd(withM2(supNew, p.m2min));
-    setVerdict($("adj-foot"), zc[0], `<div class="margin-badges">${badge(zc[0], zc[1])}${approval(mAdj, p)}</div>
-      <p class="margin-verdict__title">${usd(t)}에서 영업마진 ${pct(mAdj)}</p>
-      <p class="margin-verdict__desc">${Math.abs(totalCut) < 0.5 ? "아직 조정 없음" : `조정 마진 합계 ${totalCut > 0 ? "−" : "+"}${won(Math.abs(totalCut))}`} · ${need > 0.5
-        ? `최소 영업마진까지 <b class="text-up">${won(need)}</b> 더 줄여야 해요`
-        : `최소 영업마진 대비 여유 <b>${won(-need)}</b>`}
-      <br>이 조정안으로 최소 영업마진을 지키는 단가 <b>${usd(priceAdj)}</b></p>`);
-    $("adj-foot").classList.add("margin-adj-foot");
+    if (veSagup) rates.pack = 0;
 
-    /* 대응 방안 */
+    /* ① 시뮬레이션(VE + 마진 조정) 적용 결과로 판정·게이지를 다시 계산 */
+    const pSim = { ...p, pack: packCost, rates };
+    const rSim = forward(pSim);
+    const simOn = Math.abs(r.P2 - rSim.P2) >= 0.5;
+    const Psim = priceLines(pSim, rSim, floor);
+    const mSim = 1 - rSim.P2 / T;
+    const zSim = zoneOf(t, Psim, pSim, rSim, mSim);
+    const short = rSim.P2 - supMaxFor(T, p.m2min);   // + 부족 / − 여유 (개당 공급가 기준)
+    const shortHtml = short >= 0.5
+      ? `<span class="margin-rsum__gap is-short">${won(short)} 부족</span>`
+      : `<span class="margin-rsum__gap is-ok">${won(-short)} 여유</span>`;
+    setVerdict($("verdict"), zSim[0], `<div class="margin-badges">${simOn && zSim[0] !== z[0] ? `${badge(z[0], z[1])}<span class="margin-arrow">→</span>` : ""}${badge(zSim[0], zSim[1])}${approval(mSim, p)}</div>
+      <div class="margin-rsum__nums"><p class="margin-verdict__title">영업마진 ${simOn ? `${pct(m2now)} → ${pct(mSim)}` : pct(m2now)}</p>${shortHtml}</div>
+      <p class="margin-verdict__desc">${simOn
+        ? `VE ${veSaved >= 0.5 ? "−" + won(veSaved) : "없음"} · 마진 조정 ${Math.abs(adjCut) >= 0.5 ? (adjCut > 0 ? "−" : "+") + won(Math.abs(adjCut)) : "없음"} 적용 · 최소 영업마진을 지키는 단가 <b>${usd(Psim.min)}</b>`
+        : zSim[3]}</p>`);
+    $("gauge-note").textContent = simOn ? `VE·마진 조정 적용 후 기준선 · 적용 전 최소 마진가 ${usd(P.min)}` : "";
+    drawGauge($("gauge"), simOn ? Psim : P, t);
+    $("adj-sum").innerHTML = Math.abs(adjCut) < 0.5 ? "아직 조정 없음"
+      : `조정 합계 개당 <b>${adjCut > 0 ? "−" : "+"}${won(Math.abs(adjCut))}</b> · 이 조정안의 최소 마진 단가 <b>${usd(toUsd(withM2(r.P2 - adjCut, p.m2min)))}</b>`;
+
+    /* ③ 대응 방안 (현재 조건 기준) */
     const opts = [];
-    opts.push(["재역제안", usd(P.min), "1차·물류 마진은 그대로 두고 영업마진만 최소선까지 양보한 가격."]);
+    opts.push(["재역제안", usd(P.min), "1차·물류 마진은 그대로, 영업마진만 최소선까지 양보."]);
     const Smax = supMaxFor(T, p.m2min), base = r.C + r.L;
     if (Smax > base) {
       const u = st.mMode === "margin" ? 1 - base / Smax : Smax / base - 1;
-      opts.push(["1차·물류 마진 일괄", pct(u), `${usd(t)}를 받고 영업마진 ${pct(p.m2min)}를 지키는 공통 마진율.`]);
+      opts.push(["1차·물류 마진 일괄", pct(u), `${usd(t)}에서 영업마진 ${pct(p.m2min)}를 지키는 공통 마진율.`]);
     }
-    if (p.inco !== "EXW") opts.push(["EXW로 전환", usd(forward(p, { inco: "EXW" }).usd), "물류비와 물류 마진을 빼고 바이어가 운송을 맡는 조건."]);
+    if (p.inco !== "EXW") opts.push(["EXW로 전환", usd(forward(p, { inco: "EXW" }).usd), "물류비·물류 마진을 빼고 바이어가 운송."]);
     const next = [...st.tiers].sort((a, b) => a.min - b.min).find((q) => q.min > p.qty);
     if (next) {
       const nq = forward(p, { qty: next.min, logi: p.logi * (next.min / p.qty) * 0.85 });
-      opts.push([`${next.min.toLocaleString()}개로 늘리면`, usd(nq.usd), `할인 ${next.d}% 적용, 할인 후 영업마진 ${pct(nq.m2after)}. 물류비는 수량 비례의 85%로 가정.`]);
+      opts.push([`${next.min.toLocaleString()}개 유도`, usd(nq.usd), `할인 ${next.d}% 적용, 영업마진 ${pct(nq.m2after)}. 물류비는 수량 비례의 85% 가정.`]);
     }
     const best = t >= P.min ? -1 : 0;
     $("options").innerHTML = opts.map((o, i) => `<div class="margin-option${i === best ? " is-best" : ""}"><span class="margin-option__label">${o[0]}</span><p class="margin-option__value">${o[1]}</p><p class="margin-option__desc">${o[2]}</p></div>`).join("");
