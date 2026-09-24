@@ -394,7 +394,8 @@ import tempfile as _tempfile
 import glob as _glob
 
 rx = flask_app.regulatory_extract
-SAMPLES = REG_DIR / "samples"
+FIXTURES = HERE / "fixtures"          # 회귀 테스트 전용 자료(텍스트 PDF·스캔 PDF·혼합 PDF·다중 시트·OCR 이미지)
+SAMPLES = REG_DIR / "samples"          # 발표 시연용 최종 3개 (영어 PDF·한국어 XLSX·영어 PNG)
 
 
 def _xlsx_bytes(sheets):
@@ -430,7 +431,7 @@ def _temp_leftovers():
 
 class ExtractPdfTest(unittest.TestCase):
     def test_sample_brief_extracts_only_ingredient_table(self):
-        with open(SAMPLES / "EU-SER-041_development_brief.pdf", "rb") as f:
+        with open(FIXTURES / "EU-SER-041_development_brief.pdf", "rb") as f:
             r = rx.extract_upload("brief.pdf", f)
         self.assertEqual(r["status"], "extracted")
         names = [it["name_raw"] for it in r["items"]]
@@ -601,7 +602,7 @@ class ExtractRouteTest(unittest.TestCase):
         self.assertEqual(_temp_leftovers(), [])
 
     def test_pdf_route_ok_and_no_regulation_api_call(self):
-        with open(SAMPLES / "EU-SER-041_development_brief.pdf", "rb") as f:
+        with open(FIXTURES / "EU-SER-041_development_brief.pdf", "rb") as f:
             data = f.read()
         with mock.patch.object(svc, "_get") as get:
             res = self._post("brief.pdf", data)
@@ -706,7 +707,7 @@ class OcrUnavailableTest(unittest.TestCase):
     def test_image_without_ocr_is_503_with_install_hint(self):
         with mock.patch.object(ocrmod, "availability", return_value=_unavailable_info()):
             with self.assertRaises(rx.ExtractError) as ctx:
-                with open(SAMPLES / "sample_scan_table_kr.png", "rb") as f:
+                with open(FIXTURES / "sample_scan_table_kr.png", "rb") as f:
                     rx.extract_upload("scan.png", f)
         self.assertEqual(ctx.exception.kind, "ocr_unavailable")
         self.assertEqual(ctx.exception.http_status, 503)
@@ -716,13 +717,13 @@ class OcrUnavailableTest(unittest.TestCase):
     def test_scan_only_pdf_without_ocr_is_503(self):
         with mock.patch.object(ocrmod, "availability", return_value=_unavailable_info()):
             with self.assertRaises(rx.ExtractError) as ctx:
-                with open(SAMPLES / "sample_scan_only.pdf", "rb") as f:
+                with open(FIXTURES / "sample_scan_only.pdf", "rb") as f:
                     rx.extract_upload("scan.pdf", f)
         self.assertEqual(ctx.exception.kind, "ocr_unavailable")
 
     def test_mixed_pdf_without_ocr_keeps_text_pages(self):
         with mock.patch.object(ocrmod, "availability", return_value=_unavailable_info()):
-            with open(SAMPLES / "sample_mixed_text_scan.pdf", "rb") as f:
+            with open(FIXTURES / "sample_mixed_text_scan.pdf", "rb") as f:
                 r = rx.extract_upload("mixed.pdf", f)
         self.assertEqual(r["status"], "extracted")
         self.assertEqual(len(r["items"]), 7)                                   # 텍스트 쪽(브리프)의 표는 그대로
@@ -731,11 +732,11 @@ class OcrUnavailableTest(unittest.TestCase):
 
     def test_text_pdf_and_xlsx_unaffected(self):
         with mock.patch.object(ocrmod, "availability", return_value=_unavailable_info()):
-            with open(SAMPLES / "EU-SER-041_development_brief.pdf", "rb") as f:
+            with open(FIXTURES / "EU-SER-041_development_brief.pdf", "rb") as f:
                 r = rx.extract_upload("brief.pdf", f)
             self.assertEqual(len(r["items"]), 7)
             self.assertEqual(r["ocr"]["applied_pages"], [])
-            with open(SAMPLES / "sample_ingredients_kr.xlsx", "rb") as f:
+            with open(SAMPLES / "한국_EU_중국_아세안_두피샴푸_주요검토성분표.xlsx", "rb") as f:
                 r2 = rx.extract_upload("x.xlsx", f)
             self.assertEqual(r2["status"], "extracted")
 
@@ -760,7 +761,7 @@ class OcrPageSelectionTest(unittest.TestCase):
         with mock.patch.object(ocrmod, "availability", return_value=ready), \
              mock.patch.object(ocrmod, "render_pdf_page", return_value=object()), \
              mock.patch.object(ocrmod, "ocr_table", side_effect=fake_ocr_table):
-            with open(SAMPLES / "sample_mixed_text_scan.pdf", "rb") as f:
+            with open(FIXTURES / "sample_mixed_text_scan.pdf", "rb") as f:
                 r = rx.extract_upload("mixed.pdf", f)
         self.assertEqual(len(calls), 1)                                        # 3쪽(이미지)만 OCR
         self.assertEqual(r["ocr"]["applied_pages"], [3])
@@ -781,7 +782,7 @@ class OcrPageSelectionTest(unittest.TestCase):
              mock.patch.object(ocrmod, "render_pdf_page", return_value=object()), \
              mock.patch.object(ocrmod, "ocr_table", side_effect=ocrmod.OcrError("ocr_timeout", "OCR 처리 시간이 25초를 넘어 중단했어요.")):
             with self.assertRaises(rx.ExtractError) as ctx:
-                with open(SAMPLES / "sample_scan_only.pdf", "rb") as f:
+                with open(FIXTURES / "sample_scan_only.pdf", "rb") as f:
                     rx.extract_upload("scan.pdf", f)
         self.assertEqual(ctx.exception.kind, "ocr_timeout")
         self.assertEqual(ctx.exception.http_status, 422)
@@ -792,7 +793,7 @@ class OcrPageSelectionTest(unittest.TestCase):
         with mock.patch.object(ocrmod, "availability", return_value=ready), \
              mock.patch.object(ocrmod, "render_pdf_page", return_value=object()), \
              mock.patch.object(ocrmod, "ocr_table", return_value=([], 0, {"psm": 6})):
-            with open(SAMPLES / "sample_scan_only.pdf", "rb") as f:
+            with open(FIXTURES / "sample_scan_only.pdf", "rb") as f:
                 r = rx.extract_upload("scan.pdf", f)
         self.assertEqual(r["status"], "empty")
         self.assertTrue(any("인식된 글자가 거의 없어요" in n for n in r["notes"]))
@@ -804,7 +805,7 @@ class OcrRealTest(unittest.TestCase):
     """실제 Tesseract 로 가상 스캔 문서를 인식한다. 인식 오차가 있어도 행이 '확인 필요'로 표시되는지를 본다."""
 
     def test_korean_image(self):
-        with open(SAMPLES / "sample_scan_table_kr.png", "rb") as f:
+        with open(FIXTURES / "sample_scan_table_kr.png", "rb") as f:
             r = rx.extract_upload("scan.png", f)
         self.assertEqual(r["status"], "extracted")
         self.assertGreaterEqual(len(r["items"]), 4)
@@ -816,7 +817,7 @@ class OcrRealTest(unittest.TestCase):
         self.assertEqual(_temp_leftovers(), [])
 
     def test_english_jpg(self):
-        with open(SAMPLES / "sample_scan_table_en.jpg", "rb") as f:
+        with open(FIXTURES / "sample_scan_table_en.jpg", "rb") as f:
             r = rx.extract_upload("scan.jpg", f)
         names = [it["name_raw"] for it in r["items"]]
         for n in ("Niacinamide", "Glycerin", "Phenoxyethanol"):
@@ -824,11 +825,11 @@ class OcrRealTest(unittest.TestCase):
         self.assertEqual([it["amount_raw"] for it in r["items"]][:2], ["4.0%", "5.0%"])
 
     def test_scan_only_pdf_and_mixed_pdf(self):
-        with open(SAMPLES / "sample_scan_only.pdf", "rb") as f:
+        with open(FIXTURES / "sample_scan_only.pdf", "rb") as f:
             r = rx.extract_upload("scan.pdf", f)
         self.assertEqual(r["ocr"]["applied_pages"], [1, 2])
         self.assertIn("Niacinamide", [it["name_raw"] for it in r["items"]])
-        with open(SAMPLES / "sample_mixed_text_scan.pdf", "rb") as f:
+        with open(FIXTURES / "sample_mixed_text_scan.pdf", "rb") as f:
             r2 = rx.extract_upload("mixed.pdf", f)
         self.assertEqual(r2["ocr"]["applied_pages"], [3])                       # 텍스트 쪽 1·2 는 OCR 하지 않음
         srcs = {it["source"] for it in r2["items"]}
@@ -837,7 +838,7 @@ class OcrRealTest(unittest.TestCase):
     def test_route_image(self):
         flask_app.app.config["TESTING"] = True
         client = flask_app.app.test_client(); _login(client)
-        with open(SAMPLES / "sample_scan_table_en.jpg", "rb") as f:
+        with open(FIXTURES / "sample_scan_table_en.jpg", "rb") as f:
             data = f.read()
         res = client.post("/api/regulatory/extract", data={"file": (_io.BytesIO(data), "scan.jpg")}, content_type="multipart/form-data")
         self.assertEqual(res.status_code, 200)
@@ -929,10 +930,10 @@ class OcrTableParserTest(unittest.TestCase):
 
 @unittest.skipUnless(OCR_READY, "Tesseract(kor+eng) 가 준비된 환경에서만 실행")
 class OcrGridImageRealTest(unittest.TestCase):
-    """괘선·번호 열·두 줄 셀·합계·결재란이 있는 가상 성분표 이미지 (samples/sample_scan_grid_kr_en.png)"""
+    """괘선·번호 열·두 줄 셀·합계·결재란이 있는 가상 성분표 이미지 (tests/fixtures/sample_scan_grid_kr_en.png)"""
 
     def test_grid_table_image(self):
-        with open(SAMPLES / "sample_scan_grid_kr_en.png", "rb") as f:
+        with open(FIXTURES / "sample_scan_grid_kr_en.png", "rb") as f:
             r = rx.extract_upload("grid.png", f)
         self.assertEqual(r["status"], "extracted")
         self.assertTrue(r["ocr"]["header_found"])
