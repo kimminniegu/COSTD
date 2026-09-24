@@ -216,6 +216,16 @@ def home_api_regulations():
     return jsonify(home_data.get_regulations(since=request.args.get("since")))
 
 
+@app.route("/api/home/rates/<code>")
+@login_required
+def home_api_rate_detail(code):
+    """환율 상세 (명세 4-4) — 통화 하나의 송금 환율, 최근 30영업일 추이·통계"""
+    detail = home_data.get_rate_detail(code)
+    if detail is None:
+        return jsonify({"ok": False, "error": "지원하지 않는 통화예요"}), 404
+    return jsonify(detail)
+
+
 @app.route("/api/home/validation")
 @login_required
 def home_api_validation():

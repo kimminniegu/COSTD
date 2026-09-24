@@ -50,13 +50,109 @@
         title += " · 전일 대비 " + it.change_text + " 변동, 값 확인 필요";
         warn = '<span class="home-rate__warn" role="img" aria-label="이상값 경고">!</span>';
       }
-      return '<div class="home-rate' + (it.warning ? " is-warn" : "") + '" title="' + esc(title) + '">' +
+      return '<div class="home-rate' + (it.warning ? " is-warn" : "") + '" role="button" tabindex="0" data-code="' + esc(it.code) + '" title="' + esc(title + " · 누르면 상세 보기") + '">' +
         '<span class="home-rate__code">' + esc(it.code) + unit + warn + "</span>" +
         '<span class="home-rate__value"><span class="home-rate__rate">' + esc(it.rate_text) + "</span>" +
         '<span class="home-rate__change is-' + esc(it.direction) + '">' + arrow(it.direction) + " " + esc(it.change_text) + "</span></span></div>";
     }).join("");
     meta.textContent = "수출입은행 · " + r.date_text + " 기준";
   }
+
+  /* 1-1. 환율 상세 모달 (4-4): 통화 클릭 → /api/home/rates/<code> ------------ */
+  var rateCache = {};   // code → { at, data } (10분)
+  function fmt(n, digits) {
+    if (n == null || isNaN(n)) return "—";
+    return Number(n).toLocaleString("ko-KR", { minimumFractionDigits: digits == null ? 2 : digits, maximumFractionDigits: digits == null ? 2 : digits });
+  }
+  function rateChart(hist) {
+    var W = 320, H = 110, padT = 10, padB = 6, n = hist.length;
+    if (n < 2) return '<p class="home-rated__nochart">이력이 아직 하루치뿐이에요</p>';
+    var stepX = W / (n - 1);
+    var pts = hist.map(function (h, i) { return [i * stepX, padT + (H - padT - padB) * (1 - Number(h.pct || 0) / 100)]; });
+    var line = pts.map(function (p) { return p[0].toFixed(1) + "," + p[1].toFixed(1); }).join(" ");
+    var area = "0," + H + " " + line + " " + W + "," + H;
+    var last = pts[n - 1];
+    return '<svg class="home-rated__chart" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-hidden="true">' +
+      '<polygon class="home-tsum__area" points="' + area + '"></polygon>' +
+      '<polyline class="home-tsum__line" points="' + line + '"></polyline>' +
+      '<circle class="home-tsum__dot" cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="3.5"></circle></svg>';
+  }
+  function renderRateDetail(d) {
+    var body = $("home-rate-body");
+    $("home-rate-title").textContent = d.name ? d.name + " (" + d.code + ")" : "환율 상세";
+    if (!d.ok) { body.innerHTML = '<span class="home-error">' + esc(d.error || "환율 정보를 불러오지 못했어요") + "</span>"; return; }
+    var s = d.stats, chg = d.change == null ? "" :
+      '<span class="home-rated__change is-' + esc(d.direction) + '">' + arrow(d.direction) + " " + esc(d.diff_text) + "원 (" + esc(d.change_text) + ")</span>";
+    var warn = d.warning ? '<span class="badge badge-warning home-rated__warn">전일 대비 급변 · 값 확인 필요</span>' : "";
+    var hist = d.history || [];
+    var ticks = hist.map(function (h, i) {
+      var show = i === 0 || i === hist.length - 1 || (hist.length > 6 && i === Math.floor(hist.length / 2));
+      return '<small class="' + (show ? "" : "is-hidden") + '">' + esc(h.label) + "</small>";
+    }).join("");
+    body.innerHTML =
+      '<div class="home-rated__head">' +
+        '<div class="home-rated__main"><span class="home-rated__rate">' + esc(d.rate_text) + '<small>원</small></span>' + chg + "</div>" +
+        '<p class="home-rated__sub">' + esc(d.unit_text) + " 기준 매매기준율 · 수출입은행 " + esc(d.date_text) + " 고시" +
+          (d.prev_date_text ? " · 전일(" + esc(d.prev_date_text) + ") 대비" : "") + "</p>" + warn +
+      "</div>" +
+      '<div class="home-rated__tiles">' +
+        '<div class="home-rated__tile"><span class="home-rated__label">송금 받으실 때</span><span class="home-rated__num">' + esc(d.ttb_text || "—") + '</span><small>TTB · 외화→원화</small></div>' +
+        '<div class="home-rated__tile"><span class="home-rated__label">송금 보내실 때</span><span class="home-rated__num">' + esc(d.tts_text || "—") + '</span><small>TTS · 원화→외화</small></div>' +
+        '<div class="home-rated__tile"><span class="home-rated__label">장부가격</span><span class="home-rated__num">' + esc(d.bkpr_text || "—") + '</span><small>' + (d.spread_text ? "송금 스프레드 " + esc(d.spread_text) + "원" : "회계 기준") + "</small></div>" +
+      "</div>" +
+      '<div class="home-rated__section">' +
+        '<div class="home-rated__section-head"><span>최근 ' + s.points + "영업일 추이</span><small>" + esc(s.from_text) + " ~ " + esc(s.to_text) + "</small></div>" +
+        rateChart(hist) + '<div class="home-rated__axis">' + ticks + "</div>" +
+        '<dl class="home-rated__stats">' +
+          "<div><dt>최고</dt><dd>" + esc(s.high_text) + "<small>" + esc(s.high_date_text) + "</small></dd></div>" +
+          "<div><dt>최저</dt><dd>" + esc(s.low_text) + "<small>" + esc(s.low_date_text) + "</small></dd></div>" +
+          "<div><dt>평균</dt><dd>" + esc(s.mean_text) + "</dd></div>" +
+          "<div><dt>기간 변동</dt><dd class=\"is-" + (s.period_change > 0 ? "up" : s.period_change < 0 ? "down" : "flat") + "\">" + (s.period_change == null ? "—" : (s.period_change > 0 ? "▲ " : s.period_change < 0 ? "▼ " : "") + Math.abs(s.period_change).toFixed(2) + "%") + "</dd></div>" +
+          "<div><dt>변동성</dt><dd>" + (s.volatility == null ? "—" : s.volatility.toFixed(2) + "%") + "<small>일별 등락률 표준편차</small></dd></div>" +
+        "</dl>" +
+      "</div>" +
+      '<div class="home-rated__section home-rated__calc">' +
+        '<div class="home-rated__section-head"><span>환산 계산기</span><small>매매기준율 기준</small></div>' +
+        '<div class="home-rated__calc-row">' +
+          '<label class="home-rated__field"><span>' + esc(d.code) + '</span><input class="form-control form-control-sm" id="home-rate-fx" type="number" inputmode="decimal" min="0" step="any" value="1000"></label>' +
+          '<span class="home-rated__eq" aria-hidden="true">=</span>' +
+          '<label class="home-rated__field"><span>KRW</span><input class="form-control form-control-sm" id="home-rate-krw" type="number" inputmode="decimal" min="0" step="any"></label>' +
+        "</div>" +
+        '<p class="form-help">실제 송금·환전 금액은 은행 우대율과 수수료에 따라 달라져요. 참고용으로만 사용해 주세요.</p>' +
+      "</div>";
+    var per = d.rate / d.unit, fx = $("home-rate-fx"), krw = $("home-rate-krw");
+    var sync = function (from) {
+      if (from === "fx") krw.value = fx.value === "" ? "" : Math.round(Number(fx.value) * per);
+      else fx.value = krw.value === "" ? "" : (Number(krw.value) / per).toFixed(2);
+    };
+    fx.addEventListener("input", function () { sync("fx"); });
+    krw.addEventListener("input", function () { sync("krw"); });
+    sync("fx");
+  }
+  function openRateDetail(code) {
+    if (!window.Common || !window.Common.openModal) return;
+    var body = $("home-rate-body"), src = $("home-rate-source");
+    $("home-rate-title").textContent = code + " 환율 상세";
+    body.innerHTML = '<span class="home-loading">불러오는 중이에요</span>';
+    window.Common.openModal("home-rate-modal");
+    var c = rateCache[code];
+    if (c && Date.now() - c.at < 10 * 60 * 1000) { renderRateDetail(c.data); return; }
+    fetch("/api/home/rates/" + encodeURIComponent(code), { credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.ok) { rateCache[code] = { at: Date.now(), data: d }; if (d.source_url) src.href = d.source_url; }
+        renderRateDetail(d);
+      })
+      .catch(function () { body.innerHTML = '<span class="home-error">환율 정보를 불러오지 못했어요</span>'; });
+  }
+  $("home-rates-items").addEventListener("click", function (e) {
+    var el = e.target.closest(".home-rate[data-code]");
+    if (el) openRateDetail(el.getAttribute("data-code"));
+  });
+  $("home-rates-items").addEventListener("keydown", function (e) {
+    var el = e.target.closest(".home-rate[data-code]");
+    if (el && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openRateDetail(el.getAttribute("data-code")); }
+  });
 
   /* 2. 화장품 수출입 카드 3개 (왼쪽 열, 서버의 pandas 분석 결과) ------------ */
   function delta(d, suffix) {

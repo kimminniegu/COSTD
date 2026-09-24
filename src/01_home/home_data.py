@@ -27,6 +27,7 @@ from urllib.parse import unquote, urljoin
 from zoneinfo import ZoneInfo
 
 import feedparser
+import numpy as np
 import requests
 from bs4 import BeautifulSoup
 
@@ -82,6 +83,11 @@ def init(db_path: Path) -> None:
             CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
             """
         )
+        # 환율 상세(4-4)용 컬럼 — 이미 만들어진 DB에도 추가 (송금 받을 때 / 보낼 때 / 장부가격)
+        have = {r[1] for r in c.execute("PRAGMA table_info(exchange_rates)")}
+        for col in ("ttb", "tts", "bkpr"):
+            if col not in have:
+                c.execute(f"ALTER TABLE exchange_rates ADD COLUMN {col} REAL")
 
 
 def _conn() -> sqlite3.Connection:
@@ -207,7 +213,12 @@ def _exim_fetch(day: date) -> list[dict] | None:
         if not code or rate is None:
             continue
         unit = 100 if "(100)" in code else 1
-        rows.append({"code": code, "name": d.get("cur_nm", ""), "unit": unit, "rate": rate})
+        rows.append({
+            "code": code, "name": d.get("cur_nm", ""), "unit": unit, "rate": rate,
+            "ttb": _to_float(d.get("ttb")),     # 전신환 받으실 때 (외화 → 원화)
+            "tts": _to_float(d.get("tts")),     # 전신환 보내실 때 (원화 → 외화)
+            "bkpr": _to_float(d.get("bkpr")),   # 장부가격
+        })
     return rows
 
 
@@ -218,26 +229,46 @@ def _rates_for(day: date) -> list[dict]:
 
 
 def _ensure_rates(day: date) -> list[dict]:
-    """해당 날짜 환율을 DB에서 찾고, 없으면 API로 가져와 저장. 휴일이면 [] 반환."""
+    """해당 날짜 환율을 DB에서 찾고, 없으면 API로 가져와 저장. 휴일이면 [] 반환.
+    빈 표식(__EMPTY__)은 name 에 표식 시각을 남기며, 그날 정오 전에 남긴 표식은 고시 전 호출일 수 있어 한 번 더 확인합니다."""
     rows = _rates_for(day)
     if rows:
-        return rows
+        marker = rows[0] if len(rows) == 1 and rows[0]["code"] == "__EMPTY__" else None
+        if not marker:
+            return rows
+        marked = _parse_iso(marker.get("name") or "")
+        recheck = (marked is not None and marked.date() == day and marked.hour < 12
+                   and _now().date() == day and _now().hour >= 12)
+        if not recheck:
+            return rows
     fetched = _exim_fetch(day)
     if fetched is None:
         return []
     with _conn() as c:
         if fetched:
             c.executemany(
-                "INSERT OR REPLACE INTO exchange_rates (date, code, name, unit, rate) VALUES (?,?,?,?,?)",
-                [(day.isoformat(), r["code"], r["name"], r["unit"], r["rate"]) for r in fetched],
+                "INSERT OR REPLACE INTO exchange_rates (date, code, name, unit, rate, ttb, tts, bkpr) VALUES (?,?,?,?,?,?,?,?)",
+                [(day.isoformat(), r["code"], r["name"], r["unit"], r["rate"], r.get("ttb"), r.get("tts"), r.get("bkpr")) for r in fetched],
             )
         else:
             # 휴일 표시: 다음번에 다시 호출하지 않도록 빈 표식을 남깁니다.
             c.execute(
                 "INSERT OR REPLACE INTO exchange_rates (date, code, name, unit, rate) VALUES (?,?,?,?,?)",
-                (day.isoformat(), "__EMPTY__", "", 0, 0),
+                (day.isoformat(), "__EMPTY__", _iso(_now()), 0, 0),
             )
     return fetched
+
+
+def _backfill_rate_detail(day: date) -> None:
+    """송금 환율(ttb/tts/bkpr) 컬럼이 생기기 전에 저장된 날짜는 한 번 다시 받아 채웁니다 (4-4)."""
+    fetched = _exim_fetch(day)
+    if not fetched:
+        return
+    with _conn() as c:
+        c.executemany(
+            "UPDATE exchange_rates SET ttb=?, tts=?, bkpr=? WHERE date=? AND code=?",
+            [(r.get("ttb"), r.get("tts"), r.get("bkpr"), day.isoformat(), r["code"]) for r in fetched],
+        )
 
 
 def _latest_two_rate_days() -> tuple[tuple[date, list[dict]] | None, tuple[date, list[dict]] | None]:
@@ -305,6 +336,107 @@ def get_rates() -> dict:
             break
     d = date.fromisoformat(latest_date)
     return {"items": items, "date": latest_date, "date_text": f"{d.month}/{d.day}", "error": None}
+
+
+RATE_HISTORY_DAYS = 30           # 상세 모달에 보여줄 영업일 수 (4-4)
+RATE_HISTORY_LOOKBACK = 50       # 영업일 30일을 채우기 위해 거슬러 갈 최대 달력일 수
+EXIM_PAGE_URL = "https://www.koreaexim.go.kr/ir/HPHKIR020M01?apino=2&viewtype=1"
+
+
+def _resolve_rate_code(code: str) -> str | None:
+    """화면 코드(JPY) → 저장 코드(JPY(100)). 목록에 없으면 None"""
+    c = (code or "").strip().upper()
+    for full in RATE_CODES:
+        if full == c or full.split("(")[0] == c:
+            return full
+    return None
+
+
+def get_rate_detail(code: str, days: int = RATE_HISTORY_DAYS) -> dict | None:
+    """환율 상세 (4-4): 통화 하나의 최근 영업일 값, 송금 환율, 최근 30영업일 추이와 numpy 통계.
+    이력은 exchange_rates 에 날짜별로 캐시되므로 처음 한 번만 API를 여러 번 호출합니다."""
+    full = _resolve_rate_code(code)
+    if not full:
+        return None
+    history: list[dict] = []
+    day = _now().date()
+    backfilled = 0
+    for _ in range(RATE_HISTORY_LOOKBACK):
+        try:
+            rows = _ensure_rates(day)
+            r = next((x for x in rows if x["code"] == full), None)
+            if r and r.get("ttb") is None and backfilled < 5:   # 컬럼 추가 전 저장분 → 최근 5개 날짜만 보강
+                backfilled += 1
+                _backfill_rate_detail(day)
+                r = next((x for x in _rates_for(day) if x["code"] == full), r)
+        except Exception as err:  # noqa: BLE001 — 하루 실패해도 계속
+            log.warning("환율 이력 조회 실패(%s): %s", day, err)
+            r = None
+        if r:
+            history.append({"date": day.isoformat(), "rate": float(r["rate"]),
+                            "ttb": r.get("ttb"), "tts": r.get("tts"), "bkpr": r.get("bkpr"), "name": r.get("name", "")})
+            if len(history) >= days:
+                break
+        day -= timedelta(days=1)
+    if not history:
+        return {"code": full.replace("(100)", ""), "ok": False, "error": "환율 정보를 불러오지 못했어요"}
+    history.reverse()                                   # 오래된 날 → 최근 날
+    latest, prev = history[-1], (history[-2] if len(history) > 1 else None)
+    unit = 100 if "(100)" in full else 1
+
+    # numpy 통계 — 최고·최저·평균, 기간 변동률, 일별 등락률 표준편차(변동성)
+    rates = np.array([h["rate"] for h in history], dtype=float)
+    daily_pct = np.diff(rates) / rates[:-1] * 100 if rates.size > 1 else np.array([])
+    hi_i, lo_i = int(np.argmax(rates)), int(np.argmin(rates))
+    span = float(rates.max() - rates.min()) or 1.0
+    change = ((latest["rate"] - prev["rate"]) / prev["rate"] * 100) if prev and prev["rate"] else None
+
+    def _d(iso: str) -> str:
+        d = date.fromisoformat(iso)
+        return f"{d.month}/{d.day}"
+
+    def _num(v) -> str | None:
+        return f"{v:,.2f}" if v is not None else None
+
+    return {
+        "ok": True,
+        "code": full.replace("(100)", ""),
+        "code_full": full,
+        "name": latest["name"],
+        "unit": unit,
+        "unit_text": f"{unit} {full.replace('(100)', '')}",
+        "date": latest["date"],
+        "date_text": _d(latest["date"]),
+        "prev_date_text": _d(prev["date"]) if prev else None,
+        "rate": latest["rate"],
+        "rate_text": _num(latest["rate"]),
+        "change": None if change is None else round(change, 2),
+        "change_text": f"{abs(change):.2f}%" if change is not None else "—",
+        "diff_text": (f"{abs(latest['rate'] - prev['rate']):,.2f}" if prev else None),
+        "direction": "up" if (change or 0) > 0 else ("down" if (change or 0) < 0 else "flat"),
+        "warning": change is not None and abs(change) >= RATE_WARN_PCT,
+        "ttb": latest["ttb"], "ttb_text": _num(latest["ttb"]),
+        "tts": latest["tts"], "tts_text": _num(latest["tts"]),
+        "bkpr": latest["bkpr"], "bkpr_text": _num(latest["bkpr"]),
+        "spread_text": (f"{latest['tts'] - latest['ttb']:,.2f}" if latest["tts"] is not None and latest["ttb"] is not None else None),
+        "history": [
+            {"date": h["date"], "label": _d(h["date"]), "rate": h["rate"], "rate_text": _num(h["rate"]),
+             "pct": round((h["rate"] - float(rates.min())) / span * 100, 1)}   # 차트용 0~100
+            for h in history
+        ],
+        "stats": {
+            "points": int(rates.size),
+            "from_text": _d(history[0]["date"]),
+            "to_text": _d(latest["date"]),
+            "high": float(rates[hi_i]), "high_text": _num(float(rates[hi_i])), "high_date_text": _d(history[hi_i]["date"]),
+            "low": float(rates[lo_i]), "low_text": _num(float(rates[lo_i])), "low_date_text": _d(history[lo_i]["date"]),
+            "mean_text": _num(float(rates.mean())),
+            "period_change": round(float((rates[-1] - rates[0]) / rates[0] * 100), 2) if rates[0] else None,
+            "volatility": round(float(daily_pct.std()), 2) if daily_pct.size else None,   # 일별 등락률 표준편차(%)
+            "position": round(float((rates[-1] - rates.min()) / span * 100), 0),         # 최근값이 기간 범위 중 어디쯤인지
+        },
+        "source_url": EXIM_PAGE_URL,
+    }
 
 
 # ---------------------------------------------------------------------------
