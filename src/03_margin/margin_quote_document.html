@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+{#
+  견적서(Quotation) PDF 문서 (담당자 C)
+  - 화면 UI가 아니라 PDF 전용 단독 문서입니다. base.html 을 상속하지 않습니다.
+  - xhtml2pdf 는 CSS Variable·style.css·flex·grid 를 쓸 수 없어서
+    이 파일에 한해 고정 값을 쓰고, 배치는 table 로만 합니다. (강조색은 --color-primary 와 같은 #1b64da)
+  - xhtml2pdf 는 <p> 사이를 크게 벌리므로 칸 안의 줄바꿈은 <br> 로 합니다.
+  - 값은 service.build_quote_context() 가 검증한 context 만 쓰며, 모두 autoescape 로 출력합니다. |safe 금지.
+#}
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Quotation {{ quote_no }}</title>
+<style>
+  {% if font %}
+  @font-face { font-family: "DocFont"; src: url("{{ font.regular }}"); }
+  @font-face { font-family: "DocFont"; src: url("{{ font.bold }}"); font-weight: bold; }
+  {% endif %}
+  @page {
+    size: A4;
+    margin: 16mm 15mm 20mm 15mm;
+    @frame footer { -pdf-frame-content: doc-footer; left: 15mm; right: 15mm; bottom: 8mm; height: 8mm; }
+  }
+  body { font-family: {% if font %}"DocFont", {% endif %}Helvetica, sans-serif; font-size: 9pt; line-height: 1.4; color: #191f28; }
+  table { width: 100%; }
+  td, th { vertical-align: top; }
+  p { margin: 0; }
+  .muted { color: #6b7684; }
+  .center { text-align: center; }
+  .bold { font-weight: bold; }
+
+  .brand { margin-bottom: 12pt; }
+  .brand td { padding: 0 0 8pt; border-bottom: 2pt solid #1b64da; vertical-align: bottom; }
+  .brand .company { font-size: 15pt; font-weight: bold; }
+  .brand .title { font-size: 22pt; font-weight: bold; color: #1b64da; letter-spacing: 2pt; text-align: right; }
+
+  .label { font-size: 7.5pt; color: #6b7684; text-transform: uppercase; letter-spacing: 0.6pt; }
+  .info td { padding: 0 0 8pt; }
+  .meta td { padding: 1.5pt 0; }
+  .meta .k { color: #6b7684; width: 26mm; }
+
+  .terms { margin-bottom: 10pt; }
+  .terms td { border: 0.5pt solid #d1d6db; padding: 4pt 6pt; width: 25%; }
+  .terms .k { font-size: 7.5pt; color: #6b7684; }
+
+  .items th { background: #1b64da; color: #ffffff; font-size: 8pt; font-weight: bold; padding: 5pt 6pt; text-align: left; }
+  .items td { border-bottom: 0.5pt solid #e5e8eb; padding: 5pt 6pt; }
+  .items .num { text-align: right; }
+  .items .total td { border-bottom: 0; border-top: 1pt solid #191f28; font-weight: bold; font-size: 10pt; padding-top: 6pt; }
+  .words { margin: 4pt 0 12pt; font-size: 8pt; font-weight: bold; }
+
+  .sub { margin: 0 0 4pt; font-size: 9pt; font-weight: bold; }
+  .breakdown { margin-bottom: 12pt; }
+  .breakdown td { border-bottom: 0.5pt solid #e5e8eb; padding: 3pt 6pt; }
+  .breakdown .num { text-align: right; width: 28mm; }
+
+  .notes td { padding: 0; }
+  ol { margin: 2pt 0 0 12pt; padding: 0; }
+  li { margin: 0 0 1.5pt; }
+
+  .sign { margin-top: 26pt; }
+  .sign td { padding: 0; }
+  .sign .line { border-top: 0.5pt solid #191f28; padding-top: 3pt; }
+  #doc-footer { font-size: 7pt; color: #8b95a1; text-align: center; }
+</style>
+</head>
+<body>
+
+  <!-- 1. 우리 회사 / 제목 -->
+  <table class="brand">
+    <tr>
+      <td style="width: 60%;">
+        <span class="company">{{ seller.name }}</span>
+        {% if seller.address %}<br><span class="muted">{{ seller.address }}</span>{% endif %}
+        {% if seller.phone or seller.email %}<br><span class="muted">{% if seller.phone %}Tel. {{ seller.phone }}{% endif %}{% if seller.phone and seller.email %} &nbsp;|&nbsp; {% endif %}{% if seller.email %}{{ seller.email }}{% endif %}</span>{% endif %}
+      </td>
+      <td class="title">QUOTATION</td>
+    </tr>
+  </table>
+
+  <!-- 2. 고객사 / 견적 정보 -->
+  <table class="info">
+    <tr>
+      <td style="width: 55%;">
+        <span class="label">Quotation to</span><br>
+        <span class="bold" style="font-size: 11pt;">{{ buyer.company }}</span>
+        {% if buyer.address %}<br>{{ buyer.address }}{% endif %}
+        {% if buyer.country %}<br>{{ buyer.country }}{% endif %}
+        {% if buyer.attn %}<br>Attn. {{ buyer.attn }}{% endif %}
+        {% if buyer.email %}<br><span class="muted">{{ buyer.email }}</span>{% endif %}
+      </td>
+      <td>
+        <table class="meta">
+          <tr><td class="k">Quotation No.</td><td class="bold">{{ quote_no }}</td></tr>
+          <tr><td class="k">Date</td><td>{{ issue_date }}</td></tr>
+          <tr><td class="k">Valid until</td><td>{{ valid_until }} ({{ validity_days }} days)</td></tr>
+          {% if contact.name %}<tr><td class="k">Contact</td><td>{{ contact.name }}</td></tr>{% endif %}
+          {% if contact.email %}<tr><td class="k">E-mail</td><td>{{ contact.email }}</td></tr>{% endif %}
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <!-- 3. 거래 조건 -->
+  <table class="terms">
+    <tr>
+      <td><p class="k">Price Term</p>{{ incoterm }} {{ named_place }}</td>
+      <td><p class="k">Currency</p>{{ currency }}</td>
+      <td><p class="k">Payment</p>{{ payment }}</td>
+      <td><p class="k">MOQ</p>{{ moq or "-" }}</td>
+    </tr>
+  </table>
+
+  <!-- 4. 품목 -->
+  <table class="items">
+    <thead>
+      <tr>
+        <th style="width: 9mm;">No.</th>
+        <th>Description</th>
+        <th class="num" style="width: 26mm; text-align: right;">Quantity</th>
+        <th class="num" style="width: 34mm; text-align: right;">Unit Price ({{ currency }})</th>
+        <th class="num" style="width: 36mm; text-align: right;">Amount ({{ currency }})</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for line in lines %}
+      <tr>
+        <td class="center">{{ line.no }}</td>
+        <td>{{ line.description }}</td>
+        <td class="num">{{ line.qty }}</td>
+        <td class="num">{{ line.unit_price }}</td>
+        <td class="num">{{ line.amount }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="total">
+        <td colspan="4" class="num">TOTAL {{ incoterm }} ({{ currency }})</td>
+        <td class="num">{{ total }}</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="words">{{ total_words }}</p>
+
+  {% if breakdown %}
+  <!-- 5. 오픈북형: 개당 원가 구성 -->
+  <p class="sub">Cost Breakdown (per pc)</p>
+  <table class="breakdown">
+    {% for row in breakdown %}
+    <tr><td>{{ row.label }}</td><td class="num">{{ currency }} {{ row.usd }}</td><td class="num muted">{{ row.share }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+
+  <!-- 6. 조건 / 비고 -->
+  <table class="notes">
+    <tr><td>
+      <p class="sub">Terms &amp; Conditions</p>
+      <ol>
+        <li>This quotation is valid until {{ valid_until }}.</li>
+        <li>Prices are quoted {{ incoterm }} {{ named_place }} in {{ currency }} (Incoterms&reg; 2020).</li>
+        {% if lead_time %}<li>Lead time: {{ lead_time }}.</li>{% endif %}
+        {% if discount_note %}<li>{{ discount_note }}</li>{% endif %}
+        <li>Bank charges outside Korea are for the buyer's account.</li>
+        <li>Final price is subject to confirmed artwork, specification and order quantity.</li>
+      </ol>
+      {% if remarks %}<p class="sub" style="margin-top: 8pt;">Remarks</p><p>{{ remarks }}</p>{% endif %}
+    </td></tr>
+  </table>
+
+  <!-- 7. 서명 -->
+  <table class="sign">
+    <tr>
+      <td style="width: 55%;">&nbsp;</td>
+      <td class="line">
+        For and on behalf of<br>
+        <span class="bold">{{ seller.name }}</span><br>
+        <span class="muted">Authorized Signature</span>
+      </td>
+    </tr>
+  </table>
+
+  <div id="doc-footer">{{ seller.name }} &middot; Quotation {{ quote_no }} &middot; Page <pdf:pagenumber> of <pdf:pagecount></div>
+</body>
+</html>
