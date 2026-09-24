@@ -189,8 +189,48 @@
     setTimeout(() => { b.textContent = "운임 반영"; }, 1500);
   });
 
+  /* ---------- 현재 USD TTB (서버 /api/margin-calculator/fx-rate, 10분 캐시) ----------
+     수출 대금을 원화로 받는 기준인 TTB(전신환 받으실 때)를 기준 환율 라벨 아래 'TTB 1,351.1' 알약 버튼으로 보여주고,
+     누르면 기준 환율 칸에 넣습니다. 이미 같은 값이면 ✓ 표시 후 잠금. */
+  let liveFx = null;
+  const FX_REFRESH_MS = 10 * 60 * 1000;
+
+  async function loadLiveFx() {
+    try {
+      const res = await fetch(root.dataset.fxUrl, { headers: { Accept: "application/json" } });
+      if (!res.ok || !(res.headers.get("Content-Type") || "").includes("json")) throw new Error();
+      liveFx = await res.json();
+      if (!(liveFx.rate > 0)) throw new Error();
+    } catch (e) {
+      liveFx = null;
+    }
+    syncLiveFx();
+  }
+
+  function syncLiveFx() {
+    const btn = $("fxlive-apply");
+    if (!liveFx) {
+      btn.disabled = true;
+      btn.textContent = "TTB 없음";
+      btn.title = "현재 TTB 환율을 불러오지 못했어요. 10분 뒤 다시 시도해요.";
+      return;
+    }
+    const r1 = Math.round(liveFx.rate * 10) / 10;
+    const same = Math.abs(num("fx") - r1) < 0.05;
+    btn.disabled = same;
+    btn.textContent = `TTB ${r1.toLocaleString("ko-KR")}${same ? " ✓" : ""}`;
+    btn.title = `${same ? "기준 환율에 적용됨" : "누르면 기준 환율에 적용"} · USD TTB ${liveFx.rate.toLocaleString("ko-KR")}원 · ${liveFx.source} · ${liveFx.as_of} 기준`;
+  }
+
+  $("fxlive-apply").addEventListener("click", () => {
+    if (!liveFx) return;
+    $("fx").value = Math.round(liveFx.rate * 10) / 10;   // 소수 1자리
+    render();
+  });
+
   /* ---------- 렌더 ---------- */
   function render() {
+    syncLiveFx();
     const p = readInputs();
     const inco = $("inco").value;
     $("sea-row").style.display = ["CFR", "CIF"].includes(inco) ? "grid" : "none";
@@ -782,4 +822,6 @@
 
   drawTiers();
   render();
+  loadLiveFx();
+  setInterval(loadLiveFx, FX_REFRESH_MS);
 })();

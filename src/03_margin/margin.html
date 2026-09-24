@@ -16,7 +16,8 @@
 {%- endmacro %}
 <div class="margin-page" id="margin-app"
      data-profile-url="{{ url_for('margin_quote_profile') }}"
-     data-pdf-url="{{ url_for('margin_quote_pdf') }}">
+     data-pdf-url="{{ url_for('margin_quote_pdf') }}"
+     data-fx-url="{{ url_for('margin_fx_rate') }}">
   <div class="page-header">
     <div>
       <h1 class="page-title">원가 경쟁력 및 마진 시뮬레이션</h1>
@@ -132,8 +133,8 @@
             <button type="button" class="tab" data-tab-target="margin-view-fx" role="tab" aria-selected="false">환율 영향</button>
           </div>
           <div class="margin-fxbox">
-            <span class="margin-fxbox__label"><b>기준 환율</b><span class="text-caption">USD/KRW</span></span>
-            <div class="margin-fxbox__field">{{ field('fx', 1400, '원', '기준환율', 10) }}</div>
+            <span class="margin-fxbox__label"><b>기준 환율</b><button type="button" class="margin-fxlive__apply" id="margin-fxlive-apply" disabled>TTB 확인 중</button></span>
+            <div class="margin-fxbox__field">{{ field('fx', 1400, '원', '기준환율 (USD/KRW)', 10) }}</div>
           </div>
         </div>
       </div>

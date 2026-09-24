@@ -26,7 +26,7 @@
 | `src/03_margin/margin.css` | 이 페이지 전용 스타일 (`margin-` 접두사, CSS Variable만 사용) |
 | `src/03_margin/margin.js` | 모든 계산·렌더링·이벤트 (IIFE, 전역 변수 없음) |
 | `src/03_margin/margin.md` | 이 기능 명세서 |
-| `src/03_margin/service.py` | 견적서 PDF: 회사 정보(`COMPANY`), 입력 검증, 합계 재계산, 영문 금액 표기, PDF 생성 |
+| `src/03_margin/service.py` | 견적서 PDF: 회사 정보(`COMPANY`), 입력 검증, 합계 재계산, 영문 금액 표기, PDF 생성 / 현재 USD/KRW 환율 조회(10분 캐시) |
 | `src/03_margin/margin_quote_document.html` | 견적서 PDF 전용 문서 템플릿 (xhtml2pdf용, base.html 비상속) |
 | `app.py` | `# [C]` 주석 아래 Backend Route 2개만 |
 
@@ -37,6 +37,7 @@
 | `/margin-calculator` | GET | `margin` | 페이지 (PM 관리 Route, 로그인 필요) |
 | `/api/margin-calculator/quote-profile` | GET | `margin_quote_profile` | 견적서 팝업 자동 연동 값 (우리 회사 정보 + 로그인 담당자) |
 | `/api/margin-calculator/quote-pdf` | POST | `margin_quote_pdf` | 견적서 PDF 생성·다운로드 |
+| `/api/margin-calculator/fx-rate` | GET | `margin_fx_rate` | 현재 USD/KRW 환율 (기준 환율 옆 표시·적용용) |
 
 - API는 README 규칙 9에 따라 `/api/margin-calculator/` 접두사를 씁니다.
 - 모든 Route에 `@login_required`가 붙어 있어 로그인하지 않으면 `/login`으로 이동합니다.
@@ -67,7 +68,7 @@
 
 | 항목 | id | 단위 | 기본값 | 규칙 |
 |---|---|---|---|---|
-| 기준 환율 USD/KRW | `margin-fx` | 원 | 1400 | > 0 (상단 Tab Card 우측) |
+| 기준 환율 USD/KRW | `margin-fx` | 원 | 1400 | > 0 (상단 Tab Card 우측). 라벨 `기준 환율` 아래 알약 버튼 `TTB 1,351.1`(`margin-fxlive-apply`)을 누르면 현재 USD TTB(소수 1자리)로 바뀜 |
 | 1차 마진 입력 방식 | `margin-seg-minput` | - | 항목별 | 항목별 / 일괄 |
 | 원재료·임가공·부자재 원가 (개당) | `margin-raw` / `-proc` / `-pack` | 원 | 850 / 400 / 650 | ≥ 0 |
 | 항목별 1차 마진율 | `margin-r-raw` / `-r-proc` / `-r-pack` | % | 20 / 10 / 15 | 마진율 방식이면 < 100 |
@@ -354,10 +355,28 @@ Best regards,
 | 400 | `{"error": "고객사 회사명을(를) 입력하세요."}` 등 검증 오류 |
 | 500 | `{"error": "PDF 를 만들지 못했어요."}` |
 
-### 9.3 외부 데이터
+### 9.3 `GET /api/margin-calculator/fx-rate`
 
-- 외부 API 없음. 환율·CBM 단가·VE 절감액은 사용자 입력 또는 약식 기본값입니다. API Key를 쓰지 않습니다.
-- 패키지: `xhtml2pdf` (requirements.txt에 이미 있음).
+```json
+{ "rate": 1351.12, "source": "ExchangeRate-API 중간값 × 0.99 (추정 TTB)", "as_of": "2026-09-24 09:02" }
+```
+
+| 응답 | 내용 |
+|---|---|
+| 200 | 현재 USD/KRW **TTB(전신환 받으실 때)**. `source`는 `한국수출입은행 TTB(전신환 받으실 때)`(as_of = 고시일 `YYYY-MM-DD`) 또는 `ExchangeRate-API 중간값 × 0.99 (추정 TTB)`(as_of = 갱신 시각 KST) |
+| 502 | `{"error": "현재 환율을 불러오지 못했어요."}` — 두 소스 모두 실패 |
+
+- 수출 시뮬레이션이므로 매매기준율(`deal_bas_r`)이 아니라 수출 대금을 원화로 받을 때 적용되는 **TTB**를 씁니다.
+- 조회 순서: ① 한국수출입은행 현재환율 API(`EXIM_API_KEY`가 있을 때, USD `ttb`의 쉼표를 지우고 float 변환, 휴일·11시 이전이면 최대 7일 전 영업일까지) → ② ExchangeRate-API 공개 엔드포인트(`https://open.er-api.com/v6/latest/USD`, 키 없음)의 시장 중간값 × 0.99(`TTB_FROM_MID`, 수출입은행 USD 전신환 스프레드 1%)로 **추정 TTB**. 요청 timeout 5초.
+- 홈 담당 DB(`exchange_rates`)는 매매기준율만 저장하므로 TTB 조회에 쓰지 않습니다. (홈 코드·DB는 읽지도 수정하지도 않음)
+- 두 소스 모두 **하루 1회 고시·갱신 값**이라 초 단위 실시간은 아닙니다. 화면에는 `TTB 1,351.1`(소수 1자리)로 표시하고 정확한 값·소스·기준 시각은 마우스를 올리면(`title`) 보여줍니다.
+- 결과는 서버 메모리에 10분 캐시하고, 화면은 페이지 로드 시와 10분마다 다시 불러옵니다.
+
+### 9.4 외부 데이터
+
+- 현재 환율만 외부 API를 씁니다(9.3). 한국수출입은행 API Key는 `.env`의 `EXIM_API_KEY`(홈과 같은 키)를 `os.getenv()`로 읽고, 없으면 키가 필요 없는 ExchangeRate-API 중간값으로 TTB를 추정합니다. 계산에 쓰는 기준 환율은 여전히 사용자가 입력하며, [적용]을 눌렀을 때만 현재 환율로 바뀝니다.
+- CBM 단가·VE 절감액은 사용자 입력 또는 약식 기본값입니다.
+- 패키지: `xhtml2pdf`, `requests` (requirements.txt에 이미 있음).
 - 글꼴: PDF 한글 표시용으로 시스템 TTF(Windows 맑은 고딕, Linux 나눔고딕)를 찾아 씁니다. 없으면 Helvetica(영문만).
 
 ## 10. 데이터 처리
@@ -395,6 +414,8 @@ Best regards,
 | 팝업 자동 연동 실패 / 세션 만료 | "회사 정보를 불러오지 못했어요…" / "로그인이 만료됐어요. 다시 로그인해 주세요." |
 | 텍스트 200자 초과, 품목 20개 초과, 숫자 형식 오류 | 서버 400 + 항목명이 들어간 오류 문구 |
 | PDF 생성 실패 | 500 "PDF 를 만들지 못했어요." — 버튼 로딩 해제, 팝업 유지 |
+| 현재 환율 조회 실패 / 세션 만료 | 알약 버튼이 `TTB 없음`으로 바뀌고 비활성. 10분 뒤 자동 재시도 |
+| 기준 환율이 이미 현재 TTB와 같음 | 알약 버튼이 `TTB 1,351.1 ✓`로 바뀌고 비활성 |
 
 ## 12. UI 구성
 
@@ -405,7 +426,7 @@ Best regards,
      ├─ aside.card.margin-inputs (Desktop sticky)
      │    원가와 1차 마진 / 영업마진 / 물류와 수량(+ details.margin-drawer#margin-cbm) / 수량 할인 구간 (.margin-group, 구분선)
      └─ .margin-results
-          ├─ .card.card-sm.margin-toolbar : .tabs(견적 계산·역제안 분석·수량별 단가·환율 영향) + 기준 환율
+          ├─ .card.card-sm.margin-toolbar : .tabs(견적 계산·역제안 분석·수량별 단가·환율 영향) + .margin-fxbox(라벨 `기준 환율` + 알약 버튼 `TTB 1,351.1` | 기준 환율 입력, 툴바 한 줄 유지)
           ├─ .tab-panel#margin-view-forward : 대표 단가 Card / 상세 Card(.tabs 2개: 항목별 원가 · 견적서)
           │    └ 견적서: 형식 · 견적서 PDF / .form-check#margin-abs-on / .margin-abs-box(hidden) / 미리보기
           ├─ .tab-panel#margin-view-reverse : ① .card(.margin-rtop: 입력 | #margin-verdict → #margin-gauge → 범례·안내 한 줄) / ② .margin-rmid(VE .card | 마진 직접 조정 .card) / ③ 대응 방안 .card
@@ -436,6 +457,10 @@ def margin_quote_profile(): ...            # service.quote_profile(auth.current_
 @app.route("/api/margin-calculator/quote-pdf", methods=["POST"])
 @login_required
 def margin_quote_pdf(): ...                # build_quote_context → render_template → html_to_pdf
+
+@app.route("/api/margin-calculator/fx-rate", methods=["GET"])
+@login_required
+def margin_fx_rate(): ...                  # service.usd_krw_rate(), 실패 시 502
 ```
 
 | service.py 함수 | 역할 |
@@ -445,6 +470,7 @@ def margin_quote_pdf(): ...                # build_quote_context → render_temp
 | `amount_in_words(amount)` | `SAY US DOLLARS … AND CENTS … ONLY.` |
 | `quote_filename(quote_no)` | 안전한 파일명 `Quotation_<번호>.pdf` |
 | `html_to_pdf(html)` | xhtml2pdf 변환(리소스 정책 제한), 실패 시 RuntimeError |
+| `usd_krw_rate()` | 현재 USD/KRW TTB (수출입은행 `ttb` → ExchangeRate-API 중간값 × 0.99 순, 10분 캐시), 모두 실패 시 RuntimeError |
 
 - 템플릿의 API 주소는 `url_for()`로 `#margin-app`의 `data-profile-url`, `data-pdf-url`에 넣고 JS는 이 값만 사용합니다.
 - 페이지 Route `/margin-calculator`는 PM 관리 영역이므로 수정하지 않습니다.
@@ -485,6 +511,7 @@ def margin_quote_pdf(): ...                # build_quote_context → render_temp
 - [ ] PDF 다운로드 시 A4 한 장의 회사 양식 견적서가 저장되고, 표·합계·영문 금액이 화면 견적과 일치한다.
 - [ ] PDF 저장 후 완료 안내가 보이고, 팝업·수량별 단가 탭의 **영문 이메일 제안문 복사**가 고객사·견적번호·품목·단가·MOQ가 들어간 커버레터를 복사한다.
 - [ ] 로그인하지 않은 상태의 API 호출은 로그인 화면으로 이동한다.
+- [ ] 기준 환율 라벨 아래 `TTB 1,351.1` 버튼을 누르면 기준 환율 칸이 바뀌며 4개 탭이 다시 계산되고 `✓`로 바뀐다. 조회 실패 시 `TTB 없음`으로 표시된다.
 - [ ] 본문 폭 880px 이하에서 1열로 바뀌고 가로 스크롤 없이 사용할 수 있다.
 - [ ] `src/03_margin/`, `app.py [C]` 영역 외 파일 변경이 없다. (`git status` 확인)
 - [ ] 페이지 CSS의 class·id는 `margin-` 접두사, 색·간격은 CSS Variable, 굵기는 3종 Variable만 사용한다.
