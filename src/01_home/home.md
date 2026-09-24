@@ -255,7 +255,9 @@ change_pct = (today_rate - prev_rate) / prev_rate * 100
 
 ### 4-4. 환율 상세 모달 (구현)
 
-환율 띠의 통화를 누르면 공통 Modal(`ui_components.md` 16장, id `home-rate-modal`)에 그 통화의 상세를 보여준다. 코드는 `home_data.get_rate_detail()`, `home.js`의 `openRateDetail()`.
+환율 띠의 통화를 누르면 공통 Modal(`ui_components.md` 16장, `modal-lg` 800px, id `home-rate-modal`)에 그 통화의 상세를 보여준다. 코드는 `home_data.get_rate_detail()`, `home.js`의 `openRateDetail()`.
+
+**한 화면 규칙**: 모달 안에서 스크롤하지 않도록 두 열로 배치한다. 왼쪽 열 = 매매기준율·송금 환율 타일·환산 계산기, 오른쪽 열 = 30영업일 추이·통계. 폭 900px 이하에서는 한 열로 쌓고 모달 본문 스크롤을 허용한다.
 
 | 구역 | 내용 |
 |---|---|

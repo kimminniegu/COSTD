@@ -89,7 +89,18 @@
       var show = i === 0 || i === hist.length - 1 || (hist.length > 6 && i === Math.floor(hist.length / 2));
       return '<small class="' + (show ? "" : "is-hidden") + '">' + esc(h.label) + "</small>";
     }).join("");
+    var calc =
+      '<div class="home-rated__section home-rated__calc">' +
+        '<div class="home-rated__section-head"><span>환산 계산기</span><small>매매기준율 기준</small></div>' +
+        '<div class="home-rated__calc-row">' +
+          '<label class="home-rated__field"><span>' + esc(d.code) + '</span><input class="form-control form-control-sm" id="home-rate-fx" type="number" inputmode="decimal" min="0" step="any" value="1000"></label>' +
+          '<span class="home-rated__eq" aria-hidden="true">=</span>' +
+          '<label class="home-rated__field"><span>KRW</span><input class="form-control form-control-sm" id="home-rate-krw" type="number" inputmode="decimal" min="0" step="any"></label>' +
+        "</div>" +
+        '<p class="form-help">실제 송금·환전 금액은 은행 우대율과 수수료에 따라 달라져요. 참고용으로만 사용해 주세요.</p>' +
+      "</div>";
     body.innerHTML =
+      '<div class="home-rated__col">' +
       '<div class="home-rated__head">' +
         '<div class="home-rated__main"><span class="home-rated__rate">' + esc(d.rate_text) + '<small>원</small></span>' + chg + "</div>" +
         '<p class="home-rated__sub">' + esc(d.unit_text) + " 기준 매매기준율 · 수출입은행 " + esc(d.date_text) + " 고시" +
@@ -98,8 +109,9 @@
       '<div class="home-rated__tiles">' +
         '<div class="home-rated__tile"><span class="home-rated__label">송금 받으실 때</span><span class="home-rated__num">' + esc(d.ttb_text || "—") + '</span><small>TTB · 외화→원화</small></div>' +
         '<div class="home-rated__tile"><span class="home-rated__label">송금 보내실 때</span><span class="home-rated__num">' + esc(d.tts_text || "—") + '</span><small>TTS · 원화→외화</small></div>' +
-        '<div class="home-rated__tile"><span class="home-rated__label">장부가격</span><span class="home-rated__num">' + esc(d.bkpr_text || "—") + '</span><small>' + (d.spread_text ? "송금 스프레드 " + esc(d.spread_text) + "원" : "회계 기준") + "</small></div>" +
-      "</div>" +
+        '<div class="home-rated__tile"><span class="home-rated__label">장부가격</span><span class="home-rated__num">' + esc(d.bkpr_text || "—") + '</span><small>' + (d.spread_text ? "스프레드 " + esc(d.spread_text) + "원" : "회계 기준") + "</small></div>" +
+      "</div>" + calc + "</div>" +
+      '<div class="home-rated__col">' +
       '<div class="home-rated__section">' +
         '<div class="home-rated__section-head"><span>최근 ' + s.points + "영업일 추이</span><small>" + esc(s.from_text) + " ~ " + esc(s.to_text) + "</small></div>" +
         rateChart(hist) + '<div class="home-rated__axis">' + ticks + "</div>" +
@@ -110,16 +122,7 @@
           "<div><dt>기간 변동</dt><dd class=\"is-" + (s.period_change > 0 ? "up" : s.period_change < 0 ? "down" : "flat") + "\">" + (s.period_change == null ? "—" : (s.period_change > 0 ? "▲ " : s.period_change < 0 ? "▼ " : "") + Math.abs(s.period_change).toFixed(2) + "%") + "</dd></div>" +
           "<div><dt>변동성</dt><dd>" + (s.volatility == null ? "—" : s.volatility.toFixed(2) + "%") + "<small>일별 등락률 표준편차</small></dd></div>" +
         "</dl>" +
-      "</div>" +
-      '<div class="home-rated__section home-rated__calc">' +
-        '<div class="home-rated__section-head"><span>환산 계산기</span><small>매매기준율 기준</small></div>' +
-        '<div class="home-rated__calc-row">' +
-          '<label class="home-rated__field"><span>' + esc(d.code) + '</span><input class="form-control form-control-sm" id="home-rate-fx" type="number" inputmode="decimal" min="0" step="any" value="1000"></label>' +
-          '<span class="home-rated__eq" aria-hidden="true">=</span>' +
-          '<label class="home-rated__field"><span>KRW</span><input class="form-control form-control-sm" id="home-rate-krw" type="number" inputmode="decimal" min="0" step="any"></label>' +
-        "</div>" +
-        '<p class="form-help">실제 송금·환전 금액은 은행 우대율과 수수료에 따라 달라져요. 참고용으로만 사용해 주세요.</p>' +
-      "</div>";
+      "</div>" + "</div>";
     var per = d.rate / d.unit, fx = $("home-rate-fx"), krw = $("home-rate-krw");
     var sync = function (from) {
       if (from === "fx") krw.value = fx.value === "" ? "" : Math.round(Number(fx.value) * per);
