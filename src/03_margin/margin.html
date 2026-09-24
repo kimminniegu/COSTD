@@ -366,58 +366,61 @@
       <!-- 환율 영향 -->
       <section class="tab-panel" id="margin-view-fx">
         <div class="margin-stack">
+          <!-- 1단계: 결제 환율 조작 + 실시간 손익 (입력과 결과를 한 Card 안에서) -->
           <div class="card">
-            <div class="card-body margin-head margin-head--fx">
-              <div class="form-group">
-                <label class="form-label" for="margin-fx-contract">계약 단가 (USD 고정)</label>
-                <div class="input-group"><span class="input-group__suffix">$</span><input type="number" id="margin-fx-contract" step="0.01" value="2.15"></div>
-                <label class="form-check"><input type="checkbox" id="margin-fx-use-quote" checked> 현재 견적 단가 사용</label>
-              </div>
-              <div class="form-group margin-settle">
-                <div class="margin-settle__row">
-                  <label class="form-label" for="margin-fx-settle">결제 시점 환율</label>
-                  <button type="button" class="btn btn-ghost btn-sm" id="margin-fx-reset">견적 환율로</button>
+            <div class="card-body margin-fxdash">
+              <div class="margin-fxdash__inputs">
+                <div class="form-group">
+                  <label class="form-label" for="margin-fx-contract">계약 단가 (USD 고정)</label>
+                  {{ field('fx-contract', 2.15, '$', '계약 단가 (USD)', 0.01) }}
+                  <label class="form-check"><input type="checkbox" id="margin-fx-use-quote" checked> 현재 견적 단가 사용</label>
                 </div>
-                <div class="margin-settle__row">
-                  <p class="kpi-value" id="margin-fx-settle-val">1,400<span class="kpi-unit">원</span></p>
-                  <p class="margin-settle__chg" id="margin-fx-chg"></p>
+                <div class="form-group">
+                  <label class="form-label" for="margin-fx-settle-input">결제 시점 환율</label>
+                  <div class="margin-settle__row">
+                    <div class="margin-settle__input">{{ field('fx-settle-input', 1400, '원', '결제 시점 환율', 1) }}</div>
+                    <span class="margin-settle__chg" id="margin-fx-chg"></span>
+                    <button type="button" class="btn btn-ghost btn-sm" id="margin-fx-reset">견적 환율로</button>
+                  </div>
+                  <div class="margin-settle__slider">
+                    <input type="range" id="margin-fx-settle" min="1200" max="1600" step="5" value="1400" aria-label="결제 시점 환율 조절">
+                    <div class="margin-settle__ends"><span id="margin-fx-min-l"></span><span id="margin-fx-max-l"></span></div>
+                  </div>
                 </div>
-                <input type="range" id="margin-fx-settle" min="1200" max="1600" step="5" value="1400">
-                <div class="margin-settle__ends"><span id="margin-fx-min-l"></span><span id="margin-fx-max-l"></span></div>
               </div>
-              <div class="margin-verdict" id="margin-fx-verdict"></div>
+              <p class="form-error" id="margin-fx-err" role="alert"></p>
+
+              <div class="margin-fxdash__kpis">
+                <div class="stat-tile">
+                  <span class="stat-tile__label">실현 영업마진</span>
+                  <span class="stat-tile__value" id="margin-fx-kpi-m"></span>
+                  <span id="margin-fx-kpi-m-note"></span>
+                </div>
+                <div class="stat-tile">
+                  <span class="stat-tile__label">환차손익 (주문 전체)</span>
+                  <span class="stat-tile__value" id="margin-fx-kpi-pnl"></span>
+                  <span class="text-caption" id="margin-fx-kpi-pnl-note"></span>
+                </div>
+                <div class="stat-tile">
+                  <span class="stat-tile__label">방어 단가</span>
+                  <span class="stat-tile__value" id="margin-fx-kpi-need"></span>
+                  <span class="text-caption" id="margin-fx-kpi-need-note"></span>
+                </div>
+              </div>
+
+              <div class="margin-chips" id="margin-fx-thr" aria-label="마지노선 환율"></div>
             </div>
           </div>
 
+          <!-- 2단계: 환율 변동 시나리오 표 (항상 표시) -->
           <div class="card">
             <div class="card-header">
-              <h3 class="card-title">환율별 마진</h3>
-              <div class="margin-legend margin-legend--zone">
-                <span><i class="margin-swatch is-cur"></i>영업마진</span>
-                <span><i class="margin-swatch is-other"></i>총 마진</span>
-                <span><i class="margin-swatch is-cost"></i>견적 환율</span>
+              <div>
+                <h3 class="card-title">환율 변동 시나리오</h3>
+                <p class="card-subtitle">견적 환율 대비 ±5% · ±10% · 주문 <span id="margin-fx-qty"></span>개 기준</p>
               </div>
             </div>
-            <div class="card-body"><div class="margin-chart" id="margin-fx-chart"></div></div>
-          </div>
-
-          <div class="card">
-              <div class="card-header">
-                <div>
-                  <h3 class="card-title">버틸 수 있는 환율</h3>
-                  <p class="card-subtitle">달러 단가 고정 시, 이 환율 아래로 내려가면 기준 미달이에요.</p>
-                </div>
-              </div>
-              <div class="card-body"><div class="margin-thr-grid" id="margin-fx-thr"></div></div>
-          </div>
-          <div class="card">
-              <div class="card-header">
-                <div>
-                  <h3 class="card-title">환율 시나리오</h3>
-                  <p class="card-subtitle">견적 환율 대비 변동별 결과 · 주문 <span id="margin-fx-qty"></span>개 기준</p>
-                </div>
-              </div>
-              <div class="card-body"><div class="table-wrap"><table class="table margin-table-compact" id="margin-fx-table"></table></div></div>
+            <div class="card-body"><div class="table-wrap"><table class="table margin-table-compact" id="margin-fx-table"></table></div></div>
           </div>
         </div>
       </section>

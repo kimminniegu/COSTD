@@ -232,13 +232,28 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 .margin-qty-add .btn { flex-shrink: 0; height: 44px; }
 .margin-tier-summary.margin-verdict { flex-direction: row; flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: var(--space-1) var(--space-3); padding: var(--space-3) var(--space-4); }
 .margin-tier-summary .margin-verdict__title { font-size: var(--font-size-sub); }
-.margin-head--fx { grid-template-columns: 200px minmax(0, 1.1fr) minmax(0, 1fr); }
 .margin-head .form-check { margin-top: var(--space-1); font-size: var(--font-size-label); }
 .margin-head .input-group input { width: 100%; }
 
-.margin-settle__row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
-.margin-settle__chg { font-size: var(--font-size-label); font-weight: var(--font-weight-bold); }
+/* 환율 1단계 Card — 입력(계약 단가 | 결제 환율 + Slider) → 결과 3분할 → 마지노선 칩 */
+.margin-fxdash { display: flex; flex-direction: column; gap: var(--space-4); }
+.margin-fxdash__inputs { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: var(--space-4); align-items: start; }
+.margin-fxdash .form-check { font-size: var(--font-size-label); }
+.margin-settle__row { display: flex; align-items: center; gap: var(--space-2); }
+.margin-settle__input { flex: 1; min-width: 0; }
+.margin-settle__row .btn { flex-shrink: 0; }
+.margin-settle__chg { flex-shrink: 0; font-size: var(--font-size-label); font-weight: var(--font-weight-bold); }
+.margin-settle__slider { display: flex; flex-direction: column; }
+.margin-page .margin-settle__slider input[type="range"] { margin: 0; }
 .margin-settle__ends { display: flex; justify-content: space-between; font-size: var(--font-size-caption); color: var(--color-text-placeholder); }
+.margin-fxdash__kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+.margin-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.margin-chips__label { font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
+.margin-chip { display: inline-flex; align-items: center; gap: var(--space-1); padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill); background: var(--color-surface-muted); font-size: var(--font-size-caption); color: var(--color-text-secondary); white-space: nowrap; }
+.margin-chip .margin-swatch { margin-right: 0; }
+.margin-chip b { font-weight: var(--font-weight-extrabold); color: var(--color-text-primary); font-variant-numeric: tabular-nums; }
+.margin-chip.is-miss b { color: var(--color-danger); }
+
 
 /* 역제안 — 목표가 위치 Gauge */
 .margin-gauge { position: relative; padding: 40px var(--space-2) 48px; }
@@ -261,12 +276,6 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 .margin-option__value { margin: 2px 0; font-size: var(--font-size-section-title); font-weight: var(--font-weight-extrabold); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .margin-option__desc { font-size: var(--font-size-caption); line-height: 1.45; color: var(--color-text-secondary); }
 
-/* 환율 — 버틸 수 있는 환율 */
-.margin-thr-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
-.margin-thr { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: var(--space-1); padding: var(--space-4) var(--space-5); background: var(--color-surface-muted); border-radius: var(--radius-lg); }
-.margin-thr__k { font-size: var(--font-size-label); font-weight: var(--font-weight-bold); }
-.margin-thr__v { font-size: var(--font-size-card-title); font-weight: var(--font-weight-extrabold); font-variant-numeric: tabular-nums; }
-.margin-thr__d { grid-column: 1 / -1; font-size: var(--font-size-caption); color: var(--color-text-placeholder); }
 
 /* 수량별 단가 — 표 안 입력 */
 .margin-page .table tr.is-off td { color: var(--color-text-placeholder); }
@@ -298,39 +307,17 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 .margin-table-compact .margin-field .form-control { padding-left: var(--space-3); padding-right: 28px; }
 .margin-table-compact .margin-field__unit { right: var(--space-2); }
 
-/* SVG 차트 */
-.margin-chart svg { display: block; width: 100%; height: auto; }
-.margin-chart text { font-family: inherit; font-size: 13px; fill: var(--color-text-secondary); }
-.margin-chart .c-grid { stroke: var(--color-border); }
-.margin-chart .c-ref { stroke: var(--color-text-inverse-secondary); }
-.margin-chart .c-now { stroke: var(--color-text-primary); }
-.margin-chart .c-main { fill: none; stroke: var(--color-primary-bright); }
-.margin-chart .c-sub { fill: none; stroke: var(--color-primary-light); }
-.margin-chart .c-dot { fill: var(--color-surface); stroke: var(--color-primary-bright); }
-.margin-chart .c-bubble { fill: var(--color-surface-inverse); }
-.margin-chart text.c-inv { fill: var(--color-text-inverse); font-weight: var(--font-weight-bold); }
-.margin-chart .c-band-good { fill: var(--margin-zone-good-soft); }
-.margin-chart .c-band-caution { fill: var(--margin-zone-caution-soft); }
-.margin-chart .c-band-warn { fill: var(--margin-zone-warn-soft); }
-.margin-chart .c-band-bad { fill: var(--margin-zone-bad-soft); }
-.margin-chart .c-thr-good { stroke: var(--margin-zone-good); }
-.margin-chart .c-thr-warn { stroke: var(--margin-zone-warn); }
-.margin-chart .c-thr-bad { stroke: var(--margin-zone-bad); }
-.margin-chart text.c-thr-good { fill: var(--margin-zone-good); stroke: none; font-weight: var(--font-weight-bold); }
-.margin-chart text.c-thr-warn { fill: var(--margin-zone-warn); stroke: none; font-weight: var(--font-weight-bold); }
-.margin-chart text.c-thr-bad { fill: var(--margin-zone-bad); stroke: none; font-weight: var(--font-weight-bold); }
-
 /* 본문 폭 기준 반응형 (design_system.md §7) */
 @container page (max-width: 880px) {
   .margin-layout { grid-template-columns: 1fr; }
   .margin-inputs { position: static; max-height: none; overflow: visible; }
-  .margin-head--reverse, .margin-head--fx { grid-template-columns: 1fr 1fr; }
+  .margin-head--reverse { grid-template-columns: 1fr 1fr; }
   .margin-head--tier { grid-template-columns: 1fr 1fr; }
   .margin-head .margin-verdict { grid-column: 1 / -1; }
   .margin-two { grid-template-columns: 1fr; }
   .margin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @container page (max-width: 560px) {
-  .margin-head--reverse, .margin-head--tier, .margin-head--fx, .margin-thr-grid, .margin-modal-grid { grid-template-columns: 1fr; }
+  .margin-head--reverse, .margin-head--tier, .margin-fxdash__inputs, .margin-fxdash__kpis, .margin-modal-grid { grid-template-columns: 1fr; }
   .margin-sec-title .btn { margin-left: 0; }
 }

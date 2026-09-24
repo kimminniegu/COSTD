@@ -593,11 +593,9 @@
     $("fx-contract").disabled = useQ;
     if (useQ) $("fx-contract").value = (Math.round(r.usd * 100) / 100).toFixed(2);
     const contract = num("fx-contract");
-    if (isNaN(contract) || contract <= 0) {
-      $("fx-verdict").className = "margin-verdict";
-      $("fx-verdict").innerHTML = '<p class="margin-verdict__desc">계약 단가를 입력하세요.</p>';
-      return;
-    }
+    const bad = isNaN(contract) || contract <= 0;
+    $("fx-err").textContent = bad ? "계약 단가를 입력하세요." : "";
+    if (bad) return;
 
     /* 달러 단가 중 FOB 부분만 원화로 바뀜 (해상운임·보험료는 그대로 지급) */
     let fobU = contract;
@@ -607,7 +605,6 @@
     const base = r.C + r.L, P2 = r.P2;
     const rev = (fx) => fobU * fx;
     const m2At = (fx) => 1 - P2 / rev(fx);
-    const totAt = (fx) => (rev(fx) - base) / rev(fx);
     const fxBE = base / fobU, fxMin = P2 / (1 - mn) / fobU, fxGoal = P2 / (1 - g) / fobU;
 
     /* Slider 범위: 견적 환율 ±15% */
@@ -621,7 +618,8 @@
     const f = st.fxSettle, chg = f / p.fx - 1;
     $("fx-min-l").textContent = lo.toLocaleString() + "원";
     $("fx-max-l").textContent = hi.toLocaleString() + "원";
-    $("fx-settle-val").innerHTML = Math.round(f).toLocaleString() + '<span class="kpi-unit">원</span>';
+    const fin = $("fx-settle-input");
+    if (document.activeElement !== fin) fin.value = Math.round(f);   // 입력 중에는 덮어쓰지 않음
     $("fx-chg").innerHTML = Math.abs(chg) < 0.0005 ? '<span class="text-caption">견적 환율</span>'
       : `<span class="${chg > 0 ? "text-up" : "text-down"}">${chg > 0 ? "▲" : "▼"} ${pct(Math.abs(chg))}</span>`;
 
@@ -633,55 +631,25 @@
     else if (m >= 0) z = ["orange", "최소 마진 미달"];
     else z = ["red", "영업 손실"];
     const needU = (() => { let u = P2 / (1 - g) / f; if (sea) u += r.freightU; if (p.inco === "CIF") u += u * 1.1 * p.ins; return u; })();
-    setVerdict($("fx-verdict"), z[0], `${badge(z[0], z[1])}
-      <p class="margin-verdict__title">영업마진 ${pct(m)}</p>
-      <p class="margin-verdict__desc">총 마진 ${pct(totAt(f))} · ${Math.abs(diffUnit) < 0.5 ? "견적 환율 기준" : `견적 환율 대비 주문 이익 ${diffUnit > 0 ? "+" : "−"}${won(Math.abs(diffUnit * p.qty))}`}
-      ${m < g - 1e-9 ? `<br>목표 마진 유지 단가 <b>${usd(needU)}</b>` : ""}</p>`);
+    const pctS = (v) => Math.round(v * 1000) / 10 + "%";   // 15.0% → 15%
+    /* 핵심 결과 3분할: 실현 영업마진 / 환차손익 / 방어 단가 */
+    $("fx-kpi-m").textContent = pct(m);
+    $("fx-kpi-m-note").innerHTML = badge(z[0], z[1]);
+    const pnl = diffUnit * p.qty;   // 견적 환율 대비 환차손익 (주문 전체)
+    const sign = (v, up, down) => (v > 0 ? up : down);
+    $("fx-kpi-pnl").innerHTML = Math.abs(pnl) < 0.5 ? "±0원"
+      : `<span class="${sign(pnl, "text-up", "text-down")}">${sign(pnl, "▲ +", "▼ −")}${won(Math.abs(pnl))}</span>`;
+    $("fx-kpi-pnl-note").textContent = Math.abs(diffUnit) < 0.005 ? "견적 환율과 같아요" : `견적 환율 대비 · 개당 ${sign(diffUnit, "+", "−")}${won(Math.abs(diffUnit))}`;
+    $("fx-kpi-need").textContent = usd(needU);   // 이 환율에서 목표 영업마진을 지키려면 바이어에게 요구할 단가
+    const gap = needU - contract;
+    $("fx-kpi-need-note").textContent = `목표 마진 ${pctS(g)} 유지 · ` + (gap > 0.005 ? `현재보다 +${usd(gap)}` : "현재 단가로 달성");
 
-    /* 차트 */
-    const W = 820, H = 215, L = 50, R = 16, T = 16, B = 30;
-    const ys = [m2At(lo), m2At(hi), totAt(lo), totAt(hi), g, mn, 0];
-    const y0 = Math.floor((Math.min(...ys) - 0.03) * 20) / 20, y1 = Math.ceil((Math.max(...ys) + 0.03) * 20) / 20;
-    const X = (v) => L + ((v - lo) / (hi - lo)) * (W - L - R);
-    const Y = (v) => T + ((y1 - v) / (y1 - y0)) * (H - T - B);
-    const band = (a, b, c) => { a = Math.max(a, y0); b = Math.min(b, y1); return b > a ? `<rect class="${c}" x="${L}" y="${Y(b)}" width="${W - L - R}" height="${Y(a) - Y(b)}"/>` : ""; };
-    const path = (fn) => { let d = ""; for (let i = 0; i <= 60; i++) { const v = lo + ((hi - lo) * i) / 60; d += (i ? "L" : "M") + X(v).toFixed(1) + "," + Y(fn(v)).toFixed(1); } return d; };
-    let grid = "";
-    const step = y1 - y0 > 0.4 ? 0.1 : 0.05;
-    for (let v = Math.ceil(y0 / step) * step; v <= y1 + 1e-9; v += step) {
-      grid += `<line class="c-grid" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L - 8}" y="${Y(v) + 4}" text-anchor="end">${Math.round(v * 100)}%</text>`;
-    }
-    for (let i = 0; i <= 4; i++) {
-      const v = lo + ((hi - lo) * i) / 4;
-      grid += `<text x="${X(v)}" y="${H - 8}" text-anchor="middle">${Math.round(v).toLocaleString()}</text>`;
-    }
-    const thrLine = (v, c, lab) => (v >= y0 && v <= y1
-      ? `<line class="${c}" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke-dasharray="4 4"/><text class="${c}" x="${W - R - 4}" y="${Y(v) - 5}" text-anchor="end">${lab}</text>`
-      : "");
-    const px = X(f), py = Y(m);
-    const bubbleX = Math.min(W - R - 70, Math.max(L + 70, px));
-    $("fx-chart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="환율별 영업마진 그래프">
-      ${band(g, 9, "c-band-good")}${band(mn, g, "c-band-caution")}${band(0, mn, "c-band-warn")}${band(-9, 0, "c-band-bad")}
-      ${grid}
-      ${thrLine(g, "c-thr-good", "목표 " + pct(g))}${thrLine(mn, "c-thr-warn", "최소 " + pct(mn))}${thrLine(0, "c-thr-bad", "손익 0")}
-      <line class="c-ref" x1="${X(p.fx)}" x2="${X(p.fx)}" y1="${T}" y2="${H - B}" stroke-dasharray="3 3"/>
-      <path class="c-sub" d="${path(totAt)}" stroke-width="2" stroke-dasharray="6 4"/>
-      <path class="c-main" d="${path(m2At)}" stroke-width="2.5"/>
-      <line class="c-now" x1="${px}" x2="${px}" y1="${T}" y2="${H - B}"/>
-      <circle class="c-dot" cx="${px}" cy="${py}" r="5.5" stroke-width="2.5"/>
-      <g transform="translate(${bubbleX},${Math.max(T + 14, py - 18)})"><rect class="c-bubble" x="-72" y="-16" width="144" height="24" rx="7"/>
-      <text class="c-inv" x="0" y="0" text-anchor="middle">${Math.round(f).toLocaleString()}원 · ${pct(m)}</text></g>
-    </svg>`;
-
-    /* 버틸 수 있는 환율 */
-    const thrRow = (k, v, note) => {
-      const d = v / p.fx - 1;
-      return `<div class="margin-thr"><div class="margin-thr__k">${k}</div><div class="margin-thr__v">${Math.round(v).toLocaleString()}원</div>
-        <div class="margin-thr__d">${note} · ${d < 0 ? `견적 환율에서 ${pct(-d)} 하락까지 버팀` : "견적 환율에서 이미 미달"}</div></div>`;
-    };
-    $("fx-thr").innerHTML = thrRow("목표 영업마진 환율", fxGoal, `영업마진 ${pct(g)} 유지`)
-      + thrRow("최소 영업마진 환율", fxMin, `영업마진 ${pct(mn)} 유지`)
-      + thrRow("손익분기 환율", fxBE, "원가와 물류비만 회수");
+    /* 마지노선 환율 칩 (구 '버틸 수 있는 환율') — 견적 환율에서 이미 미달이면 is-miss */
+    const chip = (k, v, sw) => `<span class="margin-chip${v >= p.fx ? " is-miss" : ""}"><i class="margin-swatch ${sw}"></i>${k} <b>${Math.round(v).toLocaleString()}원</b></span>`;
+    $("fx-thr").innerHTML = '<span class="margin-chips__label">마지노선 환율</span>'
+      + chip("손익분기", fxBE, "is-bad")
+      + chip(`최소 마진(${pctS(mn)})`, fxMin, "is-warn")
+      + chip(`목표 마진(${pctS(g)})`, fxGoal, "is-good");
 
     /* 시나리오 표 */
     $("fx-qty").textContent = p.qty.toLocaleString();
@@ -784,6 +752,15 @@
   $("qty-add").addEventListener("input", () => { $("qty-add-err").textContent = ""; });
 
   $("fx-settle").addEventListener("input", (e) => { st.fxSettle = +e.target.value; st.fxTouched = true; render(); });
+  /* 결제 환율 직접 입력 ↔ Slider 양방향 연동 (범위 밖 값은 renderFx 에서 ±15% 끝으로 맞춤) */
+  $("fx-settle-input").addEventListener("input", (e) => {
+    const v = parseFloat(e.target.value);
+    if (isNaN(v) || v <= 0) return;
+    st.fxSettle = v;
+    st.fxTouched = true;
+    render();
+  });
+  $("fx-settle-input").addEventListener("change", (e) => { render(); e.target.value = Math.round(st.fxSettle); });
   $("fx-reset").addEventListener("click", () => { st.fxTouched = false; render(); });
 
   ["raw", "proc", "pack", "logi"].forEach((k) => $("adj-" + k).addEventListener("input", (e) => {
