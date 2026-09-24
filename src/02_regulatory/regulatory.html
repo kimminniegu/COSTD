@@ -96,16 +96,22 @@
             </div>
           </div>
 
-          {# 규제 정보 출처 — 선택한 출처만 조회하고 두 출처를 섞지 않는다 #}
+          {# 규제 정보 출처 — radio 카드 단일 선택(기본 식약처 수집 DB). 선택한 출처만 조회하고 두 출처를 섞지 않는다. 값 읽기·change 는 fieldset(id) 기준 (regulatory.js searchSource/fileSource) #}
           <div class="grid grid-2-1 mt-4">
-            <div class="form-group">
-              <label class="form-label" for="regulatory-search-source">규제 정보 출처</label>
-              <select class="form-control" id="regulatory-search-source" name="source">
-                <option value="mfds" selected>식약처 수집 DB (기본)</option>
-                <option value="api">기존 API (RapidAPI)</option>
-              </select>
-              <p class="form-help">식약처 수집 DB 는 서버에 수집해 둔 자료를 읽고, 기존 API 는 외부 API 를 호출해요. 출처를 바꾸면 다시 조회해야 해요.</p>
-            </div>
+            <fieldset class="form-group regulatory-source" id="regulatory-search-source">
+              <legend class="form-label">규제 정보 출처</legend>
+              <div class="regulatory-source__options">
+                <label class="regulatory-source__option is-selected" for="regulatory-search-source-mfds">
+                  <input type="radio" id="regulatory-search-source-mfds" name="regulatory-search-source" value="mfds" checked>
+                  <span class="regulatory-source__name">식약처 수집 DB</span>
+                </label>
+                <label class="regulatory-source__option" for="regulatory-search-source-api">
+                  <input type="radio" id="regulatory-search-source-api" name="regulatory-search-source" value="api">
+                  <span class="regulatory-source__name">K뷰티 API (RapidAPI)</span>
+                </label>
+              </div>
+              <p class="form-help">식약처 수집 DB 는 서버에 수집해 둔 자료를 읽고, K뷰티 API 는 외부 API 를 호출해요. 출처를 바꾸면 다시 조회해야 해요. (기본 선택: 식약처 수집 DB)</p>
+            </fieldset>
           </div>
 
           {# 직접 검색은 성분명 + 시장만 입력. 함량·제품 조건 입력은 파일 일괄 조회에서만 사용 (regulatory.md 5·6항) #}
@@ -155,14 +161,20 @@
             </div>
           </div>
           <div class="grid grid-2-1 mt-4">
-            <div class="form-group">
-              <label class="form-label" for="regulatory-file-source">규제 정보 출처</label>
-              <select class="form-control" id="regulatory-file-source" name="source">
-                <option value="mfds" selected>식약처 수집 DB (기본)</option>
-                <option value="api">기존 API (RapidAPI)</option>
-              </select>
-              <p class="form-help">확정 성분의 규제를 조회할 때 쓰는 출처예요. 바꾸면 이전 결과는 ‘이전 조건’이 돼요.</p>
-            </div>
+            <fieldset class="form-group regulatory-source" id="regulatory-file-source">
+              <legend class="form-label">규제 정보 출처</legend>
+              <div class="regulatory-source__options">
+                <label class="regulatory-source__option is-selected" for="regulatory-file-source-mfds">
+                  <input type="radio" id="regulatory-file-source-mfds" name="regulatory-file-source" value="mfds" checked>
+                  <span class="regulatory-source__name">식약처 수집 DB</span>
+                </label>
+                <label class="regulatory-source__option" for="regulatory-file-source-api">
+                  <input type="radio" id="regulatory-file-source-api" name="regulatory-file-source" value="api">
+                  <span class="regulatory-source__name">K뷰티 API (RapidAPI)</span>
+                </label>
+              </div>
+              <p class="form-help">확정 성분의 규제를 조회할 때 쓰는 출처예요. 바꾸면 이전 결과는 ‘이전 조건’이 돼요. (기본 선택: 식약처 수집 DB)</p>
+            </fieldset>
           </div>
 
           <div class="row mt-2">

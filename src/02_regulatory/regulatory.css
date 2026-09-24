@@ -19,6 +19,44 @@
    배너와 그 아래 조회 카드가 함께 올라오고, 소제목이 여러 줄이 되어도 겹치지 않습니다. 공통 CSS 는 수정하지 않습니다. */
 .page-header.regulatory-page-header { margin-bottom: var(--space-6); }
 
+/* 규제 정보 출처 선택 카드 -------------------------------------------------
+   radio 2개를 카드 모양 label 로 감싼 단일 선택 UI (직접 검색·파일 탭 공통). 공통 규격에 radio 카드가 없어 페이지 전용으로 두되
+   값은 design_system 변수만 사용: 미선택 = 중립 테두리(--color-border-strong)·보조 배경(--color-surface-muted),
+   선택 = 강조 테두리(--color-primary-bright)·옅은 배경(--color-primary-soft), Focus = 공통 Focus Ring(--shadow-focus).
+   선택 상태는 radio 의 checked 가 기준이며 :has() 와 JS 가 붙이는 .is-selected 가 같은 모양을 낸다.
+   카드는 flex-wrap 으로 데스크톱 가로 2개, 좁은 폭에서는 자연스럽게 세로로 내려간다 (음수 margin·위치 이동 없음) */
+.regulatory-source { min-width: 0; margin: 0; padding: 0; border: 0; }
+.regulatory-source legend { padding: 0; margin-bottom: var(--space-2); }      /* .form-group 의 gap 은 legend 에 적용되지 않아 Label ↔ 카드 8px 를 직접 둔다 */
+.regulatory-source__options { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.regulatory-source__option {
+  flex: 1 1 200px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-text-body);
+  font-size: var(--font-size-sub);
+  line-height: 1.3;
+  cursor: pointer;
+  transition: background var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base);
+}
+.regulatory-source__option:hover { background: var(--color-border); }
+.regulatory-source__option input[type="radio"] { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--color-primary-bright); cursor: pointer; }
+.regulatory-source__name { min-width: 0; overflow-wrap: anywhere; }
+.regulatory-source__option.is-selected,
+.regulatory-source__option:has(input:checked) {
+  border-color: var(--color-primary-bright);
+  background: var(--color-primary-soft);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-bold);
+}
+.regulatory-source__option:has(input:focus-visible) { border-color: var(--color-primary-bright); box-shadow: var(--shadow-focus); }
+
 /* 자동완성 후보 목록 -----------------------------------------------------
    공통 규격이 없어 페이지 전용으로 둡니다. 세부 배치·접근성 표현은 PM 협의 사항 (regulatory.md 12항) */
 .regulatory-autocomplete { position: relative; }

@@ -162,11 +162,31 @@
     lastSingle: null,     // 마지막 직접 검색 결과 {res, ctx, err} — '규제 원문·출처 보기' 를 누를 때 Modal 을 다시 채운다
   };
 
-  /* 규제 정보 출처: mfds(식약처 수집 DB, 기본) | api(기존 RapidAPI). 선택한 출처만 조회하고 섞지 않는다 */
-  var SOURCE_LABEL = { mfds: "식약처 수집 DB", api: "기존 API (RapidAPI)" };
-  var searchSourceSelect = $("regulatory-search-source");
-  function searchSource() { return (searchSourceSelect && searchSourceSelect.value) || "mfds"; }
-  function fileSource() { var s = $("regulatory-file-source"); return (s && s.value) || "mfds"; }
+  /* 규제 정보 출처: mfds(식약처 수집 DB, 기본) | api(K뷰티 API, RapidAPI). 선택한 출처만 조회하고 섞지 않는다.
+     화면은 radio 카드 2개(fieldset#regulatory-search-source / #regulatory-file-source). 값은 checked 인 radio 에서 읽고,
+     radio 의 change 는 fieldset 으로 버블링되므로 그룹에 한 번만 리스너를 둔다. 결과 표시·화면 갱신은 radio 를 건드리지 않는다 */
+  var SOURCE_LABEL = { mfds: "식약처 수집 DB", api: "K뷰티 API (RapidAPI)" };
+  var SOURCE_DEFAULT = "mfds";
+  function sourceRadios(group) { return group ? group.querySelectorAll("input[type=radio]") : []; }
+  function groupSource(group) {
+    var radios = sourceRadios(group);
+    for (var i = 0; i < radios.length; i++) if (radios[i].checked && SOURCE_LABEL[radios[i].value]) return radios[i].value;
+    return SOURCE_DEFAULT;
+  }
+  /* 선택 카드 강조(is-selected) — :has() 미지원 브라우저용. 상태는 radio 가 갖고 class 는 따라간다 */
+  function syncSourceCards(group) {
+    var radios = sourceRadios(group);
+    for (var i = 0; i < radios.length; i++) {
+      var card = radios[i].closest ? radios[i].closest(".regulatory-source__option") : null;
+      if (!card) continue;
+      if (radios[i].checked) card.classList.add("is-selected"); else card.classList.remove("is-selected");
+    }
+  }
+  var searchSourceGroup = $("regulatory-search-source");
+  var fileSourceGroup = $("regulatory-file-source");
+  function searchSource() { return groupSource(searchSourceGroup); }
+  function fileSource() { return groupSource(fileSourceGroup); }
+  syncSourceCards(searchSourceGroup); syncSourceCards(fileSourceGroup);   // 브라우저가 복원한 선택값과 카드 강조를 맞춘다
 
   /* 규제 조회 URL — 직접 검색·일괄 조회가 같은 규칙을 쓴다. mfds 는 이름·CAS 로 식별하고 code 는 표시용 */
   function regulationsUrl(sel, market, source) {
@@ -479,7 +499,7 @@
       refreshStale();
     });
   }
-  if (searchSourceSelect) searchSourceSelect.addEventListener("change", refreshStale);   // 출처를 바꾸면 '이전 조건의 결과' 안내
+  if (searchSourceGroup) searchSourceGroup.addEventListener("change", function () { syncSourceCards(searchSourceGroup); refreshStale(); });   // 출처를 바꾸면 '이전 조건의 결과' 안내
 
   var retryBtn = $("regulatory-result-retry");
   if (retryBtn) {
@@ -652,7 +672,7 @@
     access: { text: "접근 제한", variant: "danger" },
     source_unavailable: { text: "출처 이용 불가", variant: "danger" },
   };
-  /* 식약처 DB 응답의 not_listed 는 '해당 출처에서 일치 항목 없음' — 기존 API 의 '규제 목록 미등재' 와 문구를 구분한다 */
+  /* 식약처 DB 응답의 not_listed 는 '해당 출처에서 일치 항목 없음' — K뷰티 API 의 '규제 목록 미등재' 와 문구를 구분한다 */
   function statusLabel(status, res) {
     var m = LOOKUP_LABEL[status] || { text: "미조회", variant: "" };
     if (res && res.source === "mfds" && status === "not_listed") return { text: "출처에서 일치 항목 없음", variant: "warning" };
@@ -662,7 +682,7 @@
   function sourceText(res) {
     if (!res) return "—";
     if (res.source === "mfds") return "식약처 수집 DB";
-    return "기존 API (RapidAPI)";
+    return SOURCE_LABEL.api;
   }
 
   /* 오류 종류 → 화면 분류. access/auth/rate_limit 은 '접근 제한', 나머지는 'API 오류' */
@@ -1328,8 +1348,7 @@
 
   var fileMarketSel = $("regulatory-file-market");
   if (fileMarketSel) fileMarketSel.addEventListener("change", function () { fileMarketSel.classList.remove("is-error"); show($("regulatory-file-market-error"), false); updateLookupSummary(); });
-  var fileSourceSel = $("regulatory-file-source");
-  if (fileSourceSel) fileSourceSel.addEventListener("change", updateLookupSummary);   // 출처 변경 → '이전 조건' 안내
+  if (fileSourceGroup) fileSourceGroup.addEventListener("change", function () { syncSourceCards(fileSourceGroup); updateLookupSummary(); });   // 출처 변경 → '이전 조건' 안내
 
   function runBatchLookup(retryOnly) {
     if (fileState.looking || fileState.matching) return;
