@@ -216,6 +216,13 @@ def home_api_regulations():
     return jsonify(home_data.get_regulations(since=request.args.get("since")))
 
 
+@app.route("/api/home/validation")
+@login_required
+def home_api_validation():
+    """데이터 교차검증 요약 (명세 13장) — 구역별 마지막 성공·시도 시각, 환율 이상값, 수출입 정리·불일치 건수"""
+    return jsonify(home_data.get_validation())
+
+
 # [B] 국가별 인허가 규제 — 접두사: /api/regulatory/...
 
 

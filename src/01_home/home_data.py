@@ -181,6 +181,7 @@ EXIM_URL = os.getenv("EXIM_API_URL", "https://oapi.koreaexim.go.kr/site/program/
 # 표시 순서. 앞에서부터 6개를 채우며, 응답에 없는 통화(VND 등)는 건너뜁니다. (4-2, 10장)
 RATE_CODES = ["USD", "JPY(100)", "CNH", "EUR", "THB", "VND", "SGD", "MYR"]
 RATE_DISPLAY = 6
+RATE_WARN_PCT = 10.0   # 전일 대비 이 % 이상 움직이면 이상값으로 표시 (명세 13-1)
 
 
 def _exim_fetch(day: date) -> list[dict] | None:
@@ -286,6 +287,9 @@ def get_rates() -> dict:
             continue
         p = prev.get(code)
         change = ((r["rate"] - p["rate"]) / p["rate"] * 100) if p and p["rate"] else None
+        warning = change is not None and abs(change) >= RATE_WARN_PCT
+        if warning:
+            log.warning("환율 이상값: %s 전일 대비 %.2f%% (%s → %s)", code, change, p["rate"], r["rate"])
         items.append({
             "code": code.replace("(100)", ""),
             "unit": r["unit"],
@@ -295,6 +299,7 @@ def get_rates() -> dict:
             "change": change,
             "change_text": (f"{abs(change):.2f}%" if change is not None else "—"),
             "direction": "up" if (change or 0) > 0 else ("down" if (change or 0) < 0 else "flat"),
+            "warning": warning,   # 전일 대비 RATE_WARN_PCT 이상 변동 → 화면에 경고 표시
         })
         if len(items) == RATE_DISPLAY:
             break
@@ -1014,6 +1019,64 @@ def kick_refresh(sections=("rates", "trade", "news", "regulations")) -> list[str
 def is_refreshing() -> list[str]:
     with _lock:
         return sorted(_refreshing)
+
+
+def get_validation() -> dict:
+    """/api/home/validation — 데이터 교차검증 요약 (명세 13장)
+    구역별 마지막 성공·시도 시각과 오래됨 여부, 환율 이상값, 수출입 정리·불일치 건수, 저장 건수를 한 번에 돌려줍니다."""
+    now = _now()
+
+    def section(success_key: str, try_key: str, ttl: int) -> dict:
+        ok, tr = _parse_iso(_meta_get(success_key)), _parse_iso(_meta_get(try_key))
+        return {
+            "last_success": _iso(ok),
+            "last_try": _iso(tr),
+            "stale": ok is None or (now - ok).total_seconds() > ttl,   # 갱신 주기를 넘김
+            "failing": bool(tr and (ok is None or tr > ok)),           # 마지막 시도가 성공보다 뒤 = 실패 중
+        }
+
+    rates = get_rates()
+    cards = get_trade_cards()
+    with _conn() as c:
+        news_by_source = dict(c.execute("SELECT source, COUNT(*) FROM news_items GROUP BY source").fetchall())
+        reg_by_country = dict(c.execute("SELECT country, COUNT(*) FROM regulation_items GROUP BY country").fetchall())
+        reg_by_source = dict(c.execute("SELECT CASE WHEN source='KOTRA' THEN 'KOTRA' ELSE '언론' END, COUNT(*) FROM regulation_items GROUP BY 1").fetchall())
+        trade_rows = c.execute("SELECT COUNT(*) FROM trade_stats").fetchone()[0]
+        trade_months = c.execute("SELECT COUNT(DISTINCT yymm) FROM trade_stats").fetchone()[0]
+    rate_warnings = [it["code"] for it in rates["items"] if it.get("warning")]
+    return {
+        "generated_at": _iso(now),
+        "refreshing": is_refreshing(),
+        "rates": {
+            "latest_date": rates.get("date"),
+            "prev_date": _meta_get("rates_prev_date") or None,
+            "last_try": _meta_get("rates_last_try"),
+            "count": len(rates["items"]),
+            "has_change": all(it["change"] is not None for it in rates["items"]) if rates["items"] else False,
+            "warn_pct": RATE_WARN_PCT,
+            "warnings": rate_warnings,      # 전일 대비 급변 통화
+            "ok": bool(rates["items"]) and not rate_warnings,
+        },
+        "trade": section("trade_fetched_at", "trade_last_try", TRADE_TTL) | {
+            "rows": trade_rows,
+            "months": trade_months,
+            "hs_codes": HS_CODES,
+            "cleaning": cards.get("cleaning"),
+            "validation": cards.get("validation"),
+            "ok": bool(cards.get("ok")) and bool((cards.get("validation") or {}).get("ok")),
+        },
+        "news": section("news_fetched_at", "news_last_try", NEWS_TTL) | {
+            "by_source": news_by_source,
+            "missing_sources": [s for s in NEWS_SOURCES if not news_by_source.get(s)],   # 한 건도 없는 매체
+            "ok": all(news_by_source.get(s) for s in NEWS_SOURCES),
+        },
+        "regulations": section("reg_fetched_at", "reg_last_try", REG_TTL) | {
+            "by_country": reg_by_country,
+            "by_source": reg_by_source,
+            "kotra_configured": bool(os.getenv("KOTRA_NEWS_URL") and _data_go_kr_key()),
+            "ok": bool(reg_by_country),
+        },
+    }
 
 
 def get_dashboard() -> dict:

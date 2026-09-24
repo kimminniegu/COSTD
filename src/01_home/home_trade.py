@@ -10,7 +10,11 @@
 
 from __future__ import annotations
 
+import logging
+
 import pandas as pd
+
+log = logging.getLogger("cosmoa.home.trade")
 
 # 관세청 HS 6단위 품목명 (5-3 표의 4단위를 세분)
 HS6_NAMES = {
@@ -76,7 +80,10 @@ def build_cards(rows: list[dict], hs_codes: list[str]) -> dict:
     df["yymm"] = df["yymm"].astype(str).str.strip()
     df["country"] = df["country"].fillna("").astype(str).str.strip()
     df["hs_code"] = df["hs_code"].fillna("").astype(str).str.strip()
-    bad = ~df["yymm"].str.fullmatch(r"\d{6}") | df["country"].isin(["", "-"])
+    valid_ym = df["yymm"].str.fullmatch(r"\d{6}")
+    is_total = df["country"].isin(["", "-"])
+    total_rows = df[valid_ym & is_total].copy()   # 관세청 '전체' 행 — 국가 합산과 교차 비교용 (5단계, 명세 13-1)
+    bad = ~valid_ym | is_total
     cleaning["dropped"] = int(bad.sum())
     df = df[~bad].copy()
     if df.empty:
@@ -85,6 +92,9 @@ def build_cards(rows: list[dict], hs_codes: list[str]) -> dict:
     # 3. 금액 결측 → 0, 무역수지 결측 → 수출 − 수입
     na_amt = int(df[["exp_usd", "imp_usd"]].isna().any(axis=1).sum())
     df[["exp_usd", "imp_usd"]] = df[["exp_usd", "imp_usd"]].fillna(0.0)
+    # 3-1. 무역수지 교차 확인 — 값이 있는 행에서 (수출 − 수입)과 1달러 넘게 다르면 불일치로 기록 (값은 API 원본 유지)
+    has_bal = df["balance"].notna()
+    bal_mismatch = int((has_bal & ((df["balance"] - (df["exp_usd"] - df["imp_usd"])).abs() > 1.0)).sum())
     df["balance"] = df["balance"].fillna(df["exp_usd"] - df["imp_usd"])
     df["country_name"] = df["country_name"].fillna(df["country"]).replace({"": None, "-": None}).fillna(df["country"])
 
@@ -101,6 +111,20 @@ def build_cards(rows: list[dict], hs_codes: list[str]) -> dict:
 
     monthly = df.groupby("yymm")[["exp_usd", "imp_usd", "balance"]].sum()
     monthly = monthly.reindex(recent + prior).fillna(0.0)
+
+    # 5. 총계 행 vs 국가별 합산 교차 비교 (명세 13-1) — 1% 넘게 다른 달은 기록하고 로그 경고
+    total_mismatch: list[dict] = []
+    if not total_rows.empty:
+        tsum = total_rows.assign(exp_usd=total_rows["exp_usd"].fillna(0.0)).groupby("yymm")["exp_usd"].sum()
+        for ym in recent:
+            if ym in tsum.index and tsum[ym] > 0:
+                diff = abs(float(monthly.loc[ym, "exp_usd"]) - float(tsum[ym])) / float(tsum[ym]) * 100
+                if diff > 1.0:
+                    total_mismatch.append({"yymm": ym, "diff_pct": round(diff, 2)})
+        if total_mismatch:
+            log.warning("수출입 총계 행과 국가 합산 불일치: %s", total_mismatch)
+    if bal_mismatch:
+        log.warning("무역수지가 (수출 − 수입)과 다른 행: %d건", bal_mismatch)
     cur = monthly.loc[latest]
     prev_m = monthly.loc[_prev_year(latest)] if _prev_year(latest) in monthly.index and monthly.loc[_prev_year(latest), "exp_usd"] > 0 else None
     peak = float(monthly.loc[recent, "exp_usd"].max()) or 1.0
@@ -145,11 +169,22 @@ def build_cards(rows: list[dict], hs_codes: list[str]) -> dict:
 
     period_text = f"{int(recent[0][:4])}.{int(recent[0][4:])}~{int(latest[:4])}.{int(latest[4:])}"
     cleaning_text = f"결측 {cleaning['coerced'] + na_amt}건 보정 · 제외 {cleaning['dropped']}행 · 미보고 {cleaning['filled_grid']}칸 0 처리"
+    if bal_mismatch:
+        cleaning_text += f" · 수지 불일치 {bal_mismatch}행"
+    if total_mismatch:
+        cleaning_text += f" · 총계 불일치 {len(total_mismatch)}개월"
+    validation = {
+        "ok": not total_mismatch and bal_mismatch == 0,
+        "total_rows": int(len(total_rows)),            # 관세청 '전체' 행 수 (0이면 비교 불가)
+        "total_mismatch_months": total_mismatch,        # 국가 합산과 1% 넘게 다른 달
+        "balance_mismatch_rows": bal_mismatch,          # 수지 ≠ 수출 − 수입 인 행 수
+    }
     return {
         "ok": True,
         "hs_codes": hs_codes,
         "period_text": period_text,
         "cleaning": cleaning | {"na_amount": na_amt, "text": cleaning_text},
+        "validation": validation,
         "summary": summary,
         "countries": countries,
         "products": products,

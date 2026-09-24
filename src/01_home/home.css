@@ -45,6 +45,8 @@
 .home-rate__change { font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); font-variant-numeric: tabular-nums; color: var(--color-text-secondary); }
 .home-rate__change.is-up { color: var(--color-up); }
 .home-rate__change.is-down { color: var(--color-down); }
+.home-rate__warn { display: inline-grid; place-items: center; width: 14px; height: 14px; margin-left: 4px; border-radius: 50%; background: var(--color-warning-soft); color: var(--color-warning); font-size: 10px; font-weight: var(--font-weight-extrabold); line-height: 1; vertical-align: 1px; }
+.home-rate.is-warn .home-rate__rate { color: var(--color-warning); }
 .home-rates__meta { font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
 /* 환율 카드 자체가 좁으면(창이 작거나 태블릿) 3칸 × 2줄로 — 화면 폭이 아니라 카드 폭 기준 */
 @container home-rates (max-width: 600px) {

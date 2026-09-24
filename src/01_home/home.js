@@ -45,8 +45,13 @@
     box.innerHTML = r.items.map(function (it) {
       var unit = it.unit === 100 ? " <small>(100)</small>" : "";
       var title = it.name + (it.unit === 100 ? " · 100" + it.code + " 기준" : " · 1" + it.code + " 기준");
-      return '<div class="home-rate" title="' + esc(title) + '">' +
-        '<span class="home-rate__code">' + esc(it.code) + unit + "</span>" +
+      var warn = "";
+      if (it.warning) { /* 전일 대비 급변 — 서버 RATE_WARN_PCT 기준 (명세 13-1) */
+        title += " · 전일 대비 " + it.change_text + " 변동, 값 확인 필요";
+        warn = '<span class="home-rate__warn" role="img" aria-label="이상값 경고">!</span>';
+      }
+      return '<div class="home-rate' + (it.warning ? " is-warn" : "") + '" title="' + esc(title) + '">' +
+        '<span class="home-rate__code">' + esc(it.code) + unit + warn + "</span>" +
         '<span class="home-rate__value"><span class="home-rate__rate">' + esc(it.rate_text) + "</span>" +
         '<span class="home-rate__change is-' + esc(it.direction) + '">' + arrow(it.direction) + " " + esc(it.change_text) + "</span></span></div>";
     }).join("");
