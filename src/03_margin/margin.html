@@ -380,10 +380,10 @@
                   <div class="margin-settle__row">
                     <div class="margin-settle__input">{{ field('fx-settle-input', 1400, '원', '결제 시점 환율', 1) }}</div>
                     <span class="margin-settle__chg" id="margin-fx-chg"></span>
-                    <button type="button" class="btn btn-ghost btn-sm" id="margin-fx-reset">견적 환율로</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="margin-fx-reset">견적 환율로</button>
                   </div>
                   <div class="margin-settle__slider">
-                    <input type="range" id="margin-fx-settle" min="1200" max="1600" step="5" value="1400" aria-label="결제 시점 환율 조절">
+                    <input type="range" class="margin-fxrange" id="margin-fx-settle" min="1200" max="1600" step="5" value="1400" aria-label="결제 시점 환율 조절">
                     <div class="margin-settle__ends"><span id="margin-fx-min-l"></span><span id="margin-fx-max-l"></span></div>
                   </div>
                 </div>
@@ -391,17 +391,17 @@
               <p class="form-error" id="margin-fx-err" role="alert"></p>
 
               <div class="margin-fxdash__kpis">
-                <div class="stat-tile">
+                <div class="margin-kpi">
                   <span class="stat-tile__label">실현 영업마진</span>
                   <span class="stat-tile__value" id="margin-fx-kpi-m"></span>
                   <span id="margin-fx-kpi-m-note"></span>
                 </div>
-                <div class="stat-tile">
+                <div class="margin-kpi">
                   <span class="stat-tile__label">환차손익 (주문 전체)</span>
                   <span class="stat-tile__value" id="margin-fx-kpi-pnl"></span>
                   <span class="text-caption" id="margin-fx-kpi-pnl-note"></span>
                 </div>
-                <div class="stat-tile">
+                <div class="margin-kpi">
                   <span class="stat-tile__label">방어 단가</span>
                   <span class="stat-tile__value" id="margin-fx-kpi-need"></span>
                   <span class="text-caption" id="margin-fx-kpi-need-note"></span>

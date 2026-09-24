@@ -607,8 +607,12 @@
     const m2At = (fx) => 1 - P2 / rev(fx);
     const fxBE = base / fobU, fxMin = P2 / (1 - mn) / fobU, fxGoal = P2 / (1 - g) / fobU;
 
-    /* Slider 범위: 견적 환율 ±15% */
-    const lo = Math.round((p.fx * 0.85) / 10) * 10, hi = Math.round((p.fx * 1.15) / 10) * 10;
+    /* Slider 범위 — 실무 기준: 견적~결제(1~3개월) 원/달러 변동을 보수적으로 본 견적 환율 ±10%.
+       최소·목표 마진 환율이 그 밖이면 보이도록 넓히되 ±20%까지만. 손익분기 환율은 현실적 변동폭 밖이라 칩으로만 표시 */
+    const FX_BAND = 0.10, FX_BAND_MAX = 0.20;
+    const r10 = (v) => Math.round(v / 10) * 10;
+    const lo = r10(Math.max(p.fx * (1 - FX_BAND_MAX), Math.min(p.fx * (1 - FX_BAND), fxMin * 0.97)));
+    const hi = r10(Math.min(p.fx * (1 + FX_BAND_MAX), Math.max(p.fx * (1 + FX_BAND), fxGoal * 1.03)));
     const sl = $("fx-settle");
     sl.min = lo;
     sl.max = hi;
@@ -643,6 +647,13 @@
     $("fx-kpi-need").textContent = usd(needU);   // 이 환율에서 목표 영업마진을 지키려면 바이어에게 요구할 단가
     const gap = needU - contract;
     $("fx-kpi-need-note").textContent = `목표 마진 ${pctS(g)} 유지 · ` + (gap > 0.005 ? `현재보다 +${usd(gap)}` : "현재 단가로 달성");
+
+    /* Slider 트랙 = 위험/안전 게이지: 손익분기·최소·목표 환율 구간을 판정 색으로 칠함 (손잡이가 현재 환율 핀) */
+    const at = (v) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100)).toFixed(2) + "%";
+    /* 3구간 단색: 최소 마진 미만 연한 빨강 / 최소~목표 주황 / 목표 이상 초록 */
+    const stops = [["bad", lo, fxMin], ["warn", fxMin, fxGoal], ["good", fxGoal, hi]]
+      .map(([k, a, b]) => `var(--margin-fxrange-${k}) ${at(a)} ${at(b)}`);
+    sl.style.setProperty("--margin-fxrange-bg", `linear-gradient(to right, ${stops.join(", ")})`);
 
     /* 마지노선 환율 칩 (구 '버틸 수 있는 환율') — 견적 환율에서 이미 미달이면 is-miss */
     const chip = (k, v, sw) => `<span class="margin-chip${v >= p.fx ? " is-miss" : ""}"><i class="margin-swatch ${sw}"></i>${k} <b>${Math.round(v).toLocaleString()}원</b></span>`;

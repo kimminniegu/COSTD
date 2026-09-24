@@ -13,6 +13,10 @@
   --margin-zone-warn-soft: var(--color-warning-soft);
   --margin-zone-bad: var(--color-danger);
   --margin-zone-bad-soft: var(--color-danger-soft);
+  /* 결제 환율 게이지 트랙 전용 3색 — 맑은 빨강 / 주황 / 초록 (각 상태 토큰을 밝고 선명하게, 상대 색 문법) */
+  --margin-fxrange-bad: oklch(from var(--color-danger) calc(l + 0.06) calc(c + 0.02) h);
+  --margin-fxrange-warn: oklch(from var(--color-warning) calc(l + 0.14) calc(c + 0.04) h);
+  --margin-fxrange-good: oklch(from var(--color-success) calc(l + 0.12) calc(c + 0.03) h);
 }
 
 /* 페이지 머리 ↔ 본문 간격 (공통 72px은 입력형 화면에 넓어서 이 페이지만 줄임) */
@@ -247,6 +251,37 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 .margin-page .margin-settle__slider input[type="range"] { margin: 0; }
 .margin-settle__ends { display: flex; justify-content: space-between; font-size: var(--font-size-caption); color: var(--color-text-placeholder); }
 .margin-fxdash__kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+.margin-kpi { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4) var(--space-5); background: var(--color-background); border-radius: var(--radius-lg); }
+/* 결제 환율 Slider = 위험/안전 게이지 (트랙 색은 margin.js 가 --margin-fxrange-bg 로 지정) */
+.margin-page input[type="range"].margin-fxrange {
+  -webkit-appearance: none;
+  appearance: none;
+  height: var(--space-2);
+  margin: var(--space-2) 0;
+  border-radius: var(--radius-pill);
+  background: var(--margin-fxrange-bg, var(--color-background));
+  cursor: pointer;
+}
+.margin-fxrange::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: var(--space-5);
+  height: var(--space-5);
+  border: var(--space-1) solid var(--color-surface-inverse);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card-hover);
+}
+.margin-fxrange::-moz-range-thumb {
+  width: var(--space-5);
+  height: var(--space-5);
+  box-sizing: border-box;
+  border: var(--space-1) solid var(--color-surface-inverse);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card-hover);
+}
+.margin-fxrange::-moz-range-track { background: transparent; }
+.margin-fxrange:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
 .margin-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .margin-chips__label { font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
 .margin-chip { display: inline-flex; align-items: center; gap: var(--space-1); padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill); background: var(--color-surface-muted); font-size: var(--font-size-caption); color: var(--color-text-secondary); white-space: nowrap; }

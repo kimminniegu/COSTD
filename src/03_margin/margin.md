@@ -108,7 +108,7 @@
 | 수량별 단가 | 견적 수량 추가 | `margin-qty-add` + `margin-qty-add-btn` (Enter 가능) | 비어 있음 |
 | 수량별 단가 | 가격표 행 (수량, 물류비 총액) | 표 안 입력 | 3천·5천·1만·2만·5만개 |
 | 환율 영향 | 계약 단가 / 현재 견적 단가 사용 | `margin-fx-contract` / `margin-fx-use-quote` | 체크(견적 단가 연동) |
-| 환율 영향 | 결제 시점 환율 (직접 입력 / Slider, 양방향 연동) | `margin-fx-settle-input` / `margin-fx-settle` | 기준 환율, 범위 ±15% |
+| 환율 영향 | 결제 시점 환율 (직접 입력 / Slider, 양방향 연동) | `margin-fx-settle-input` / `margin-fx-settle` | 기준 환율, 범위 ±10% (최소·목표 환율 포함, 최대 ±20%) |
 
 ### 6.3 견적서 PDF 팝업 (`#margin-quote-modal`)
 
@@ -225,11 +225,12 @@ FOB 달러 단가  fobU = 계약단가 (CIF면 ÷ (1 + 1.1 × 보험요율), CFR
 방어 단가      need = P2 / (1 − toSale(목표)) / f  (+ CFR·CIF 해상운임/수량, CIF 보험)   ← 결제 환율 f에서 목표 영업마진을 지키려면 바이어에게 요구할 USD 단가
 ```
 
-- Slider 범위는 기준 환율의 ±15%(10원 단위), 시나리오 표는 −10% / −5% / 0 / +5% / +10%입니다.
+- Slider 범위(실무 기준): 견적~결제 1~3개월 사이 원/달러 변동을 보수적으로 본 **기준 환율 ±10%**. 최소·목표 마진 환율이 그 밖이면 `× 0.97` / `× 1.03` 여유를 두고 포함하도록 넓히되 **±20%까지만**, 10원 단위(step 5원). 손익분기 환율은 현실적 변동폭 밖인 경우가 많아 범위에 넣지 않고 칩으로만 보여줍니다. 시나리오 표는 −10% / −5% / 0 / +5% / +10%입니다.
 - **① 상단 Card — 입력과 결과를 한 Card 안에서**
   1. 입력: 왼쪽 계약 단가(+ 현재 견적 단가 사용), 오른쪽 결제 시점 환율 입력칸 + 변동률 + `견적 환율로` 버튼, 그 바로 아래 Slider와 범위 끝 값.
-     입력칸에 숫자를 넣으면 즉시 `st.fxSettle`에 반영되어 Slider·결과·시나리오 표가 다시 그려지고, Slider를 움직이면 입력칸 값이 바뀝니다. 입력 중(포커스)에는 입력칸을 덮어쓰지 않고, 입력을 마치면(`change`) ±15% 범위 안 값으로 정리합니다.
-  2. 핵심 결과 3분할(`.stat-tile` 3개):
+     입력칸에 숫자를 넣으면 즉시 `st.fxSettle`에 반영되어 Slider·결과·시나리오 표가 다시 그려지고, Slider를 움직이면 입력칸 값이 바뀝니다. 입력 중(포커스)에는 입력칸을 덮어쓰지 않고, 입력을 마치면(`change`) Slider 범위 안 값으로 정리합니다.
+     Slider 트랙이 곧 **위험/안전 게이지**입니다. margin.js가 `--margin-fxrange-bg`로 트랙을 최소 · 목표 환율 경계로 나눠 칠하고, 손잡이가 현재 결제 환율 위치를 가리킵니다. 트랙은 3구간 단색입니다: 최소 마진 환율 미만 빨강(`--margin-fxrange-bad`, 손익분기 미만 포함) / 최소~목표 주황(`--margin-fxrange-warn`) / 목표 이상 초록(`--margin-fxrange-good`). 세 색은 `.margin-page`에서 `--color-danger / -warning / -success`의 밝기·채도만 올린 맑은 색(상대 색 문법 `oklch(from …)`)입니다. (별도 게이지 막대 없음)
+  2. 핵심 결과 3분할(연한 박스 `.margin-kpi` 3개, 배경 `--color-background`):
      - 실현 영업마진 `m2(f)` + 판정 Badge(목표 마진 유지 / 최소 마진 이상 / 최소 마진 미달 / 영업 손실)
      - 환차손익 총액 `pnl` — 이익 `text-up`(빨강 ▲ +), 손실 `text-down`(파랑 ▼ −), 0이면 `±0원`. 보조 줄에 견적 환율 대비 개당 금액.
      - 방어 단가 `need` — 보조 줄에 `목표 마진 20% 유지 · 현재보다 +$0.16` 또는 `현재 단가로 달성`.
@@ -299,7 +300,7 @@ Best regards,
 | 견적 계산 | 인코텀즈 단가(`kpi-value-lg`), 원화 단가·주문 총액, 할인/할증/MOQ Badge, 구성 막대, Stat Tile 4개, 항목별 원가 표, (발행 옵션 체크 시) 내부·대외 비교 표 2개, 견적서 미리보기 |
 | 역제안 분석 | 판정 박스(판정 Badge + R&R Badge + 제목 + 설명), Gauge, (orange·red) VE Card: 체크리스트·개선 판정 박스·개선 Gauge, 조정 결과 박스(+ R&R Badge), 대응 방안 카드 2~4개 |
 | 수량별 단가 | 요약 박스, 수량별 단가표: 수량 · 물류비 총액(+ 개당 물류) · 단가 막대(+ 현재 주문/할인/할증 · 주문 총액) · 영업마진 Badge · 삭제 |
-| 환율 영향 | 상단 Card: 결제 환율 입력·변동률·Slider, Stat Tile 3개(실현 영업마진+Badge · 환차손익 총액 · 방어 단가), 마지노선 환율 칩 3개 / 하단 Card: 환율 변동 시나리오 표 |
+| 환율 영향 | 상단 Card: 결제 환율 입력·변동률·Slider(트랙 = 위험/안전 구간 색, 손잡이 = 현재 환율), 결과 박스 3개(실현 영업마진+Badge · 환차손익 총액 · 방어 단가), 마지노선 환율 칩 3개 / 하단 Card: 환율 변동 시나리오 표 |
 | 가격표 복사 | 영문 텍스트: `Price list (FOB Korea, USD per pc)` / `MOQ: 5,000 pcs` / `10,000 pcs : $2.15 (volume discount 3%)` … |
 | 영문 이메일 제안문 복사 | 7.8의 커버레터 텍스트 (Subject 포함) |
 | 견적서 PDF (A4 1장) | 회사명·연락처 / QUOTATION / 고객사·견적번호·일자·유효기간·담당자 / 거래 조건(Price Term·Currency·Payment·MOQ) / 품목 표 / 합계·영문 금액(SAY US DOLLARS … ONLY.) / 오픈북형 원가 구성 / Terms & Conditions / 비고 / 서명란 / 쪽 번호 |
@@ -364,7 +365,7 @@ Best regards,
 | 마진 직접 조정에 100% 이상(마진율 방식) / 숫자 아님 | 입력 무시 |
 | 환율 탭 계약 단가 미입력 | 상단 Card `#margin-fx-err`에 "계약 단가를 입력하세요.", 결과 갱신 중단 |
 | 결제 시점 환율 입력이 비었거나 0 이하 | 값 반영 안 함, 입력을 마치면 현재 결제 환율로 되돌림 |
-| 결제 시점 환율이 ±15% 범위 밖 | 범위 끝 값으로 계산하고 입력을 마치면 그 값으로 표시 |
+| 결제 시점 환율이 Slider 범위 밖 | 범위 끝 값으로 계산하고 입력을 마치면 그 값으로 표시 |
 | 가격표 수량·물류비 ≤ 0 | 값 반영 안 함. 행은 최소 1개 유지 (1개 남으면 삭제 버튼 비활성) |
 | 견적 수량 추가: 빈 값·0 이하 / 이미 있는 수량 | 입력칸 아래 `.form-error` "0보다 큰 수량을 입력하세요." / "10,000개는 이미 표에 있어요." |
 | MOQ·할증률 음수 | 값 반영 안 함 |
@@ -395,7 +396,7 @@ Best regards,
           │    └ 견적서: 형식 · 견적서 PDF / .form-check#margin-abs-on / .margin-abs-box(hidden) / 미리보기
           ├─ .tab-panel#margin-view-reverse : 목표가·판정 / Gauge / VE Card#margin-ve-card(hidden) / 마진 직접 조정 / 대응 방안
           ├─ .tab-panel#margin-view-tier    : 한 줄 입력(MOQ · MOQ 미만 주문 · 할증률 · 견적 수량 추가, 모두 44px) / 한 줄 요약 / 수량별 단가표 Card(범례 · 가격표 복사 · 영문 이메일 제안문 복사, table.margin-qtable)
-          └─ .tab-panel#margin-view-fx      : ① .card > .margin-fxdash(입력 2열 → Stat Tile 3분할 → .margin-chips) / ② .card(환율 변동 시나리오 표)
+          └─ .tab-panel#margin-view-fx      : ① .card > .margin-fxdash(입력 2열 (Slider = input.margin-fxrange 게이지) → .margin-kpi 3분할 → .margin-chips) / ② .card(환율 변동 시나리오 표)
 .modal-backdrop#margin-quote-modal > .modal.modal-lg  (우리 회사 / 고객사 / 견적 조건 / 완료 안내 .alert / 영문 이메일 제안문 복사 · 닫기 · PDF 다운로드)
 ```
 
