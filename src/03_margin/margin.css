@@ -217,7 +217,21 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 /* 상단 입력 + 판정 (역제안 / 수량별 / 환율) */
 .margin-head { display: grid; gap: var(--space-4); align-items: stretch; }
 .margin-head--reverse { grid-template-columns: 200px 150px minmax(0, 1fr); }
-.margin-head--tier { grid-template-columns: 180px 220px minmax(0, 1fr); }
+/* 수량별 단가 머리: 2×2 입력 + 요약 (모든 입력 60px 높이로 맞춤) */
+/* 수량별 단가 머리: 입력 4개를 한 줄(44px)로, 요약은 그 아래 한 줄 */
+.margin-head--tier { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr) minmax(0, 0.7fr) minmax(0, 1.4fr); gap: var(--space-3); align-items: end; }
+.margin-head--tier .form-group { gap: var(--space-1); }
+.margin-head--tier .margin-verdict { grid-column: 1 / -1; }
+.margin-head__err { grid-column: -2 / -1; }
+.margin-head__err { margin-top: calc(var(--space-2) * -1); }
+.margin-seg--block { display: flex; width: 100%; height: 44px; }
+.margin-seg--block .tab { flex: 1; font-size: var(--font-size-label); }
+.margin-head .is-disabled .margin-field { opacity: 0.45; }
+.margin-qty-add { display: flex; gap: var(--space-2); }
+.margin-qty-add .margin-field { flex: 1; min-width: 0; }
+.margin-qty-add .btn { flex-shrink: 0; height: 44px; }
+.margin-tier-summary.margin-verdict { flex-direction: row; flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: var(--space-1) var(--space-3); padding: var(--space-3) var(--space-4); }
+.margin-tier-summary .margin-verdict__title { font-size: var(--font-size-sub); }
 .margin-head--fx { grid-template-columns: 200px minmax(0, 1.1fr) minmax(0, 1fr); }
 .margin-head .form-check { margin-top: var(--space-1); font-size: var(--font-size-label); }
 .margin-head .input-group input { width: 100%; }
@@ -256,11 +270,31 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 
 /* 수량별 단가 — 표 안 입력 */
 .margin-page .table tr.is-off td { color: var(--color-text-placeholder); }
-.margin-tag { display: block; font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
-.margin-tag.is-now { color: var(--color-primary); }
-.margin-tag.is-under { color: var(--color-warning); }
-.margin-w-qty { width: 116px; }
-.margin-w-logi { width: 140px; margin-left: auto; }
+.margin-w-qty { width: 100px; }
+.margin-w-logi { width: 124px; margin-left: auto; }
+
+/* 수량별 단가표 — 단가 칸 안의 가로 막대 (차트 + 가격표 통합) */
+.margin-qtable td { vertical-align: top; }
+.margin-qtable thead th { vertical-align: middle; }
+/* 표 안 숫자 입력은 스핀 버튼을 숨겨 좁은 칸에서도 숫자가 잘리지 않게 */
+.margin-qtable input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.margin-qtable input[type="number"]::-webkit-inner-spin-button,
+.margin-qtable input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.margin-qtable__line { display: flex; align-items: center; gap: var(--space-2); min-height: 44px; }
+.margin-qtable__line.is-end { justify-content: flex-end; }
+.margin-qtable__line > .margin-qbar { flex: 1; min-width: 0; }
+.margin-qtable .btn-icon { width: 32px; height: 32px; }
+.margin-qtable__moq { flex-shrink: 0; padding: 2px var(--space-2); border-radius: var(--radius-pill); background: var(--color-primary-soft); color: var(--color-primary); font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); }
+.margin-qtable__price { width: 100%; min-width: 110px; }
+.margin-qtable__sub.margin-qtable__notes { display: flex; flex-wrap: wrap; gap: 0 var(--space-2); white-space: normal; }
+.margin-qtable__notes > * { white-space: nowrap; }
+.margin-qtable__sub { display: block; margin-top: 2px; font-size: var(--font-size-caption); color: var(--color-text-placeholder); white-space: nowrap; }
+.margin-qtable__sub .is-now { color: var(--color-primary); }
+.margin-qbar { display: grid; grid-template-columns: minmax(0, 1fr) 48px; align-items: center; gap: var(--space-2); }
+.margin-qbar__track { display: block; height: 12px; overflow: hidden; border-radius: var(--radius-pill); background: var(--color-background); }
+.margin-qbar__fill { display: block; height: 100%; border-radius: var(--radius-pill); transition: width var(--transition-base); }
+.margin-qbar b { font-size: var(--font-size-sub); font-weight: var(--font-weight-extrabold); color: var(--color-text-primary); text-align: right; font-variant-numeric: tabular-nums; }
+.margin-qbar__off { font-size: var(--font-size-label); font-weight: var(--font-weight-bold); color: var(--color-text-placeholder); }
 .margin-table-compact .margin-field .form-control { padding-left: var(--space-3); padding-right: 28px; }
 .margin-table-compact .margin-field__unit { right: var(--space-2); }
 
@@ -268,7 +302,6 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 .margin-chart svg { display: block; width: 100%; height: auto; }
 .margin-chart text { font-family: inherit; font-size: 13px; fill: var(--color-text-secondary); }
 .margin-chart .c-grid { stroke: var(--color-border); }
-.margin-chart .c-axis { stroke: var(--color-border-strong); }
 .margin-chart .c-ref { stroke: var(--color-text-inverse-secondary); }
 .margin-chart .c-now { stroke: var(--color-text-primary); }
 .margin-chart .c-main { fill: none; stroke: var(--color-primary-bright); }
@@ -276,12 +309,6 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 .margin-chart .c-dot { fill: var(--color-surface); stroke: var(--color-primary-bright); }
 .margin-chart .c-bubble { fill: var(--color-surface-inverse); }
 .margin-chart text.c-inv { fill: var(--color-text-inverse); font-weight: var(--font-weight-bold); }
-.margin-chart text.c-strong { fill: var(--color-text-primary); font-weight: var(--font-weight-bold); }
-.margin-chart text.c-value { fill: var(--color-text-primary); font-weight: var(--font-weight-extrabold); font-size: 15px; }
-.margin-chart text.c-muted { fill: var(--color-text-placeholder); }
-.margin-chart text.c-disc { fill: var(--color-primary); font-size: 12px; }
-.margin-chart text.c-sur { fill: var(--color-warning); font-size: 12px; }
-.margin-chart text.c-plain { fill: var(--color-text-placeholder); font-size: 12px; }
 .margin-chart .c-band-good { fill: var(--margin-zone-good-soft); }
 .margin-chart .c-band-caution { fill: var(--margin-zone-caution-soft); }
 .margin-chart .c-band-warn { fill: var(--margin-zone-warn-soft); }
@@ -292,16 +319,13 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 .margin-chart text.c-thr-good { fill: var(--margin-zone-good); stroke: none; font-weight: var(--font-weight-bold); }
 .margin-chart text.c-thr-warn { fill: var(--margin-zone-warn); stroke: none; font-weight: var(--font-weight-bold); }
 .margin-chart text.c-thr-bad { fill: var(--margin-zone-bad); stroke: none; font-weight: var(--font-weight-bold); }
-.margin-chart .c-bar-cur { fill: var(--color-primary-bright); }
-.margin-chart .c-bar-other { fill: var(--color-primary-light); }
-.margin-chart .c-hatch-bg { fill: var(--color-background); }
-.margin-chart .c-hatch-fg { fill: var(--color-text-inverse-secondary); }
 
 /* 본문 폭 기준 반응형 (design_system.md §7) */
 @container page (max-width: 880px) {
   .margin-layout { grid-template-columns: 1fr; }
   .margin-inputs { position: static; max-height: none; overflow: visible; }
-  .margin-head--reverse, .margin-head--tier, .margin-head--fx { grid-template-columns: 1fr 1fr; }
+  .margin-head--reverse, .margin-head--fx { grid-template-columns: 1fr 1fr; }
+  .margin-head--tier { grid-template-columns: 1fr 1fr; }
   .margin-head .margin-verdict { grid-column: 1 / -1; }
   .margin-two { grid-template-columns: 1fr; }
   .margin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }

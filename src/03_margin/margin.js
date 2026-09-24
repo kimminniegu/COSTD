@@ -697,7 +697,9 @@
   }
 
   function renderTier(p) {
-    $("sur-box").style.visibility = st.moqMode === "surcharge" ? "visible" : "hidden";
+    const surOn = st.moqMode === "surcharge";
+    $("moq-sur").disabled = !surOn;
+    $("sur-box").classList.toggle("is-disabled", !surOn);
     const rows = st.qtyRows.map((row, i) => ({ ...row, i })).sort((a, b) => a.q - b.q);
     const data = rows.map((row) => {
       const r = forward(p, { qty: row.q, logi: row.l });
@@ -713,55 +715,30 @@
       <p class="margin-verdict__title">${best ? `${best.q.toLocaleString()}개면 ${usd(best.r.usd)}` : ""}</p>
       <p class="margin-verdict__desc">${best && best.q !== st.moq ? `MOQ 단가보다 ${pct(1 - best.r.usd / moqRow.usd)} 낮아요 · 할인 후 영업마진 ${pct(best.r.m2after)}` : "가격표에서 가장 낮은 단가예요."}</p>`;
 
-    /* 차트 */
-    const W = 820, H = 230, L = 50, R = 12, T = 30, B = 46;
-    const n = data.length, slot = (W - L - R) / n, bw = Math.min(64, slot * 0.5);
-    const vals = data.map((x) => x.r.usd);
-    const y0 = Math.max(0, Math.floor(Math.min(...vals) * 0.85 * 10) / 10), y1 = Math.ceil(Math.max(...vals) * 1.06 * 10) / 10;
-    const Y = (v) => T + ((y1 - v) / (y1 - y0)) * (H - T - B);
-    let g = "";
-    const stp = y1 - y0 > 0.8 ? 0.2 : 0.1;
-    for (let v = Math.ceil(y0 / stp) * stp; v <= y1 + 1e-9; v += stp) {
-      g += `<line class="c-grid" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L - 8}" y="${Y(v) + 4}" text-anchor="end">$${v.toFixed(1)}</text>`;
-    }
-    let bars = "", moqX = null;
-    data.forEach((x, k) => {
-      const cx = L + slot * k + slot / 2, top = Y(x.r.usd), h = H - B - top;
-      const cur = x.q === p.qty;
-      const fill = x.r.belowMoq ? 'fill="url(#margin-hatch)"' : `class="${cur ? "c-bar-cur" : "c-bar-other"}"`;
-      if (moqX === null && !x.r.belowMoq && k > 0) moqX = L + slot * k;
-      const noteCls = x.r.d > 0 ? "c-disc" : x.r.sur > 0 ? "c-sur" : "c-plain";
-      const note = x.r.d > 0 ? "할인 −" + Math.round(x.r.d * 100) + "%" : x.r.sur > 0 ? "할증 +" + Math.round(x.r.sur * 100) + "%" : x.off ? "MOQ 미만" : "정가";
-      bars += `<rect x="${cx - bw / 2}" y="${top}" width="${bw}" height="${h}" rx="8" ${fill}/>
-        <text class="${x.off ? "c-muted" : "c-value"}" x="${cx}" y="${top - 8}" text-anchor="middle">${x.off ? "불가" : usd(x.r.usd)}</text>
-        <text class="c-strong" x="${cx}" y="${H - B + 20}" text-anchor="middle">${x.q.toLocaleString()}개</text>
-        <text class="${noteCls}" x="${cx}" y="${H - B + 38}" text-anchor="middle">${note}</text>`;
-    });
-    const moqLine = moqX !== null
-      ? `<line class="c-now" x1="${moqX}" x2="${moqX}" y1="${T - 18}" y2="${H - B}" stroke-dasharray="4 4"/>
-        <rect class="c-bubble" x="${moqX - 34}" y="${T - 28}" width="68" height="20" rx="6"/><text class="c-inv" x="${moqX}" y="${T - 14}" text-anchor="middle">MOQ</text>`
-      : "";
-    $("q-chart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="수량별 단가 막대 그래프">
-      <defs><pattern id="margin-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect class="c-hatch-bg" width="6" height="6"/><rect class="c-hatch-fg" width="3" height="6"/></pattern></defs>
-      ${g}<line class="c-axis" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/>${bars}${moqLine}</svg>`;
-
-    /* 가격표 */
-    $("tier-table").innerHTML = `<thead><tr><th>수량</th><th class="is-numeric">물류비 총액</th><th class="is-numeric">개당 물류</th><th class="is-numeric">${p.inco} 단가</th><th class="is-numeric">영업마진</th><th class="is-numeric">주문 총액</th><th></th></tr></thead><tbody>`
+    /* 수량별 단가표 — 가격표 행마다 단가 막대를 함께 그립니다 (막대 길이: 가장 싼 단가 ~ 가장 비싼 단가 구간 기준) */
+    const vals = valid.map((x) => x.r.usd);
+    const vMin = vals.length ? Math.min(...vals) : 0, vMax = vals.length ? Math.max(...vals) : 1;
+    const barW = (v) => (vMax - vMin < 1e-9 ? 100 : 35 + ((v - vMin) / (vMax - vMin)) * 65);
+    $("tier-table").innerHTML = `<thead><tr><th>수량</th><th class="is-numeric">물류비 총액</th><th>${p.inco} 단가</th><th class="is-numeric">영업마진</th><th></th></tr></thead><tbody>`
       + data.map((x) => {
-        const r = x.r;
+        const r = x.r, now = x.q === p.qty;
         const zz = r.m2after < p.m2min - 1e-9 ? "red" : r.m2after < p.m2 - 1e-9 ? "yellow" : "green";
-        const tag = x.q === p.qty ? '<span class="margin-tag is-now">현재</span>'
-          : x.q === st.moq ? '<span class="margin-tag">MOQ</span>'
-          : r.belowMoq ? '<span class="margin-tag is-under">MOQ 미만</span>' : "";
-        const adj = r.d > 0 ? `<span class="margin-tag text-down">할인 −${pct(r.d)}</span>` : r.sur > 0 ? `<span class="margin-tag text-up">할증 +${pct(r.sur)}</span>` : "";
-        return `<tr class="${x.q === p.qty ? "is-active" : ""} ${x.off ? "is-off" : ""}">
-          <td><div class="margin-field margin-w-qty"><input class="form-control form-control-sm" type="number" step="1000" value="${x.q}" data-qi="${x.i}" data-f="q" aria-label="수량"><span class="margin-field__unit">개</span></div></td>
-          <td class="is-numeric"><div class="margin-field margin-w-logi"><input class="form-control form-control-sm" type="number" step="100000" value="${x.l}" data-qi="${x.i}" data-f="l" aria-label="물류비 총액"><span class="margin-field__unit">원</span></div></td>
-          <td class="is-numeric">${won(r.L)}</td>
-          <td class="is-numeric"><b>${x.off ? "주문 불가" : usd(r.usd)}</b>${tag}${adj}</td>
-          <td class="is-numeric">${x.off ? "-" : badge(zz, pct(r.m2after))}</td>
-          <td class="is-numeric">${x.off ? "-" : "$" + Math.round((Math.round(r.usd * 100) / 100) * x.q).toLocaleString()}</td>
-          <td><button type="button" class="btn btn-ghost btn-icon" data-qdel="${x.i}" aria-label="수량 삭제">${ICON_X}</button></td></tr>`;
+        const fill = r.belowMoq ? "is-hatch" : now ? "is-cur" : "is-other";
+        const pctS = (v) => Math.round(v * 1000) / 10 + "%";   // 표 안에서는 10.0% → 10%
+        const notes = [now ? '<b class="is-now">현재 주문</b>' : ""];
+        if (r.d > 0) notes.push(`<span class="text-down">할인 −${pctS(r.d)}</span>`);
+        if (r.sur > 0) notes.push(`<span class="text-up">할증 +${pctS(r.sur)}</span>`);
+        if (!x.off) notes.push(`<span>총 $${Math.round((Math.round(r.usd * 100) / 100) * x.q).toLocaleString()}</span>`);
+        const price = x.off
+          ? '<span class="margin-qbar__off">MOQ 미만 · 주문 불가</span>'
+          : `<div class="margin-qbar"><span class="margin-qbar__track"><span class="margin-qbar__fill ${fill}" style="width:${barW(r.usd)}%"></span></span><b>${usd(r.usd)}</b></div>`;
+        const moqTag = x.q === st.moq ? '<span class="margin-qtable__moq">MOQ</span>' : "";
+        return `<tr class="${now ? "is-active" : ""} ${x.off ? "is-off" : ""}">
+          <td><div class="margin-qtable__line"><div class="margin-field margin-w-qty"><input class="form-control form-control-sm" type="number" step="1000" value="${x.q}" data-qi="${x.i}" data-f="q" aria-label="수량"><span class="margin-field__unit">개</span></div>${moqTag}</div></td>
+          <td class="is-numeric"><div class="margin-qtable__line is-end"><div class="margin-field margin-w-logi"><input class="form-control form-control-sm" type="number" step="100000" value="${x.l}" data-qi="${x.i}" data-f="l" aria-label="물류비 총액"><span class="margin-field__unit">원</span></div></div><span class="margin-qtable__sub">개당 ${won(r.L)}</span></td>
+          <td class="margin-qtable__price"><div class="margin-qtable__line">${price}</div><span class="margin-qtable__sub margin-qtable__notes">${notes.filter(Boolean).join("")}</span></td>
+          <td class="is-numeric"><div class="margin-qtable__line is-end">${x.off ? "-" : badge(zz, pct(r.m2after))}</div></td>
+          <td><div class="margin-qtable__line"><button type="button" class="btn btn-ghost btn-icon" data-qdel="${x.i}" aria-label="수량 삭제"${st.qtyRows.length > 1 ? "" : " disabled"}>${ICON_X}</button></div></td></tr>`;
       }).join("") + "</tbody>";
     $("tier-table").querySelectorAll("input").forEach((e) => e.addEventListener("change", () => {
       const v = parseFloat(e.value);
@@ -790,11 +767,21 @@
     copyText($("copy-tier"), lines.join("\n"));
   });
 
-  $("add-qty").addEventListener("click", () => {
-    const last = st.qtyRows[st.qtyRows.length - 1];
-    st.qtyRows.push({ q: last.q * 2, l: Math.round((last.l * 1.7) / 100000) * 100000 });
+  /* 견적 수량 추가 — 물류비 총액은 가장 가까운 수량 행에서 (수량비)^0.75 로 약식 추정 (수량이 늘수록 개당 물류비가 줄어드는 관행) */
+  function addQty() {
+    const q = Math.round(num("qty-add"));
+    const err = $("qty-add-err");
+    if (isNaN(q) || q <= 0) { err.textContent = "0보다 큰 수량을 입력하세요."; $("qty-add").focus(); return; }
+    if (st.qtyRows.some((row) => row.q === q)) { err.textContent = `${q.toLocaleString()}개는 이미 표에 있어요.`; return; }
+    const near = st.qtyRows.reduce((a, b) => (Math.abs(Math.log(b.q / q)) < Math.abs(Math.log(a.q / q)) ? b : a));
+    st.qtyRows.push({ q, l: Math.max(10000, Math.round((near.l * Math.pow(q / near.q, 0.75)) / 10000) * 10000) });
+    err.textContent = "";
+    $("qty-add").value = "";
     render();
-  });
+  }
+  $("qty-add-btn").addEventListener("click", addQty);
+  $("qty-add").addEventListener("keydown", (e) => { if (e.key === "Enter") addQty(); });
+  $("qty-add").addEventListener("input", () => { $("qty-add-err").textContent = ""; });
 
   $("fx-settle").addEventListener("input", (e) => { st.fxSettle = +e.target.value; st.fxTouched = true; render(); });
   $("fx-reset").addEventListener("click", () => { st.fxTouched = false; render(); });

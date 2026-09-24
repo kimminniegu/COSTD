@@ -314,44 +314,50 @@
           <div class="card">
             <div class="card-body margin-head margin-head--tier">
               <div class="form-group">
-                <label class="form-label" for="margin-moq">MOQ (최소 주문수량)</label>
-                <div class="input-group"><input type="number" id="margin-moq" step="500" value="5000"><span class="input-group__suffix">개</span></div>
+                <label class="form-label" for="margin-moq">MOQ</label>
+                {{ field('moq', 5000, '개', 'MOQ (최소 주문수량)', 500) }}
               </div>
               <div class="form-group">
                 <span class="form-label">MOQ 미만 주문</span>
-                <div class="tabs margin-seg" id="margin-seg-moqmode" role="tablist" aria-label="MOQ 미만 주문 처리">
+                <div class="tabs margin-seg margin-seg--block" id="margin-seg-moqmode" role="tablist" aria-label="MOQ 미만 주문 처리">
                   <button type="button" class="tab is-active" data-k="surcharge" role="tab" aria-selected="true">소량 할증</button>
                   <button type="button" class="tab" data-k="block" role="tab" aria-selected="false">주문 불가</button>
                 </div>
-                <div class="margin-inline margin-inline--tight" id="margin-sur-box"><span class="text-caption">할증률</span><div class="margin-w-sm">{{ field('moq-sur', 10, '%', '소량 할증률', 1) }}</div></div>
               </div>
-              <div class="margin-verdict is-info" id="margin-tier-summary"></div>
+              <div class="form-group" id="margin-sur-box">
+                <label class="form-label" for="margin-moq-sur">할증률</label>
+                {{ field('moq-sur', 10, '%', '소량 할증률', 1) }}
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="margin-qty-add">견적 수량 추가</label>
+                <div class="margin-qty-add">
+                  {{ field('qty-add', '', '개', '견적 수량 추가', 1000) }}
+                  <button type="button" class="btn btn-soft btn-sm" id="margin-qty-add-btn">추가</button>
+                </div>
+              </div>
+              <p class="form-error margin-head__err" id="margin-qty-add-err" role="alert"></p>
+              <div class="margin-verdict is-info margin-tier-summary" id="margin-tier-summary"></div>
             </div>
           </div>
 
+          <!-- 수량별 단가: 막대(단가 칸 안)와 가격표를 한 Card 로 -->
           <div class="card">
             <div class="card-header">
-              <h3 class="card-title">수량별 단가</h3>
-              <div class="margin-legend margin-legend--zone">
-                <span><i class="margin-swatch is-cur"></i>현재 주문</span>
-                <span><i class="margin-swatch is-other"></i>다른 수량</span>
-                <span><i class="margin-swatch is-hatch"></i>MOQ 미만</span>
+              <div>
+                <h3 class="card-title">수량별 단가표</h3>
+                <div class="margin-legend">
+                  <span><i class="margin-swatch is-cur"></i>현재 주문</span>
+                  <span><i class="margin-swatch is-other"></i>다른 수량</span>
+                  <span><i class="margin-swatch is-hatch"></i>MOQ 미만</span>
+                </div>
               </div>
-            </div>
-            <div class="card-body"><div class="margin-chart" id="margin-q-chart"></div></div>
-          </div>
-
-          <div class="card">
-            <div class="card-header">
-              <h3 class="card-title">가격표</h3>
               <div class="row">
                 <button type="button" class="btn btn-secondary btn-sm" id="margin-copy-tier">바이어용 가격표 복사</button>
                 <button type="button" class="btn btn-secondary btn-sm" id="margin-copy-mail-tier">영문 이메일 제안문 복사</button>
-                <button type="button" class="btn btn-secondary btn-sm" id="margin-add-qty">수량 추가</button>
               </div>
             </div>
             <div class="card-body">
-              <div class="table-wrap"><table class="table margin-table-compact" id="margin-tier-table"></table></div>
+              <div class="table-wrap"><table class="table margin-table-compact margin-qtable" id="margin-tier-table"></table></div>
             </div>
           </div>
         </div>
