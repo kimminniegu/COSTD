@@ -53,7 +53,6 @@
 /* 환율 상세 모달 (4-4) */
 /* 한 화면에 들어가도록 두 열(왼쪽: 환율·송금·계산기 / 오른쪽: 추이·통계). 900px 이하에서 한 열 */
 .home-rated { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-6); }
-#home-rate-modal .modal-body { overflow: visible; }
 #home-rate-modal .modal-header { padding-top: var(--space-6); }
 #home-rate-modal .modal-body { padding-top: var(--space-4); padding-bottom: var(--space-4); }
 #home-rate-modal .modal-footer { padding-bottom: var(--space-6); }
@@ -94,10 +93,50 @@
 .home-rated__eq { padding-bottom: 10px; color: var(--color-text-placeholder); }
 .home-rated__input { text-align: right; font-variant-numeric: tabular-nums; }
 .home-rated__foot { justify-content: space-between; align-items: center; }
+.home-rated__foot-actions { display: flex; align-items: center; gap: var(--space-4); }
+
+/* 수출입 상세 모달 (5-9) */
+.home-tcard[data-trade-open] { cursor: pointer; transition: box-shadow var(--transition-base), transform var(--transition-base); }
+.home-tcard[data-trade-open]:hover, .home-tcard[data-trade-open]:focus-visible { box-shadow: var(--shadow-card-hover, 0 6px 20px rgba(25, 31, 40, 0.08)); }
+.home-traded { display: flex; flex-direction: column; gap: var(--space-4); transition: opacity var(--transition-base); }
+.home-traded.is-loading { opacity: 0.5; pointer-events: none; }
+#home-trade-modal .modal-body { padding-top: var(--space-4); padding-bottom: var(--space-4); }   /* 넘치면 공통 규칙대로 본문 스크롤 */
+#home-trade-modal .modal-header { padding-top: var(--space-6); }
+#home-trade-modal .modal-footer { padding-bottom: var(--space-6); }
+#home-trade-modal .modal-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-traded__controls { display: flex; flex-direction: column; gap: var(--space-2); padding-bottom: var(--space-3); border-bottom: 1px solid var(--color-border-strong); }
+.home-traded__ctl { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
+.home-traded__ctl-label { flex: none; font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
+.home-traded__ctl .home-chip { padding: 4px 10px; font-size: var(--font-size-caption); }
+.home-traded__select { height: 30px; padding: 0 28px 0 10px; font-size: var(--font-size-caption); max-width: 220px; background-size: 14px; }
+.home-traded__cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-6); }
+/* 아래(230행 부근)의 .home-tsum__kpis 기본 규칙보다 뒤에 오지 않으므로 선택자 특이도를 높여 덮어씀 */
+.home-traded .home-tsum__kpis.home-traded__kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: none; gap: var(--space-2); }
+.home-traded__kpis .home-tsum__kpi { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; row-gap: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
+.home-traded__kpis .home-tsum__label { grid-row: auto; }
+.home-traded__kpis .home-tsum__value { font-size: 1.0625rem; }
+.home-traded__kpis .home-rank__delta { text-align: left; }
+.home-traded__zero { stroke: var(--color-border-strong); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.home-traded__tabs { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.home-traded__tabs .tab { padding: 4px 10px; font-size: var(--font-size-caption); }
+.home-traded__tabs small { font-size: 0.6875rem; color: var(--color-text-placeholder); white-space: nowrap; }
+.home-traded__rank { margin: var(--space-2) 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.home-traded__row { display: grid; grid-template-columns: 16px minmax(0, 1.3fr) minmax(24px, 0.7fr) 68px 40px 52px; align-items: center; gap: var(--space-2); min-height: 22px; padding: 1px 4px; border-radius: 6px; font-size: var(--font-size-caption); font-variant-numeric: tabular-nums; }
+.home-traded__row.is-selected { background: var(--color-primary-soft); }
+.home-traded__no { color: var(--color-text-placeholder); font-size: 0.6875rem; text-align: right; }
+.home-traded__name { display: flex; align-items: baseline; gap: 4px; min-width: 0; font-weight: var(--font-weight-bold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-traded__name small { font-size: 0.625rem; font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
+.home-traded__val { text-align: right; font-weight: var(--font-weight-bold); white-space: nowrap; }
+.home-traded__share { text-align: right; color: var(--color-text-secondary); white-space: nowrap; }
+.home-traded__row .home-rank__bar { height: 6px; }
+.home-traded__row .home-rank__delta { font-size: 0.6875rem; }
+.home-traded__empty { padding: var(--space-6) 0; text-align: center; }
+@media (max-width: 900px) {
+  .home-traded__cols { grid-template-columns: minmax(0, 1fr); }
+}
 @media (max-width: 900px) {
   .home-rated { grid-template-columns: minmax(0, 1fr); }
   .home-rated__col:last-child { padding-left: 0; border-left: 0; padding-top: var(--space-4); border-top: 1px solid var(--color-border-strong); }
-  #home-rate-modal .modal-body { overflow-y: auto; }
 }
 @media (max-width: 640px) {
   .home-rated__tiles, .home-rated__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }

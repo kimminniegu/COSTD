@@ -444,6 +444,8 @@ def get_rate_detail(code: str, days: int = RATE_HISTORY_DAYS) -> dict | None:
 # ---------------------------------------------------------------------------
 TRADE_URL = os.getenv("TRADE_API_URL", "https://apis.data.go.kr/1220000/nitemtrade/getNitemtradeList")
 HS_CODES = list(dict.fromkeys(c.strip() for c in os.getenv("COSMETIC_HS_CODES", "3304").split(",") if c.strip()))  # 5-3 (중복 제거)
+TRADE_ALL_CODES = ["3303", "3304", "3305", "3307"]   # 상세 모달(5-9)에서 고를 수 있는 품목. 홈 카드는 HS_CODES 만 사용
+_trade_lock = threading.Lock()
 home_trade = importlib.import_module("src.01_home.home_trade")   # pandas 분석 (홈 왼쪽 카드 3개)
 
 
@@ -490,39 +492,84 @@ def _trade_fetch(start_yymm: str, end_yymm: str, hs_code: str) -> list[dict]:
     return rows
 
 
-def refresh_trade() -> None:
-    if not _is_stale("trade_fetched_at", TRADE_TTL):
-        return
-    now = _now()
-    # 관세청 API는 조회 기간이 12개월 이내여야 함(resultCode 99) → 최근 12개월 + 그 앞 12개월, 두 번 나눠 조회
+def _trade_windows(now: datetime) -> list[tuple[str, str]]:
+    """관세청 API는 조회 기간이 12개월 이내여야 함(resultCode 99) → 12개월씩 3구간 = 36개월 (24개월 + 전년 동기 비교용)
+    실적은 항상 전월까지만 발표되므로 전월을 기준으로 잡아 36개월이 온전히 비교 범위에 들어가게 합니다."""
     first = now.replace(day=1)
     def _ym(months_back: int) -> str:
         y, m = first.year, first.month - months_back
         while m <= 0:
             y, m = y - 1, m + 12
         return f"{y}{m:02d}"
-    windows = [(_ym(11), _ym(0)), (_ym(23), _ym(12)), (_ym(26), _ym(24))]   # 전년 동기간 비교용으로 약 27개월
+    return [(_ym(12), _ym(1)), (_ym(24), _ym(13)), (_ym(36), _ym(25))]
+
+
+def _fetch_trade_code(hs: str, now: datetime) -> bool:
+    """HS 4단위 코드 하나를 3구간으로 받아 저장. 성공하면 코드별 수집 시각(meta)을 남깁니다."""
+    rows = []
+    for start, end in _trade_windows(now):
+        try:
+            rows += _trade_fetch(start, end, hs)
+        except Exception as err:  # noqa: BLE001
+            log.warning("수출입 조회 실패(%s %s~%s): %s", hs, start, end, err)
+    if not rows:
+        return False
+    with _conn() as c:
+        c.executemany(
+            "INSERT OR REPLACE INTO trade_stats (yymm, hs_code, country, country_name, exp_usd, imp_usd, balance, fetched_at)"
+            " VALUES (?,?,?,?,?,?,?,?)",
+            [(r["yymm"], r["hs_code"], r["country"], r["country_name"], r["exp_usd"], r["imp_usd"], r["balance"], _iso(now))
+             for r in rows],
+        )
+    _meta_set(f"trade_fetched_at:{hs}", _iso(now))
+    log.info("수출입 수집 %s: %d행", hs, len(rows))
+    return True
+
+
+def refresh_trade() -> None:
+    if not _is_stale("trade_fetched_at", TRADE_TTL):
+        return
+    now = _now()
     ok = False
-    for hs in HS_CODES:
-        rows = []
-        for start, end in windows:
-            try:
-                rows += _trade_fetch(start, end, hs)
-            except Exception as err:  # noqa: BLE001
-                log.warning("수출입 조회 실패(%s %s~%s): %s", hs, start, end, err)
-        if not rows:
-            continue
-        with _conn() as c:
-            c.executemany(
-                "INSERT OR REPLACE INTO trade_stats (yymm, hs_code, country, country_name, exp_usd, imp_usd, balance, fetched_at)"
-                " VALUES (?,?,?,?,?,?,?,?)",
-                [(r["yymm"], r["hs_code"], r["country"], r["country_name"], r["exp_usd"], r["imp_usd"], r["balance"], _iso(now))
-                 for r in rows],
-            )
-        ok = True
+    with _trade_lock:
+        for hs in HS_CODES:
+            ok = _fetch_trade_code(hs, now) or ok
     if ok:
         _meta_set("trade_fetched_at", _iso(now))
     _meta_set("trade_last_try", _iso(now))
+
+
+def ensure_trade_codes(codes: list[str]) -> list[str]:
+    """상세 모달에서 고른 품목이 아직 없거나 오래됐으면 지금 받아옵니다 (요청 스레드에서 동기 실행). 받아온 코드 목록 반환"""
+    fetched = []
+    now = _now()
+    with _trade_lock:
+        for hs in codes:
+            if hs in TRADE_ALL_CODES and _is_stale(f"trade_fetched_at:{hs}", TRADE_TTL) and _is_stale(f"trade_last_try:{hs}", 600):
+                _meta_set(f"trade_last_try:{hs}", _iso(now))
+                if _fetch_trade_code(hs, now):
+                    fetched.append(hs)
+    return fetched
+
+
+def get_trade_detail(hs: str = "3304", months: int = 12, country: str = "", metric: str = "exp") -> dict | None:
+    """수출입 상세 (5-9). 품목 코드가 목록에 없으면 None"""
+    hs = (hs or "all").strip()
+    if hs != "all" and (not hs.isdigit() or hs[:4] not in TRADE_ALL_CODES or len(hs) not in (4, 6)):
+        return None
+    codes = TRADE_ALL_CODES if hs == "all" else [hs[:4]]
+    fetched = ensure_trade_codes(codes)
+    with _conn() as c:
+        rows = [dict(r) for r in c.execute(
+            "SELECT yymm, hs_code, country, country_name, exp_usd, imp_usd, balance FROM trade_stats WHERE "
+            + " OR ".join("hs_code LIKE ?" for _ in codes), [f"{cd}%" for cd in codes])]
+    try:
+        out = home_trade.build_detail(rows, hs=hs, months=months, country=country, metric=metric)
+    except Exception as err:  # noqa: BLE001
+        log.warning("수출입 상세 분석 실패: %s", err)
+        out = {"ok": False, "message": "수출입 실적을 분석하지 못했어요", "kstat_url": "https://stat.kita.net/"}
+    out["fetched_now"] = fetched
+    return out
 
 
 def _trade_monthly_totals() -> dict[str, dict]:

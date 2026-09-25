@@ -226,6 +226,21 @@ def home_api_rate_detail(code):
     return jsonify(detail)
 
 
+@app.route("/api/home/trade")
+@login_required
+def home_api_trade_detail():
+    """수출입 상세 (명세 5-9) — ?hs=3304|330499|all &months=3|6|12|24 &country=CN &metric=exp|imp|bal"""
+    detail = home_data.get_trade_detail(
+        hs=_arg("hs") or "3304",
+        months=request.args.get("months", 12, type=int),
+        country=_arg("country"),
+        metric=_arg("metric", ("exp", "imp", "bal")) or "exp",
+    )
+    if detail is None:
+        return jsonify({"ok": False, "error": "지원하지 않는 품목 코드예요"}), 400
+    return jsonify(detail)
+
+
 @app.route("/api/home/validation")
 @login_required
 def home_api_validation():
