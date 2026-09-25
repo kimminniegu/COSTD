@@ -15,6 +15,35 @@
 {% endblock %}
 
 {% block content %}
+{# ------------------------------------------------------------------
+   식약처 공식 조회 연결 (사전검토 보조) — 직접 검색 카드 · 일괄 결과 · 상세 Modal 이 같은 버튼을 쓴다.
+   실제 <a> 새 탭 열기(target=_blank, rel=noopener noreferrer). 검색어 전달 방식이 확인되지 않아 URL 에 쿼리를 붙이지 않으며,
+   성분 상세 페이지가 아니라 공식 조회 페이지(사용제한 원료 목록)로 이동한다. 링크 이동은 화면 상태(입력값·결과·선택)를 바꾸지 않는다.
+   일괄 결과 표의 행별 작은 텍스트 링크는 regulatory.js mfdsTextLink() 가 같은 주소로 만든다. #}
+{% set regulatory_mfds_url = "https://nedrug.mfds.go.kr/pbp/CCBDF01" %}
+{% macro regulatory_mfds_icon() -%}
+<svg class="regulatory-mfds-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M7 3.5H4a1.5 1.5 0 0 0-1.5 1.5v7A1.5 1.5 0 0 0 4 13.5h7a1.5 1.5 0 0 0 1.5-1.5V9M9.5 2.5h4v4M13.5 2.5 7.5 8.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+{%- endmacro %}
+{% macro regulatory_mfds_button() -%}
+<a class="btn btn-surface btn-sm regulatory-mfds-link" href="{{ regulatory_mfds_url }}" target="_blank" rel="noopener noreferrer">식약처에서 사용제한 원료 확인 {{ regulatory_mfds_icon() }}<span class="regulatory-sr-only">(새 탭에서 열림)</span></a>
+{%- endmacro %}
+{% macro regulatory_mfds_textlink() -%}
+<a class="regulatory-mfds-textlink" href="{{ regulatory_mfds_url }}" target="_blank" rel="noopener noreferrer">식약처에서 추가 확인 {{ regulatory_mfds_icon() }}<span class="regulatory-sr-only">(새 탭에서 열림)</span></a>
+{%- endmacro %}
+{# 공통 안내 패널 (직접 검색 결과 · 일괄 결과 아래 각 한 번). 중립 .alert 위에 흰색 보조 버튼 — 주요 실행 버튼(btn-primary)보다 낮은 강조도 #}
+{% macro regulatory_mfds_panel(id) -%}
+<div class="alert regulatory-mfds-notice" id="{{ id }}">
+  <div>
+    <p class="alert-title">식약처 공식 페이지에서 추가 확인</p>
+    <p class="regulatory-mfds-notice__text">이 결과는 해외영업 업무의 사전검토를 위한 참고 정보예요. 조회되지 않는 성분이나 상세 제한사항은 식약처에서 추가로 확인해 주세요. 최종 처방과 수출 대상국 규정의 적합성은 연구·규제 담당자의 검토가 필요해요.</p>
+    <div class="regulatory-mfds-notice__action">
+      {{ regulatory_mfds_button() }}
+      <span class="regulatory-mfds-notice__help">공식 페이지에서 성분명·영문명·CAS 번호로 직접 검색해 주세요. 식약처 사용제한 원료 조회만으로 다른 해외 시장의 적합성이 확정되지는 않아요.</span>
+    </div>
+  </div>
+</div>
+{%- endmacro %}
+
 <div class="page-header regulatory-page-header">
   <div>
     <h1 class="page-title">국가별 인허가 규제</h1>
@@ -323,6 +352,8 @@
         <p id="regulatory-result-error-reason">잠시 후 다시 시도해 주세요.</p>
         <p class="text-caption text-secondary" id="regulatory-result-error-kind"></p>
         <button type="button" class="btn btn-secondary" id="regulatory-result-retry">다시 시도</button>
+        {# 오류는 오류로 남기고(미등재·규제 없음으로 바꾸지 않음), 공식 페이지에서 직접 확인할 길만 둔다 #}
+        <p class="text-caption regulatory-mfds-inline">{{ regulatory_mfds_textlink() }}</p>
       </div>
     </div>
 
@@ -415,6 +446,9 @@
           <button type="button" class="btn btn-soft regulatory-single__detail-btn" data-modal-open="regulatory-detail-modal">규제 원문·출처 보기</button>
           <span class="regulatory-single__hint">규제 원문과 출처 등 상세 정보를 확인하세요.</span>
         </div>
+
+        {# 사전검토 안내 + 식약처 공식 조회 — 조회됨·일치 항목 없음·미확인 등 결과 상태와 무관하게 항상 표시 #}
+        <div class="mt-4">{{ regulatory_mfds_panel("regulatory-single-mfds") }}</div>
       </div>
     </div>
 
@@ -526,6 +560,9 @@
             </table>
           </div>
 
+          {# 결과 표 전체에 대한 공통 안내·버튼 — 한 번만. 조회되지 않은 행에는 regulatory.js 가 작은 텍스트 링크만 붙인다 #}
+          <div class="mt-4">{{ regulatory_mfds_panel("regulatory-batch-mfds") }}</div>
+
           <p class="text-caption text-secondary mt-4">
             조회 상태: 규제 정보 조회됨 · 규제 데이터 미확인(시장 항목 없음) · 규제 목록 미등재 · 판단 보류 · 성분 확인 필요 · 성분 매칭 실패 · 접근 제한 · API 오류 · 미조회.
             ‘미확인’과 ‘미등재’는 API 소스에 해당 항목이 없다는 뜻이며 허용·안전을 뜻하지 않아요.
@@ -601,6 +638,17 @@
             <dt>자체 검증일</dt><dd data-detail="verified-at">미실시</dd>
           </dl>
           <p class="text-caption text-secondary mt-2">데이터 확보·수집 시각은 법령 개정일이나 최신성 보장을 의미하지 않습니다. 시간은 한국시간(KST)입니다.</p>
+        </section>
+        {# 제한사항·출처를 확인한 뒤 이동하는 공식 조회 버튼 — 공통 안내는 결과 아래에 이미 있으므로 도움말과 버튼만.
+           위 ‘출처’ 항목의 공공데이터 안내 페이지 링크(data.go.kr)는 다른 주소라 그대로 둔다 #}
+        <section class="alert regulatory-mfds-notice regulatory-mfds-notice--compact" id="regulatory-detail-mfds">
+          <div>
+            <p class="alert-title">식약처 공식 페이지에서 추가 확인</p>
+            <div class="regulatory-mfds-notice__action">
+              {{ regulatory_mfds_button() }}
+              <span class="regulatory-mfds-notice__help">공식 페이지에서 성분명·영문명·CAS 번호로 직접 검색해 주세요. 식약처 사용제한 원료 조회만으로 다른 해외 시장의 적합성이 확정되지는 않아요.</span>
+            </div>
+          </div>
         </section>
       </div>
     </div>

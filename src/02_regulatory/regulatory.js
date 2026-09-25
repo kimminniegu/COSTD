@@ -719,6 +719,24 @@
     return badge(m.text, m.variant);
   }
 
+  /* 식약처 공식 조회 페이지(사용제한 원료) 작은 텍스트 링크 — 조회되지 않은 행·항목에만 붙인다.
+     regulatory.html 의 버튼·매크로와 같은 주소. 검색어 전달 방식이 확인되지 않아 쿼리를 붙이지 않고, 새 탭으로 열어 화면 상태를 유지한다.
+     상태(미등재·매칭 미확정·API 오류 등)는 기존 배지·사유 그대로 두고 링크만 더한다 */
+  var MFDS_RESTRICTION_URL = "https://nedrug.mfds.go.kr/pbp/CCBDF01";
+  function mfdsTextLink() {
+    var a = el("a", "regulatory-mfds-textlink", "식약처에서 추가 확인 ");
+    a.href = MFDS_RESTRICTION_URL; a.target = "_blank"; a.rel = "noopener noreferrer";
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "regulatory-mfds-icon"); svg.setAttribute("viewBox", "0 0 16 16"); svg.setAttribute("width", "14"); svg.setAttribute("height", "14");
+    svg.setAttribute("aria-hidden", "true"); svg.setAttribute("focusable", "false");
+    var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", "M7 3.5H4a1.5 1.5 0 0 0-1.5 1.5v7A1.5 1.5 0 0 0 4 13.5h7a1.5 1.5 0 0 0 1.5-1.5V9M9.5 2.5h4v4M13.5 2.5 7.5 8.5");
+    path.setAttribute("fill", "none"); path.setAttribute("stroke", "currentColor"); path.setAttribute("stroke-width", "1.5"); path.setAttribute("stroke-linecap", "round"); path.setAttribute("stroke-linejoin", "round");
+    svg.appendChild(path); a.appendChild(svg);
+    a.appendChild(el("span", "regulatory-sr-only", "(새 탭에서 열림)"));
+    return a;
+  }
+
   /* 관련 항목 목록 요소 (염류·유도체·성분군 — 확정 규제와 분리) */
   function relatedList(res, ul) {
     if (!ul) return 0;
@@ -814,7 +832,7 @@
     srcNode.appendChild(document.createTextNode(res && res.data_source ? res.data_source : "미제공"));
     if (res && res.source === "mfds" && res.source_page) {
       srcNode.appendChild(document.createTextNode(" "));
-      var link = el("a", null, "식약처 공공데이터 안내 페이지"); link.href = res.source_page; link.target = "_blank"; link.rel = "noopener";
+      var link = el("a", null, "식약처 공공데이터 안내 페이지"); link.href = res.source_page; link.target = "_blank"; link.rel = "noopener noreferrer";
       srcNode.appendChild(link);
       srcNode.appendChild(document.createTextNode(" (개별 법령 원문 링크 아님)"));
     }
@@ -1487,6 +1505,7 @@
         if (x.result.res.result_note) tdStatus.appendChild(el("p", "regulatory-result__sub", "API 안내(원문): " + x.result.res.result_note));
       }
       if (st === "hold" && x.result && x.result.res) tdStatus.appendChild(el("p", "regulatory-result__sub", "확인되지 않은 응답 상태값 ‘" + (x.result.res.result_status || "—") + "’ — 임의로 해석하지 않았어요."));
+      if (st !== "found") { var linkP = el("p", "regulatory-result__sub"); linkP.appendChild(mfdsTextLink()); tdStatus.appendChild(linkP); }   // 조회되지 않은 행: 상태는 그대로, 공식 조회 링크만 추가
       tr.appendChild(tdStatus);
       var types = x.result && x.result.res && x.result.res.entries ? x.result.res.entries.map(function (e) { return e.regulate_type || "구분 미제공"; }) : [];
       tr.appendChild(el("td", null, types.length ? types.join(", ") : "—"));
@@ -1528,7 +1547,7 @@
     var allNoData = rows.length > 0 && counts.found === 0 && rows.every(function (x) { var st = rowStatus(x, market); return st === "no_data" || st === "not_listed"; });
     show($("regulatory-result-empty"), allNoData);
     var list = $("regulatory-empty-review-list");
-    if (list) { list.innerHTML = ""; if (allNoData) reviewNames.forEach(function (n) { list.appendChild(el("li", null, n)); }); }
+    if (list) { list.innerHTML = ""; if (allNoData) reviewNames.forEach(function (n) { var li = el("li", null, n); li.appendChild(mfdsTextLink()); list.appendChild(li); }); }   // 전부 미확인일 때의 확인 필요 목록에도 행별 링크
     show($("regulatory-result-table-wrap"), rows.length > 0 && !allNoData);
     setResult("batch");
     refreshBatchStale();
