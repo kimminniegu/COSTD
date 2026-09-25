@@ -104,13 +104,19 @@ def _clean(rows: list[dict]):
     return df, cleaning, na_amt, bal_mismatch, total_rows
 
 
-def build_cards(rows: list[dict], hs_codes: list[str]) -> dict:
-    """trade_stats 행 목록 → 홈 왼쪽 카드 3개용 dict. 데이터가 없으면 ok=False"""
+def build_cards(rows: list[dict], hs_codes: list[str], totals: list[dict] | None = None) -> dict:
+    """trade_stats 행 목록 → 홈 왼쪽 카드 3개용 dict. 데이터가 없으면 ok=False
+    totals: 관세청 품목별 수출입실적(국가 구분 없는 공식 총계) 행. 있으면 국가별 합산과 교차 비교(13-1)에 씁니다."""
     empty = {"ok": False, "message": "수출입 실적을 불러오지 못했어요", "kstat_url": "https://stat.kita.net/"}
     cleaned = _clean(rows)
     if cleaned is None:
         return empty
     df, cleaning, na_amt, bal_mismatch, total_rows = cleaned
+    if totals:   # 품목별 API 총계가 있으면 응답 안의 '전체' 행 대신 그것을 기준으로
+        t = pd.DataFrame(totals)
+        t["exp_usd"] = pd.to_numeric(t["exp_usd"], errors="coerce").fillna(0.0)
+        t["yymm"] = t["yymm"].astype(str)
+        total_rows = t[["yymm", "exp_usd"]].copy()
 
     latest = df["yymm"].max()
     recent = _month_range(latest, MONTHS)
@@ -189,7 +195,8 @@ def build_cards(rows: list[dict], hs_codes: list[str]) -> dict:
         cleaning_text += f" · 총계 불일치 {len(total_mismatch)}개월"
     validation = {
         "ok": not total_mismatch and bal_mismatch == 0,
-        "total_rows": int(len(total_rows)),            # 관세청 '전체' 행 수 (0이면 비교 불가)
+        "total_rows": int(len(total_rows)),            # 총계 행 수 (0이면 비교 불가). 품목별 API(5-7-1) 또는 응답 안 '전체' 행
+        "total_source": "품목별 API" if totals else ("응답 전체 행" if len(total_rows) else None),
         "total_mismatch_months": total_mismatch,        # 국가 합산과 1% 넘게 다른 달
         "balance_mismatch_rows": bal_mismatch,          # 수지 ≠ 수출 − 수입 인 행 수
     }

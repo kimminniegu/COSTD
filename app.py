@@ -241,6 +241,13 @@ def home_api_trade_detail():
     return jsonify(detail)
 
 
+@app.route("/api/home/world")
+@login_required
+def home_api_world():
+    """세계 수입시장 (명세 5-10) — ?hs=3304. UN Comtrade 연간 자료, 오래됐으면 백그라운드 수집 시작"""
+    return jsonify(home_data.get_world(_arg("hs") or "3304"))
+
+
 @app.route("/api/home/validation")
 @login_required
 def home_api_validation():

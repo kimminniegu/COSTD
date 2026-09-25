@@ -131,6 +131,9 @@
 .home-traded__row .home-rank__bar { height: 6px; }
 .home-traded__row .home-rank__delta { font-size: 0.6875rem; }
 .home-traded__empty { padding: var(--space-6) 0; text-align: center; }
+.home-traded__rank--world .home-traded__row { grid-template-columns: 16px minmax(0, 1.2fr) minmax(24px, 0.6fr) 64px 40px 60px; }
+.home-traded__kor { text-align: right; font-size: 0.6875rem; font-weight: var(--font-weight-bold); color: var(--color-text-secondary); white-space: nowrap; }
+.home-traded__kor.is-high { color: var(--color-primary); }
 @media (max-width: 900px) {
   .home-traded__cols { grid-template-columns: minmax(0, 1fr); }
 }
