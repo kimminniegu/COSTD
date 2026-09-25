@@ -271,15 +271,34 @@
 .home-tcard .home-panel__title { white-space: nowrap; min-width: 0; overflow: hidden; }
 .home-tcard .home-panel__sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .home-tcard__body { min-height: 0; display: flex; }
-.home-tsum { flex: 1; min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-4); }
-.home-tsum__kpis { display: grid; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 0; }
-.home-tsum__kpi { display: grid; grid-template-columns: 56px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: var(--space-2); align-items: baseline; }
-.home-tsum__label { grid-row: 1 / 3; align-self: center; font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
-.home-tsum__value { font-size: 1.25rem; font-weight: var(--font-weight-extrabold); letter-spacing: -0.5px; font-variant-numeric: tabular-nums; line-height: 1.2; white-space: nowrap; }
-.home-tsum__value small { margin-left: 1px; font-size: var(--font-size-label); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
+/* 화장품 수출입 요약 카드: 왼쪽 지표 3줄 + 누계 / 오른쪽 회색 패널 그래프 (테두리 없이 배경 차이로 구분) */
+.home-tsum { flex: 1; min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr); gap: var(--space-4); }
+.home-tsum__kpis { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.home-tsum__row { display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; align-items: baseline; column-gap: var(--space-2); padding: 5px 0; border-bottom: 1px solid var(--color-border); }
+.home-tsum__row:last-of-type { border-bottom: 0; }
+.home-tsum__label { font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); white-space: nowrap; }
+.home-tsum__value { min-width: 0; font-size: 1.1875rem; font-weight: var(--font-weight-extrabold); letter-spacing: -0.4px; font-variant-numeric: tabular-nums; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-tsum__value small { margin-left: 1px; font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); letter-spacing: 0; color: var(--color-text-secondary); }
+.home-tsum__delta { font-size: var(--font-size-caption); text-align: right; white-space: nowrap; }
+.home-tsum__foot { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-2); padding: 6px 10px; border-radius: var(--radius-xs); background: var(--color-surface-muted); font-size: var(--font-size-caption); color: var(--color-text-secondary); white-space: nowrap; }
+.home-tsum__foot strong { font-variant-numeric: tabular-nums; color: var(--color-text-primary); }
 /* 최근 12개월 꺾은선 — Chart 라이브러리 없이 inline SVG (design_system: 선 primary-bright, 영역 primary-soft) */
-.home-tsum__trend { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding-left: var(--space-3); border-left: 1px solid var(--color-border-strong); }
-.home-tsum__trend .home-chart { flex: 1; min-height: 0; padding-top: 6px; }
+.home-tsum__trend { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; min-height: 0; padding: 10px 12px 8px; border-radius: var(--radius-lg); background: var(--color-surface-muted); }
+.home-tsum__trend-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); white-space: nowrap; }
+.home-tsum__trend-head small { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 0.6875rem; font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
+.home-tsum__trend .home-chart { flex: 1; min-height: 0; padding-top: 4px; }
+.home-tsum__trend .home-chart__last { box-shadow: var(--shadow-card); }
+@media (max-width: 1400px) {   /* 좁은 화면: 값 글자를 줄여 한 줄에 유지 */
+  .home-tsum__row { grid-template-columns: 46px minmax(0, 1fr) auto; }
+  .home-tsum__value { font-size: 1rem; letter-spacing: -0.2px; }
+  .home-tsum__trend-head small { display: none; }
+}
+@media (max-width: 1300px) {
+  .home-tsum__row { grid-template-columns: 40px minmax(0, 1fr) auto; column-gap: 6px; }
+  .home-tsum__value { font-size: 0.9375rem; }
+  .home-tsum__delta { font-size: 0.75rem; }
+  .home-tsum__foot { padding: 5px 8px; font-size: 0.75rem; }
+}
 /* 이전 버전 home.js(캐시)가 그리는 구형 차트도 깨지지 않게 두는 안전장치 */
 .home-tsum__chart { flex: 1; width: 100%; min-height: 0; overflow: visible; }
 .home-tsum__axis { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); margin-top: var(--space-1); }
@@ -351,7 +370,7 @@
   .home-clock__list { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--space-2); }
   .home-clock__row:nth-child(2n + 1) { padding-left: 0; border-left: 0; }
   .home-tsum { grid-template-columns: minmax(0, 1fr); }
-  .home-tsum__trend { padding-left: 0; border-left: 0; min-height: 96px; }
+  .home-tsum__trend { min-height: 110px; }
   .home-rank__item { grid-template-columns: minmax(72px, 1fr) minmax(0, 1fr) auto auto; }
   .home-rank__name small { display: none; }
   .home-rank__delta { display: none; }

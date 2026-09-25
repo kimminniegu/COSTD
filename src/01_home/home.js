@@ -223,10 +223,10 @@
   /* 최근 12개월 수출액 꺾은선 — 라이브러리 없이 inline SVG (선: primary-bright / 영역: primary-soft) */
   function trendChart(trend, currentYymm) {
     var cur = trend.findIndex(function (m) { return m.yymm === currentYymm; });
-    return '<div class="home-tsum__trend">' + lineChart({
+    return lineChart({
       values: trend.map(function (m) { return musdNum(m.musd); }), labels: trend.map(function (m) { return m.label; }),
-      fmt: fmtMusd, aria: "최근 12개월 월별 수출액 (백만 달러)", zeroBase: true, current: cur, every: 2,
-    }) + "</div>";
+      fmt: fmtMusd, aria: "최근 12개월 월별 수출액 (백만 달러)", zeroBase: true, current: cur, every: 3,
+    });
   }
   function renderTradeCards(t) {
     var sumBody = $("home-tsum-body"), sumMonth = $("home-tsum-month"), sumMeta = $("home-tsum-meta");
@@ -244,14 +244,21 @@
     var s = t.summary;
     sumMonth.textContent = s.month_text + " · HS " + t.hs_codes.join("·");
     sumMeta.innerHTML = '<span title="' + esc(t.cleaning.text) + '">관세청 · pandas 정리</span> · <a href="' + esc(t.kstat_url) + '" target="_blank" rel="noopener" title="한국무역협회 K-stat에서 상세 조회">K-stat ↗</a>';
+    /* 왼쪽: 지표 3줄(라벨 · 값 · 전년비)을 한 줄씩 정렬 + 누계 한 줄 / 오른쪽: 회색 패널 안 월별 그래프 (공통 kpi-delta 사용) */
+    var row = function (label, musd, yoy) {
+      var d = !yoy || yoy.change == null ? '<span class="kpi-delta home-tsum__delta">—</span>'
+        : '<span class="kpi-delta home-tsum__delta is-' + esc(yoy.direction) + '" title="전년 동월 대비">' + arrow(yoy.direction) + " " + esc(yoy.change_text) + "</span>";
+      return '<div class="home-tsum__row"><span class="home-tsum__label">' + label + '</span><span class="home-tsum__value">$' + esc(musd) + "<small>M</small></span>" + d + "</div>";
+    };
     sumBody.innerHTML =
       '<div class="home-tsum">' +
         '<div class="home-tsum__kpis">' +
-          '<div class="home-tsum__kpi"><span class="home-tsum__label">수출</span><span class="home-tsum__value">$' + esc(s.exp_musd) + '<small>M</small></span>' + delta(s.exp_yoy, " 전년비") + "</div>" +
-          '<div class="home-tsum__kpi"><span class="home-tsum__label">수입</span><span class="home-tsum__value">$' + esc(s.imp_musd) + '<small>M</small></span>' + delta(s.imp_yoy, " 전년비") + "</div>" +
-          '<div class="home-tsum__kpi"><span class="home-tsum__label">무역수지</span><span class="home-tsum__value">$' + esc(s.bal_musd) + '<small>M</small></span><span class="home-rank__delta">12개월 수출 $' + esc(s.total_12m_musd) + "M</span></div>" +
+          row("수출", s.exp_musd, s.exp_yoy) + row("수입", s.imp_musd, s.imp_yoy) + row("무역수지", s.bal_musd, null) +
+          '<div class="home-tsum__foot"><span>최근 12개월 수출 누계</span><strong>$' + esc(s.total_12m_musd) + "M</strong></div>" +
         "</div>" +
-        trendChart(s.trend, s.yymm) +
+        '<div class="home-tsum__trend"><div class="home-tsum__trend-head"><span>월별 수출액</span><small>백만 달러 · 증감률은 전년 동월 대비</small></div>' +
+          trendChart(s.trend, s.yymm) +
+        "</div>" +
       "</div>";
     cList.innerHTML = t.countries.map(rankItem).join("") || '<li class="home-list__empty">데이터가 없어요</li>';
     pList.innerHTML = t.products.map(rankItem).join("") || '<li class="home-list__empty">데이터가 없어요</li>';
