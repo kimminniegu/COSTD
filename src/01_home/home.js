@@ -19,6 +19,13 @@
     setJSON: function (k, v) { storage.set(k, JSON.stringify(v)); },
   };
 
+  /* 공통 .container 가 container-type(레이아웃 격리)을 써서 그 안의 position:fixed 모달이 본문 스크롤을 따라 움직입니다.
+     홈의 모달 3개를 <body> 바로 아래로 옮겨 항상 화면 가운데에 뜨게 합니다. (common.js 는 document 위임이라 그대로 동작) */
+  ["home-city-modal", "home-rate-modal", "home-trade-modal"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el && el.parentNode !== document.body) document.body.appendChild(el);
+  });
+
   var state = {
     data: JSON.parse(dataEl.textContent || "{}"),
     clockMode: storage.get("cosmoa.clock.mode") || "top_export",
@@ -248,8 +255,8 @@
       '<polyline class="home-tsum__line" points="' + line + '"></polyline>' +
       '<circle class="home-tsum__dot" cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="3.5"></circle></svg>';
   }
-  function chip(attr, value, label, active, extra) {
-    return '<button class="home-chip' + (active ? " is-active" : "") + '" type="button" ' + attr + '="' + esc(value) + '"' + (extra || "") + ">" + esc(label) + "</button>";
+  function seg(attr, value, label, active, extra) {   /* 공통 Tabs(Segmented Control) 항목 — ui_components.md 13장 */
+    return '<button class="tab' + (active ? " is-active" : "") + '" type="button" role="tab" aria-selected="' + (active ? "true" : "false") + '" ' + attr + '="' + esc(value) + '"' + (extra || "") + ">" + esc(label) + "</button>";
   }
   function tradeQuery() {
     var f = state.tradeFilter;
@@ -262,18 +269,21 @@
     storage.setJSON("cosmoa.trade.filter", f);
     loadTradeDetail();
   }
-  function tradeRankList(items, metricName, showShare) {
-    if (!items || !items.length) return '<li class="home-list__empty">해당 조건의 실적이 없어요</li>';
-    return items.map(function (it, i) {
-      var hl = state.tradeFilter.country && it.code === state.tradeFilter.country ? " is-selected" : "";
-      return '<li class="home-traded__row' + hl + '" title="' + esc(it.name + " · " + metricName + " $" + it.musd + "M") + '">' +
-        '<span class="home-traded__no">' + (i + 1) + "</span>" +
-        '<span class="home-traded__name">' + esc(it.name) + "<small>" + esc(it.code) + "</small></span>" +
-        '<span class="home-rank__bar" aria-hidden="true"><span style="width:' + Number(it.bar || 0) + '%"></span></span>' +
-        '<span class="home-traded__val">' + (it.value < 0 ? "−" : "") + "$" + esc(it.musd.replace("-", "")) + "M</span>" +
-        '<span class="home-traded__share">' + (showShare && it.share != null ? esc(it.share) + "%" : "") + "</span>" +
-        delta(it) + "</li>";
+  function tradeTable(items, metricName, nameHead) {   /* 공통 Table(ui_components.md 12장) — 순위 · 이름 · 막대 · 금액 · 비중 · 전년비 */
+    if (!items || !items.length) return '<div class="state state-empty home-traded__state"><p class="state-title">해당 조건의 실적이 없어요</p><p>다른 품목이나 기간을 골라 보세요</p></div>';
+    var rows = items.map(function (it, i) {
+      var active = state.tradeFilter.country && it.code === state.tradeFilter.country ? ' class="is-active"' : "";
+      return "<tr" + active + ' title="' + esc(it.name + " · " + metricName + " $" + it.musd + "M") + '">' +
+        '<td class="is-numeric home-traded__no">' + (i + 1) + "</td>" +
+        '<td class="home-traded__name">' + esc(it.name) + "<small>" + esc(it.code) + "</small></td>" +
+        '<td class="home-traded__barcell"><span class="home-rank__bar" aria-hidden="true"><span style="width:' + Number(it.bar || 0) + '%"></span></span></td>' +
+        '<td class="is-numeric home-traded__val">' + (it.value < 0 ? "−" : "") + "$" + esc(String(it.musd).replace("-", "")) + "M</td>" +
+        '<td class="is-numeric home-traded__share">' + (it.share != null ? esc(it.share) + "%" : "–") + "</td>" +
+        '<td class="is-numeric">' + delta(it) + "</td></tr>";
     }).join("");
+    return '<div class="table-wrap"><table class="table home-traded__table"><thead><tr>' +
+      '<th class="is-numeric">#</th><th>' + esc(nameHead) + '</th><th></th><th class="is-numeric">' + esc(metricName) + '</th><th class="is-numeric">비중</th><th class="is-numeric">전년비</th>' +
+      "</tr></thead><tbody>" + rows + "</tbody></table></div>";
   }
   /* 세계 수입시장 탭 (5-10): UN Comtrade 연간 자료. 처음엔 백그라운드 수집이라 15초마다 다시 확인 */
   function worldHs4() { var h = state.tradeFilter.hs; return h && h !== "all" ? h.slice(0, 4) : "3304"; }
@@ -281,18 +291,24 @@
     var box = $("home-trade-world");
     if (!box) return;
     if (!w.ok) {
-      box.innerHTML = '<li class="home-list__empty">' + esc(w.message || "세계 수입시장 자료를 불러오지 못했어요") + (w.refreshing ? '<br><small class="text-caption">받는 동안 다른 탭을 봐도 돼요</small>' : "") + "</li>";
+      box.innerHTML = '<div class="state state-empty home-traded__state">' +
+        (w.refreshing ? '<div class="spinner" aria-hidden="true"></div>' : "") +
+        '<p class="state-title">' + esc(w.message || "세계 수입시장 자료를 불러오지 못했어요") + "</p>" +
+        (w.refreshing ? "<p>받는 동안 다른 탭을 봐도 돼요</p>" : "") + "</div>";
       return;
     }
-    box.innerHTML = w.importers.map(function (it) {
-      return '<li class="home-traded__row" title="' + esc(it.name_en + " · 총수입 $" + it.imports_musd + "M · 한국산 $" + it.from_korea_musd + "M") + '">' +
-        '<span class="home-traded__no">' + it.rank + "</span>" +
-        '<span class="home-traded__name">' + esc(it.name) + "<small>" + esc(it.iso) + "</small></span>" +
-        '<span class="home-rank__bar" aria-hidden="true"><span style="width:' + Number(it.bar || 0) + '%"></span></span>' +
-        '<span class="home-traded__val">$' + esc(it.imports_musd) + "M</span>" +
-        '<span class="home-traded__share">' + esc(it.world_share) + "%</span>" +
-        '<span class="home-traded__kor' + (it.korea_share >= 10 ? " is-high" : "") + '">' + (it.korea_share == null ? "—" : "KR " + esc(it.korea_share) + "%") + "</span></li>";
+    var rows = w.importers.map(function (it) {
+      return '<tr title="' + esc(it.name_en + " · 총수입 $" + it.imports_musd + "M · 한국산 $" + it.from_korea_musd + "M") + '">' +
+        '<td class="is-numeric home-traded__no">' + it.rank + "</td>" +
+        '<td class="home-traded__name">' + esc(it.name) + "<small>" + esc(it.iso) + "</small></td>" +
+        '<td class="home-traded__barcell"><span class="home-rank__bar" aria-hidden="true"><span style="width:' + Number(it.bar || 0) + '%"></span></span></td>' +
+        '<td class="is-numeric home-traded__val">$' + esc(it.imports_musd) + "M</td>" +
+        '<td class="is-numeric home-traded__share">' + esc(it.world_share) + "%</td>" +
+        '<td class="is-numeric">' + (it.korea_share == null ? '<span class="badge">—</span>' : '<span class="badge' + (it.korea_share >= 10 ? " badge-primary" : "") + '">' + esc(it.korea_share) + "%</span>") + "</td></tr>";
     }).join("");
+    box.innerHTML = '<div class="table-wrap"><table class="table home-traded__table"><thead><tr>' +
+      '<th class="is-numeric">#</th><th>수입국</th><th></th><th class="is-numeric">총수입</th><th class="is-numeric">세계 비중</th><th class="is-numeric">한국산</th>' +
+      "</tr></thead><tbody>" + rows + "</tbody></table></div>";
   }
   function loadWorld(force) {
     var hs4 = worldHs4(), c = worldCache[hs4];
@@ -314,19 +330,19 @@
     if (!box) return;
     var tab = tradeTab;
     box.innerHTML =
-      '<div class="home-traded__tabs"><div class="tabs" role="tablist">' +
-        '<button class="tab' + (tab === "countries" ? " is-active" : "") + '" type="button" role="tab" data-trade-tab="countries">국가별</button>' +
-        '<button class="tab' + (tab === "products" ? " is-active" : "") + '" type="button" role="tab" data-trade-tab="products">품목별</button>' +
-        '<button class="tab' + (tab === "world" ? " is-active" : "") + '" type="button" role="tab" data-trade-tab="world">세계 수입시장</button>' +
-      "</div><small id=\"home-trade-world-meta\">" + (tab === "world" ? "UN Comtrade · HS " + esc(worldHs4()) : esc(d.metric_name) + " 기준 · 상위 10 · 전년 동기 대비") + "</small></div>";
+      '<div class="home-traded__head"><div class="tabs" role="tablist" aria-label="순위 기준">' +
+        seg("data-trade-tab", "countries", "국가별", tab === "countries") +
+        seg("data-trade-tab", "products", "품목별", tab === "products") +
+        seg("data-trade-tab", "world", "세계 수입시장", tab === "world") +
+      '</div><span class="text-caption home-traded__meta" id="home-trade-world-meta">' + (tab === "world" ? "UN Comtrade · HS " + esc(worldHs4()) : "전년 동기 대비") + "</span></div>";
     if (tab === "world") {
-      box.innerHTML += '<ol class="home-traded__rank home-traded__rank--world" id="home-trade-world"><li class="home-list__empty">불러오는 중이에요</li></ol>' +
-        '<p class="form-help">각국이 전 세계에서 수입한 금액(연간)과 그중 한국산 비중이에요. 한국 수출 통계(관세청)와 집계 기준이 달라 금액이 정확히 일치하지는 않아요.</p>';
+      box.innerHTML += '<div id="home-trade-world"><div class="state state-empty home-traded__state"><div class="spinner" aria-hidden="true"></div><p class="state-title">불러오는 중이에요</p></div></div>' +
+        '<p class="form-help">각국이 전 세계에서 수입한 연간 금액과 그중 한국산 비중이에요. 관세청 수출 통계와 집계 기준이 달라 금액이 정확히 일치하지는 않아요.</p>';
       loadWorld(false);
       return;
     }
     var isC = tab === "countries";
-    box.innerHTML += '<ol class="home-traded__rank">' + tradeRankList(isC ? d.countries : d.products, d.metric_name, true) + "</ol>" +
+    box.innerHTML += tradeTable(isC ? d.countries : d.products, d.metric_name, isC ? "국가" : "품목 (HS 6단위)") +
       (isC && d.country ? '<p class="form-help">국가를 고른 상태예요. 품목별 탭은 ' + esc(d.country_name) + " 기준으로 보여요.</p>" : "");
   }
   function renderTradeDetail(d) {
@@ -336,47 +352,51 @@
     var hs4 = f.hs && f.hs !== "all" ? f.hs.slice(0, 4) : "all";
     var controls =
       '<div class="home-traded__controls">' +
-        '<div class="home-traded__ctl"><span class="home-traded__ctl-label">품목</span><div class="home-chips">' +
-          chip("data-trade-hs", "all", "전체", hs4 === "all") +
-          (d.hs4_options || []).map(function (o) { return chip("data-trade-hs", o.code, o.code + " " + o.name, hs4 === o.code, o.has_data ? "" : ' title="처음 선택 시 관세청에서 받아와요"'); }).join("") +
+        '<div class="home-traded__ctl">' +
+          '<span class="form-label home-traded__ctl-label">품목</span>' +
+          '<div class="tabs" role="tablist" aria-label="품목">' +
+            seg("data-trade-hs", "all", "전체", hs4 === "all") +
+            (d.hs4_options || []).map(function (o) { return seg("data-trade-hs", o.code, o.code + " " + o.name, hs4 === o.code, o.has_data ? "" : ' title="처음 선택 시 관세청에서 받아와요"'); }).join("") +
+          "</div>" +
+          (hs4 !== "all" ? '<select class="form-control form-control-sm home-traded__select" id="home-trade-hs6" aria-label="세부 품목">' +
+            '<option value="' + esc(hs4) + '">세부 품목 전체</option>' +
+            (d.hs6_options || []).map(function (o) { return '<option value="' + esc(o.code) + '"' + (f.hs === o.code ? " selected" : "") + ">" + esc(o.code + " " + o.name) + "</option>"; }).join("") +
+          "</select>" : "") +
         "</div>" +
-        (hs4 !== "all" ? '<select class="form-control form-control-sm home-traded__select" id="home-trade-hs6" aria-label="세부 품목">' +
-          '<option value="' + esc(hs4) + '">세부 품목 전체</option>' +
-          (d.hs6_options || []).map(function (o) { return '<option value="' + esc(o.code) + '"' + (f.hs === o.code ? " selected" : "") + ">" + esc(o.code + " " + o.name) + "</option>"; }).join("") +
-        "</select>" : "") +
+        '<div class="home-traded__ctl">' +
+          '<span class="form-label home-traded__ctl-label">기간</span>' +
+          '<div class="tabs" role="tablist" aria-label="기간">' + (d.periods || [3, 6, 12, 24]).map(function (m) { return seg("data-trade-months", m, m + "개월", Number(f.months) === m); }).join("") + "</div>" +
+          '<span class="form-label home-traded__ctl-label">지표</span>' +
+          '<div class="tabs" role="tablist" aria-label="지표">' + (d.metrics || []).map(function (m) { return seg("data-trade-metric", m.key, m.name, f.metric === m.key); }).join("") + "</div>" +
+          '<select class="form-control form-control-sm home-traded__select home-traded__select--right" id="home-trade-country" aria-label="국가">' +
+            '<option value="">국가 전체</option>' +
+            (d.country_options || []).map(function (o) { return '<option value="' + esc(o.code) + '"' + (f.country === o.code ? " selected" : "") + ">" + esc(o.name + " (" + o.code + ")") + "</option>"; }).join("") +
+          "</select>" +
         "</div>" +
-        '<div class="home-traded__ctl"><span class="home-traded__ctl-label">기간</span><div class="home-chips">' +
-          (d.periods || [3, 6, 12, 24]).map(function (m) { return chip("data-trade-months", m, m + "개월", Number(f.months) === m); }).join("") +
-        "</div>" +
-        '<span class="home-traded__ctl-label">지표</span><div class="home-chips">' +
-          (d.metrics || []).map(function (m) { return chip("data-trade-metric", m.key, m.name, f.metric === m.key); }).join("") +
-        "</div>" +
-        '<select class="form-control form-control-sm home-traded__select" id="home-trade-country" aria-label="국가">' +
-          '<option value="">국가 전체</option>' +
-          (d.country_options || []).map(function (o) { return '<option value="' + esc(o.code) + '"' + (f.country === o.code ? " selected" : "") + ">" + esc(o.name + " (" + o.code + ")") + "</option>"; }).join("") +
-        "</select></div>" +
       "</div>";
     if (!d.ok) {
-      body.innerHTML = controls + '<div class="home-traded__empty"><span class="home-error">' + esc(d.message || d.error || "수출입 실적을 불러오지 못했어요") + "</span></div>";
+      body.innerHTML = controls + '<div class="state state-empty home-traded__state"><p class="state-title">' + esc(d.message || d.error || "수출입 실적을 불러오지 못했어요") + "</p><p>다른 품목이나 기간을 골라 보세요</p></div>";
       return;
     }
     var s = d.summary, ticks = d.trend.map(function (t, i) {
       var show = i === 0 || i === d.trend.length - 1 || (d.trend.length > 8 && i === Math.floor(d.trend.length / 2));
       return '<small class="' + (show ? "" : "is-hidden") + '">' + esc(t.label) + "</small>";
     }).join("");
-    var kpi = function (label, musd, yoy) {
+    var tile = function (label, musd, yoy) {   /* 공통 Stat Tile(ui_components.md 5장) + kpi-delta */
       var neg = String(musd).indexOf("-") === 0;
-      return '<div class="home-tsum__kpi"><span class="home-tsum__label">' + label + '</span><span class="home-tsum__value">' + (neg ? "−" : "") + "$" + esc(String(musd).replace("-", "")) + "<small>M</small></span>" + delta(yoy, d.has_prior ? " 전년비" : "") + "</div>";
+      var dl = !yoy || yoy.change == null ? '<span class="kpi-delta">' + (d.has_prior ? "—" : "전년 자료 없음") + "</span>"
+        : '<span class="kpi-delta is-' + esc(yoy.direction) + '">' + arrow(yoy.direction) + " " + esc(yoy.change_text) + " 전년비</span>";
+      return '<div class="stat-tile home-traded__tile"><span class="stat-tile__label">' + label + '</span><span class="stat-tile__value">' + (neg ? "−" : "") + "$" + esc(String(musd).replace("-", "")) + "<small>M</small></span>" + dl + "</div>";
     };
     body.innerHTML = controls +
       '<div class="home-traded__cols">' +
-        '<div class="home-rated__col">' +
-          '<div class="home-rated__section-head"><span>' + esc(d.period_text) + " 합계</span><small>" + (d.has_prior ? "전년 동기 대비" : "전년 동기 자료 없음") + "</small></div>" +
-          '<div class="home-tsum__kpis home-traded__kpis">' + kpi("수출", s.exp_musd, s.exp_yoy) + kpi("수입", s.imp_musd, s.imp_yoy) + kpi("무역수지", s.bal_musd, s.bal_yoy) + "</div>" +
-          '<div class="home-rated__section-head"><span>월별 ' + esc(d.metric_name) + "</span><small>백만 달러 · " + esc(d.trend.length) + "개월</small></div>" +
-          svgLine(d.trend, 320, 110, d.zero_pct) + '<div class="home-rated__axis">' + ticks + "</div>" +
+        '<div class="home-traded__col">' +
+          '<div class="home-traded__head"><span class="home-traded__title">' + esc(d.period_text) + ' 합계</span><span class="text-caption">백만 달러</span></div>' +
+          '<div class="home-traded__tiles">' + tile("수출", s.exp_musd, s.exp_yoy) + tile("수입", s.imp_musd, s.imp_yoy) + tile("무역수지", s.bal_musd, s.bal_yoy) + "</div>" +
+          '<div class="home-traded__head"><span class="home-traded__title">월별 ' + esc(d.metric_name) + '</span><span class="text-caption">' + esc(d.trend.length) + "개월 추이</span></div>" +
+          '<div class="home-traded__chart">' + svgLine(d.trend, 320, 120, d.zero_pct) + '<div class="home-rated__axis">' + ticks + "</div></div>" +
         "</div>" +
-        '<div class="home-rated__col" id="home-trade-right"></div>' +
+        '<div class="home-traded__col" id="home-trade-right"></div>' +
       "</div>";
     $("home-trade-foot").textContent = "관세청 수출입실적 · " + d.latest_text + " 최신 · " + (d.cleaning_text || "");
     renderTradeRight(d);

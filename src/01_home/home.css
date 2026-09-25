@@ -104,38 +104,61 @@
 #home-trade-modal .modal-header { padding-top: var(--space-6); }
 #home-trade-modal .modal-footer { padding-bottom: var(--space-6); }
 #home-trade-modal .modal-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.home-traded__controls { display: flex; flex-direction: column; gap: var(--space-2); padding-bottom: var(--space-3); border-bottom: 1px solid var(--color-border-strong); }
+
+/* 조건 선택: 공통 Segmented Control(.tabs) + Select. 회색 패널 위에 놓아 Card 안 배치 규칙을 따름 */
+.home-traded__controls { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; border-radius: var(--radius-lg); background: var(--color-surface-muted); }
 .home-traded__ctl { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
-.home-traded__ctl-label { flex: none; font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
-.home-traded__ctl .home-chip { padding: 4px 10px; font-size: var(--font-size-caption); }
-.home-traded__select { height: 30px; padding: 0 28px 0 10px; font-size: var(--font-size-caption); max-width: 220px; background-size: 14px; }
-.home-traded__cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-6); }
-/* 아래(230행 부근)의 .home-tsum__kpis 기본 규칙보다 뒤에 오지 않으므로 선택자 특이도를 높여 덮어씀 */
-.home-traded .home-tsum__kpis.home-traded__kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: none; gap: var(--space-2); }
-.home-traded__kpis .home-tsum__kpi { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; row-gap: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
-.home-traded__kpis .home-tsum__label { grid-row: auto; }
-.home-traded__kpis .home-tsum__value { font-size: 1.0625rem; }
-.home-traded__kpis .home-rank__delta { text-align: left; }
+.home-traded__ctl-label { flex: none; margin: 0; font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+.home-traded__ctl .tabs { background: var(--color-background); }
+.home-traded__ctl .tab { padding: 5px 10px; font-size: var(--font-size-caption); }
+.home-traded__select { width: auto; height: 32px; padding: 0 32px 0 10px; border-radius: var(--radius-xs); background-color: var(--color-surface); background-position: right 8px center; background-size: 16px; font-size: var(--font-size-caption); max-width: 170px; }
+.home-traded__select--right { margin-left: auto; }
+
+/* 본문 두 열: 테두리 대신 간격으로 구분 */
+.home-traded__cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-5); }
+.home-traded__col { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.home-traded__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 32px; }
+.home-traded__head .tabs { padding: 3px; }
+.home-traded__head .tab { padding: 5px 10px; font-size: var(--font-size-caption); }
+.home-traded__title { font-size: var(--font-size-label); font-weight: var(--font-weight-bold); color: var(--color-text-primary); }
+
+/* 합계 3종: 공통 Stat Tile */
+.home-traded__tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+.home-traded__tile { gap: 2px; padding: 10px; }
+.home-traded__tile .stat-tile__value { font-size: 0.9375rem; font-weight: var(--font-weight-extrabold); letter-spacing: -0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-traded__tile .stat-tile__value small { margin-left: 1px; font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); letter-spacing: 0; color: var(--color-text-secondary); }
+.home-traded__tile .kpi-delta { font-size: var(--font-size-caption); }
+
+/* 추이 그래프: 회색 패널 안 */
+.home-traded__chart { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px 6px; border-radius: var(--radius-lg); background: var(--color-surface-muted); }
+.home-traded__chart .home-rated__chart { height: 104px; }
 .home-traded__zero { stroke: var(--color-border-strong); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
-.home-traded__tabs { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
-.home-traded__tabs .tab { padding: 4px 10px; font-size: var(--font-size-caption); }
-.home-traded__tabs small { font-size: 0.6875rem; color: var(--color-text-placeholder); white-space: nowrap; }
-.home-traded__rank { margin: var(--space-2) 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
-.home-traded__row { display: grid; grid-template-columns: 16px minmax(0, 1.3fr) minmax(24px, 0.7fr) 68px 40px 52px; align-items: center; gap: var(--space-2); min-height: 22px; padding: 1px 4px; border-radius: 6px; font-size: var(--font-size-caption); font-variant-numeric: tabular-nums; }
-.home-traded__row.is-selected { background: var(--color-primary-soft); }
-.home-traded__no { color: var(--color-text-placeholder); font-size: 0.6875rem; text-align: right; }
-.home-traded__name { display: flex; align-items: baseline; gap: 4px; min-width: 0; font-weight: var(--font-weight-bold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.home-traded__name small { font-size: 0.625rem; font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
-.home-traded__val { text-align: right; font-weight: var(--font-weight-bold); white-space: nowrap; }
-.home-traded__share { text-align: right; color: var(--color-text-secondary); white-space: nowrap; }
-.home-traded__row .home-rank__bar { height: 6px; }
-.home-traded__row .home-rank__delta { font-size: 0.6875rem; }
-.home-traded__empty { padding: var(--space-6) 0; text-align: center; }
-.home-traded__rank--world .home-traded__row { grid-template-columns: 16px minmax(0, 1.2fr) minmax(24px, 0.6fr) 64px 40px 60px; }
-.home-traded__kor { text-align: right; font-size: 0.6875rem; font-weight: var(--font-weight-bold); color: var(--color-text-secondary); white-space: nowrap; }
-.home-traded__kor.is-high { color: var(--color-primary); }
+
+/* 순위: 공통 Table을 촘촘하게 */
+.home-traded__table { font-size: var(--font-size-caption); table-layout: fixed; }
+.home-traded__table th, .home-traded__table td { padding: 4px 6px; }
+.home-traded__table th { padding-top: 6px; padding-bottom: 6px; font-size: 0.75rem; }
+.home-traded__table th:first-child, .home-traded__table td:first-child { width: 22px; padding-left: var(--space-2); }
+.home-traded__table th:nth-child(3) { width: 34px; }
+.home-traded__table th:nth-child(4) { width: 86px; }
+.home-traded__table th:nth-child(5) { width: 48px; }
+.home-traded__table th:nth-child(6) { width: 60px; }
+.home-traded__meta { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-traded__no { color: var(--color-text-placeholder); }
+.home-traded__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: var(--font-weight-bold); color: var(--color-text-strong); }
+.home-traded__name small { margin-left: 4px; font-size: 0.6875rem; font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
+.home-traded__barcell { padding-left: 0 !important; padding-right: 0 !important; }
+.home-traded__barcell .home-rank__bar { height: 6px; }
+.home-traded__val { font-weight: var(--font-weight-bold); }
+.home-traded__share { color: var(--color-text-secondary); }
+.home-traded__table .home-rank__delta { font-size: 0.6875rem; }
+.home-traded__table .badge { height: 22px; padding: 0 8px; font-size: 0.6875rem; }
+.home-traded__state { padding: var(--space-5) var(--space-4); text-align: center; }
+.home-traded__state .state-title { font-size: var(--font-size-sub); }
+.home-traded__state .spinner { margin: 0 auto var(--space-2); }
 @media (max-width: 900px) {
   .home-traded__cols { grid-template-columns: minmax(0, 1fr); }
+  .home-traded__select--right { margin-left: 0; }
 }
 @media (max-width: 900px) {
   .home-rated { grid-template-columns: minmax(0, 1fr); }
