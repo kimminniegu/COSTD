@@ -472,8 +472,9 @@ K-stat 화면을 직접 긁어오지 않는다. K-stat 숫자의 원천인 **관
 | 조회 | 선택 품목의 HS 4단위(전체·6단위를 골랐으면 3304)로 `cmdCode`, 수입(`flowCode=M`), 작년(없으면 재작년) |
 | 두 번 호출 | ① `partnerCode=0`(전 세계에서의 수입) ② `partnerCode=410`(한국에서의 수입). 운송수단·세관절차 세부 행을 빼기 위해 `partner2Code=0, motCode=0, customsCode=C00` |
 | 국가명 | 코드표(`Reporters.json`)를 30일 캐시해 ISO2·영문명을 얻고, 주요국은 `COUNTRY_KO`로 한글 표시 |
-| 속도 | 키 없이 쓰는 공개 preview는 **한 호출에 1~3분** 걸린다. 그래서 요청 스레드에서 기다리지 않고 **백그라운드로 받아 7일 캐시**(`world_trade` 표)하며, 화면은 "받아오는 중"을 보여주고 15초마다 다시 확인한다. `.env`에 `COMTRADE_API_KEY`(무료 구독, 하루 500회)를 넣으면 정식 endpoint로 빠르게 받는다 |
-| 표시 | 총수입 상위 15개국: 순위, 국가, 막대, 총수입(백만 달러), 세계 비중, **한국산 비중(KR %)** — 10% 이상은 파란색. 머리에 "세계 n개국 수입 $xM 중 한국산 y%" |
+| 속도 | 키 없이 쓰는 공개 preview는 **한 호출에 1~3분** 걸리고 시간당 제한에 걸리면 500 오류가 난다. 그래서 요청 스레드에서 기다리지 않고 **백그라운드로 받아 7일 캐시**(`world_trade` 표)하며, 화면은 "받아오는 중"을 보여주고 15초마다 다시 확인한다. `.env`에 `COMTRADE_API_KEY`(무료 구독의 Primary key, 하루 500회)를 넣으면 정식 endpoint로 **2~5초** 만에 받는다. **키를 넣은 뒤에는 서버를 다시 시작해야** 읽힌다(`.env`는 시작 시 한 번만 읽음) |
+| 재시도 | 실패하면 키가 있을 때 2분, 없을 때 30분 뒤 다시 시도 (`meta.world_last_try:<hs4>`) |
+| 표시 | 총수입 상위 10개국: 순위, 국가, 막대, 총수입(백만 달러), 세계 비중, **한국산 비중(KR %)** — 10% 이상은 파란색. 머리에 "세계 n개국 수입 $xM 중 한국산 y%" |
 | API | `GET /api/home/world?hs=3304` → `{ok, year, importers[], reporters, world_total_musd, korea_share_total, refreshing}` |
 | 주의 | 각국 수입 통계(CIF)와 한국 수출 통계(FOB)는 기준이 달라 금액이 정확히 맞지 않는다. 화면에도 안내 문구를 둔다. 홍콩·마카오는 중국과 별도 국가로 집계 |
 
@@ -915,7 +916,7 @@ def fetch_google_regulations():
 | `/api/home/regulations?since=...` | GET | A | 규제 새 소식 JSON (화면에서 10분마다 호출) |
 | `/api/home/rates/<code>` | GET | A | 환율 상세 JSON (4-4). 송금 환율, 최근 30영업일 이력과 numpy 통계 |
 | `/api/home/trade?hs&months&country&metric` | GET | A | 수출입 상세 JSON (5-9). 품목·기간·국가·지표별 합계, 추이, 상위 10 국가·품목 |
-| `/api/home/world?hs=3304` | GET | A | 세계 수입시장 JSON (5-10). UN Comtrade 연간, 상위 15개 수입국과 한국산 비중. 오래됐으면 백그라운드 수집 시작 |
+| `/api/home/world?hs=3304` | GET | A | 세계 수입시장 JSON (5-10). UN Comtrade 연간, 상위 10개 수입국과 한국산 비중. 오래됐으면 백그라운드 수집 시작 |
 | `/api/home/validation` | GET | A | 데이터 교차검증 요약 JSON (13-3). 구역별 마지막 성공·시도 시각, 환율 이상값, 수출입 불일치 건수, 매체·국가별 저장 건수 |
 
 현지 시각은 서버 없이 브라우저에서 계산한다. `app.py`의 `[A] Home` 영역에는 Route와 `home_highlight` 템플릿 필터(검색어 `<mark>` 강조)만 두고 로직은 모듈에 둔다.

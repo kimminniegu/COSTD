@@ -656,7 +656,7 @@ COMTRADE_DATA = "https://comtradeapi.un.org/data/v1/get/C/A/HS"
 COMTRADE_REPORTERS = "https://comtradeapi.un.org/files/v1/app/reference/Reporters.json"
 WORLD_TTL = 7 * 86400
 KOREA_CODE = 410
-WORLD_TOP = 15
+WORLD_TOP = 10   # 다른 탭과 같이 상위 10
 COUNTRY_KO = {"CN": "중국", "US": "미국", "JP": "일본", "HK": "홍콩", "VN": "베트남", "RU": "러시아", "TW": "대만", "TH": "태국",
               "SG": "싱가포르", "ID": "인도네시아", "MY": "말레이시아", "PH": "필리핀", "CA": "캐나다", "GB": "영국", "FR": "프랑스",
               "DE": "독일", "PL": "폴란드", "AE": "아랍에미리트", "SA": "사우디아라비아", "AU": "호주", "NL": "네덜란드", "IT": "이탈리아",
@@ -751,7 +751,8 @@ def kick_world(hs4: str) -> bool:
     with _lock:
         if key in _refreshing:
             return True
-        if not (_is_stale(f"world_fetched_at:{hs4}", WORLD_TTL) and _is_stale(f"world_last_try:{hs4}", 1800)):
+        retry_after = 120 if COMTRADE_KEY else 1800   # 정식 키가 있으면 빠르니 2분, 공개 preview 는 제한 때문에 30분
+        if not (_is_stale(f"world_fetched_at:{hs4}", WORLD_TTL) and _is_stale(f"world_last_try:{hs4}", retry_after)):
             return False
         _refreshing.add(key)
 

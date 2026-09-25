@@ -240,7 +240,7 @@
   }
 
   /* 2-1. 수출입 상세 모달 (5-9): 카드 클릭 → /api/home/trade?hs&months&country&metric ---- */
-  var tradeTab = "countries", tradeLast = null, worldCache = {}, worldTimer = null;
+  var tradeTab = "countries", tradeLast = null, worldCache = {}, worldTimer = null, tradeFoot = "";
   function svgLine(points, W, H, zeroPct) {
     var padT = 8, padB = 4, n = points.length;
     if (n < 2) return '<p class="home-rated__nochart">표시할 달이 부족해요</p>';
@@ -336,11 +336,12 @@
         seg("data-trade-tab", "world", "세계 수입시장", tab === "world") +
       '</div><span class="text-caption home-traded__meta" id="home-trade-world-meta">' + (tab === "world" ? "UN Comtrade · HS " + esc(worldHs4()) : "전년 동기 대비") + "</span></div>";
     if (tab === "world") {
-      box.innerHTML += '<div id="home-trade-world"><div class="state state-empty home-traded__state"><div class="spinner" aria-hidden="true"></div><p class="state-title">불러오는 중이에요</p></div></div>' +
-        '<p class="form-help">각국이 전 세계에서 수입한 연간 금액과 그중 한국산 비중이에요. 관세청 수출 통계와 집계 기준이 달라 금액이 정확히 일치하지는 않아요.</p>';
+      box.innerHTML += '<div id="home-trade-world"><div class="state state-empty home-traded__state"><div class="spinner" aria-hidden="true"></div><p class="state-title">불러오는 중이에요</p></div></div>';
+      $("home-trade-foot").textContent = "UN Comtrade · 각국의 연간 총수입과 그중 한국산 비중 · 관세청 수출 통계와 집계 기준이 달라 금액이 정확히 맞지는 않아요";
       loadWorld(false);
       return;
     }
+    $("home-trade-foot").textContent = tradeFoot;
     var isC = tab === "countries";
     box.innerHTML += tradeTable(isC ? d.countries : d.products, d.metric_name, isC ? "국가" : "품목 (HS 6단위)") +
       (isC && d.country ? '<p class="form-help">국가를 고른 상태예요. 품목별 탭은 ' + esc(d.country_name) + " 기준으로 보여요.</p>" : "");
@@ -398,7 +399,8 @@
         "</div>" +
         '<div class="home-traded__col" id="home-trade-right"></div>' +
       "</div>";
-    $("home-trade-foot").textContent = "관세청 수출입실적 · " + d.latest_text + " 최신 · " + (d.cleaning_text || "");
+    tradeFoot = "관세청 수출입실적 · " + d.latest_text + " 최신 · " + (d.cleaning_text || "");
+    $("home-trade-foot").textContent = tradeFoot;
     renderTradeRight(d);
   }
   function loadTradeDetail() {

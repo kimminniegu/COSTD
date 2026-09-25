@@ -118,7 +118,7 @@
 .home-traded__cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-5); }
 .home-traded__col { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
 .home-traded__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 32px; }
-.home-traded__head .tabs { padding: 3px; }
+.home-traded__head .tabs { flex: none; padding: 3px; }
 .home-traded__head .tab { padding: 5px 10px; font-size: var(--font-size-caption); }
 .home-traded__title { font-size: var(--font-size-label); font-weight: var(--font-weight-bold); color: var(--color-text-primary); }
 
@@ -152,7 +152,7 @@
 .home-traded__val { font-weight: var(--font-weight-bold); }
 .home-traded__share { color: var(--color-text-secondary); }
 .home-traded__table .home-rank__delta { font-size: 0.6875rem; }
-.home-traded__table .badge { height: 22px; padding: 0 8px; font-size: 0.6875rem; }
+.home-traded__table .badge { height: 18px; padding: 0 7px; font-size: 0.6875rem; line-height: 18px; }
 .home-traded__state { padding: var(--space-5) var(--space-4); text-align: center; }
 .home-traded__state .state-title { font-size: var(--font-size-sub); }
 .home-traded__state .spinner { margin: 0 auto var(--space-2); }
