@@ -94,9 +94,10 @@
 
         <!-- ③ 물류비 — 미팅에서 거의 손대지 않는 값. 기본 접힘, 요약만 표시 -->
         <div class="margin-group">
+          <div class="margin-group__head"><h3 class="margin-group__title">물류비</h3></div>
           <details class="margin-drawer" id="margin-logi-box">
             <summary class="margin-drawer__head">
-              <span class="margin-drawer__title">물류비</span>
+              <span class="margin-drawer__title">FOB 물류비 총액</span>
               <b class="margin-drawer__value" id="margin-logi-sum"></b>
               <span class="margin-drawer__peek text-caption" id="margin-logi-peek"></span>
             </summary>
@@ -170,14 +171,14 @@
                 <div class="margin-hero__sub" id="margin-hero-sub"></div>
               </div>
               <div class="margin-bar" id="margin-bar"></div>
-              <div class="margin-legend">
-                <span><i class="margin-swatch is-cost"></i>원가</span>
-                <span><i class="margin-swatch is-m1"></i>1차 마진</span>
-                <span><i class="margin-swatch is-logi"></i>물류비</span>
-                <span><i class="margin-swatch is-logi-m"></i>물류 마진</span>
-                <span><i class="margin-swatch is-m2"></i>영업마진</span>
-                <span><i class="margin-swatch is-disc"></i>수량 할인</span>
-                <span><i class="margin-swatch is-sur"></i>소량 할증</span>
+              <div class="margin-legend" id="margin-bar-legend">
+                <span data-seg="is-cost"><i class="margin-swatch is-cost"></i>원가</span>
+                <span data-seg="is-m1"><i class="margin-swatch is-m1"></i>1차 마진</span>
+                <span data-seg="is-logi"><i class="margin-swatch is-logi"></i>물류비</span>
+                <span data-seg="is-logi-m"><i class="margin-swatch is-logi-m"></i>물류 마진</span>
+                <span data-seg="is-m2"><i class="margin-swatch is-m2"></i>영업마진</span>
+                <span data-seg="is-disc"><i class="margin-swatch is-disc"></i>수량 할인</span>
+                <span data-seg="is-sur"><i class="margin-swatch is-sur"></i>소량 할증</span>
               </div>
               <div class="margin-stats" id="margin-stats"></div>
             </div>
@@ -283,16 +284,16 @@
               <div class="card-header">
                 <div>
                   <h3 class="card-title">사양 변경(VE) 추천</h3>
-                  <p class="card-subtitle" id="margin-ve-hint">체크하면 위 판정과 게이지에 바로 반영돼요.</p>
+                  <p class="card-subtitle" id="margin-ve-hint">체크하면 위 판정에 반영돼요</p>
                 </div>
               </div>
               <div class="card-body">
                 <div class="margin-ve-list">
                   <label class="margin-ve-item"><input type="checkbox" id="margin-ve-coat">
-                    <span class="margin-ve-item__text"><b>부자재 코팅/후가공 생략</b><span class="text-caption">UV 코팅·박·에폭시 제외 · −30~50원 중 하한</span></span>
+                    <span class="margin-ve-item__text"><b>부자재 코팅/후가공 생략</b><span class="text-caption">UV 코팅·박·에폭시 제외 (하한 적용)</span></span>
                     <span class="margin-ve-item__save" id="margin-ve-save-coat"></span></label>
                   <label class="margin-ve-item"><input type="checkbox" id="margin-ve-box">
-                    <span class="margin-ve-item__text"><b>단상자 지류 변경 / 단일도수</b><span class="text-caption">평량 한 단계 하향, 1도 인쇄</span></span>
+                    <span class="margin-ve-item__text"><b>단상자 평량·도수 축소</b><span class="text-caption">평량 한 단계 하향, 1도 인쇄</span></span>
                     <span class="margin-ve-item__save" id="margin-ve-save-box"></span></label>
                   <label class="margin-ve-item"><input type="checkbox" id="margin-ve-sagup">
                     <span class="margin-ve-item__text"><b>부자재 사급 전환</b><span class="text-caption" id="margin-ve-sagup-note">부자재 1차 마진 제외</span></span>
@@ -306,7 +307,7 @@
               <div class="card-header">
                 <div>
                   <h3 class="card-title">마진 직접 조정</h3>
-                  <p class="card-subtitle">조정 마진율이 위 판정과 게이지에 바로 반영돼요.</p>
+                  <p class="card-subtitle">조정 시 위 판정에 반영</p>
                 </div>
                 <button type="button" class="btn btn-secondary btn-sm" id="margin-adj-reset">현재값으로</button>
               </div>
@@ -355,9 +356,11 @@
               <p class="form-error margin-head__err" id="margin-qty-add-err" role="alert"></p>
               <!-- 수량 할인 구간 — 바꾸면 아래 단가표·견적 단가에 바로 반영 -->
               <div class="margin-disc">
-                <span class="form-label margin-disc__label">수량 할인 구간</span>
+                <div class="margin-disc__head">
+                  <span class="form-label">수량 할인 구간</span>
+                  <button type="button" class="btn btn-ghost btn-sm" id="margin-add-tier">+ 구간 추가</button>
+                </div>
                 <div class="margin-disc__list" id="margin-tiers"></div>
-                <button type="button" class="btn btn-secondary btn-sm" id="margin-add-tier">구간 추가</button>
               </div>
               <div class="margin-verdict is-info margin-tier-summary" id="margin-tier-summary"></div>
             </div>
@@ -373,8 +376,9 @@
                   <span><i class="margin-swatch is-other"></i>다른 수량</span>
                   <span><i class="margin-swatch is-hatch"></i>MOQ 미만</span>
                 </div>
+                <p class="card-subtitle margin-tier-crit" id="margin-tier-crit"></p>
               </div>
-              <div class="row">
+              <div class="row margin-nowrap">
                 <button type="button" class="btn btn-secondary btn-sm" id="margin-copy-tier">바이어용 가격표 복사</button>
                 <button type="button" class="btn btn-secondary btn-sm" id="margin-copy-mail-tier">영문 이메일 제안문 복사</button>
               </div>

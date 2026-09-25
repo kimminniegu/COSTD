@@ -13,6 +13,7 @@
   const won = (v) => Math.round(v).toLocaleString("ko-KR") + "원";
   const usd = (v) => "$" + (Math.round(v * 100) / 100).toFixed(2);
   const pct = (v) => (Math.round(v * 1000) / 10).toFixed(1) + "%";
+  const pctN = (v) => Math.round(v * 1000) / 10 + "%";   // 기준값 표시용 (20.0% → 20%)
   const money = (v) => "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const NAMES = { raw: "원재료", proc: "임가공", pack: "부자재" };
   const ICON_X = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>';
@@ -340,18 +341,22 @@
       ["수량 할인", r.P3 - r.P4, "is-disc"], ["소량 할증", r.P4 - r.P3, "is-sur"],
     ];
     const barMax = Math.max(r.P3, r.P4);
-    $("bar").innerHTML = segs.filter((s) => s[1] > 0.0001).map((s) => {
+    const shown = segs.filter((s) => s[1] > 0.0001);
+    /* 범례는 막대에 실제로 있는 항목만 (할인·할증이 없으면 숨김) */
+    root.querySelectorAll("#margin-bar-legend [data-seg]").forEach((e) => { e.hidden = !shown.some((s) => s[2] === e.dataset.seg); });
+    $("bar").innerHTML = shown.map((s) => {
       const w = (s[1] / barMax) * 100;
       return `<div class="${s[2]}" style="width:${w}%" title="${s[0]} ${won(s[1])}">${w > 9 ? Math.round(s[1]).toLocaleString() : ""}</div>`;
     }).join("");
 
     /* 할인 후 영업마진은 판매가 대비 값이라 목표·최소도 판매가 대비(toSale)로 바꿔 비교 */
     const low = r.m2after < toSale(p.m2min) - 1e-9;
-    const tile = (label, value, cls = "", note = "") => `<div class="stat-tile"><span class="stat-tile__label">${label}</span><span class="stat-tile__value ${cls}">${value}</span>${note}</div>`;
-    $("stats").innerHTML = tile("원가", won(r.C))
-      + tile("1차 마진 (물류 포함)", pct(r.m1eff))
-      + tile("할인 후 영업마진", pct(r.m2after), low ? "is-low" : "", `<span class="text-caption">목표 ${pct(toSale(p.m2))} · 최소 ${pct(toSale(p.m2min))}</span>`)
-      + tile("총 마진 (판매가 대비)", pct(r.marginTotal / r.P4));
+    /* 라벨은 짧게 한 줄, 기준·설명은 값 아래 보조 줄로 (4개 타일 높이 통일) */
+    const tile = (label, value, note, cls = "") => `<div class="stat-tile"><span class="stat-tile__label">${label}</span><span class="stat-tile__value ${cls}">${value}</span><span class="margin-stat-note">${note}</span></div>`;
+    $("stats").innerHTML = tile("원가", won(r.C), r.C > 0 && p.loss > 0 ? `로스 ${pct(p.loss)} 포함` : "개당 제조원가")
+      + tile("1차 마진", pct(r.m1eff), "물류 포함")
+      + tile("할인 후 영업마진", pct(r.m2after), `목표 ${pctN(toSale(p.m2))} · 최소 ${pctN(toSale(p.m2min))}`, low ? "is-low" : "")
+      + tile("총 마진", pct(r.marginTotal / r.P4), "판매가 대비");
 
     const n = (v) => `<td class="is-numeric">${v}</td>`;
     $("item-table").innerHTML = '<thead><tr><th>항목</th><th class="is-numeric">원가</th><th class="is-numeric">마진율</th><th class="is-numeric">공급가</th><th class="is-numeric">마진</th></tr></thead><tbody>'
@@ -628,8 +633,8 @@
     $("ve-save-box").textContent = "−" + won(VE_CUT.box);
     $("ve-save-sagup").textContent = p.sagup ? "-" : "−" + won(sagupSave);
     $("ve-hint").textContent = z[0] === "orange" || z[0] === "red"
-      ? "마진만으로 맞추기 어려워요. 체크하면 위 판정에 바로 반영돼요."
-      : "지금은 마진만으로 대응 가능해요. 체크하면 위 판정에 반영돼요.";
+      ? "마진만으로는 부족해요 · 체크해 보세요"
+      : "체크하면 위 판정에 반영돼요";
     const cut = ["coat", "box"].reduce((a, k) => a + ($("ve-" + k).checked ? VE_CUT[k] : 0), 0);
     const veSagup = $("ve-sagup").checked && !p.sagup;
     const packCost = Math.max(0, p.pack - cut);
@@ -811,7 +816,8 @@
     const vMin = vals.length ? Math.min(...vals) : 0, vMax = vals.length ? Math.max(...vals) : 1;
     const barW = (v) => (vMax - vMin < 1e-9 ? 100 : 35 + ((v - vMin) / (vMax - vMin)) * 65);
     const gS = toSale(p.m2), mnS = toSale(p.m2min);   // 영업마진 Badge 기준 (판매가 대비)
-    $("tier-table").innerHTML = `<thead><tr><th>수량</th><th class="is-numeric">물류비 총액</th><th>${p.inco} 단가</th><th class="is-numeric">영업마진<span class="margin-qtable__sub">목표 ${pct(gS)} · 최소 ${pct(mnS)}</span></th><th></th></tr></thead><tbody>`
+    $("tier-crit").textContent = `영업마진 배지 기준 · 목표 ${pctN(gS)} · 최소 ${pctN(mnS)}`;
+    $("tier-table").innerHTML = `<thead><tr><th>수량</th><th class="is-numeric">물류비 총액</th><th>${p.inco} 단가</th><th class="is-numeric">영업마진</th><th></th></tr></thead><tbody>`
       + data.map((x) => {
         const r = x.r, now = x.q === p.qty;
         const zz = r.m2after < mnS - 1e-9 ? "red" : r.m2after < gS - 1e-9 ? "yellow" : "green";
