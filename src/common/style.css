@@ -334,6 +334,24 @@ button, input, select, textarea { font: inherit; color: inherit; }
   font-size: var(--font-size-sub);
   font-weight: var(--font-weight-bold);
 }
+.app-user__main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin: -6px -8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-base);
+}
+.app-user__main:hover { background: var(--color-surface); }
 .app-user__logout {
   flex: none;
   display: grid;
@@ -350,6 +368,29 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .app-user__name, .app-user__team { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-user__name { font-size: var(--font-size-sub); font-weight: var(--font-weight-bold); }
 .app-user__team { font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+
+/* 내 계정 모달 (회사소개 · 로그인 정보) */
+.app-about { display: flex; flex-direction: column; gap: var(--space-6); }
+.app-about__section { display: flex; flex-direction: column; gap: var(--space-3); }
+.app-about__section + .app-about__section { padding-top: var(--space-5); border-top: 1px solid var(--color-border); }
+.app-about__title { margin: 0; font-size: var(--font-size-label); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
+.app-about__head, .app-about__brand { display: flex; align-items: center; gap: var(--space-3); }
+.app-about__head .badge { margin-left: auto; }
+.app-about__avatar { width: 44px; height: 44px; font-size: var(--font-size-body); }
+.app-about__brand .app-brand__logo { flex: none; }
+.app-about__who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.app-about__name { font-size: var(--font-size-card-title); font-weight: var(--font-weight-bold); line-height: 1.2; }
+.app-about__list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); margin: 0; }
+.app-about__list > div { display: flex; flex-direction: column; gap: 2px; padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
+.app-about__list dt { font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+.app-about__list dd { margin: 0; font-size: var(--font-size-sub); font-weight: var(--font-weight-bold); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-about__desc { margin: 0; font-size: var(--font-size-sub); line-height: 1.6; color: var(--color-text-body); }
+.app-about__features { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.app-about__features li { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-label); color: var(--color-text-body); }
+.app-about__icon { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-xs); background: var(--color-primary-soft); color: var(--color-primary); }
+@media (max-width: 640px) {
+  .app-about__list, .app-about__features { grid-template-columns: minmax(0, 1fr); }
+}
 
 .app-main {
   margin-left: var(--layout-sidebar-width);
@@ -406,6 +447,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
   .is-sidebar-collapsed .app-user { flex-direction: column; justify-content: center; gap: 6px; padding: 8px 0; background: transparent; border-color: transparent; }
   .is-sidebar-collapsed .app-user__text { display: none; }
+  .is-sidebar-collapsed .app-user__main { flex: none; margin: 0; padding: 0; }
   .is-sidebar-collapsed .app-user__logout { margin-left: 0; }
 }
 
