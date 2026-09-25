@@ -84,6 +84,7 @@
     if (st.mMode === "margin" && (Object.values(rates).some((v) => v >= 1) || p.m2 >= 1)) {
       return { error: "마진율 방식에서는 마진이 100% 미만이어야 해요." };
     }
+    if (p.m2min > p.m2) return { error: "최소 마진 방어선은 목표 영업마진보다 클 수 없어요." };
     p.rates = rates;
     return p;
   }
@@ -121,19 +122,24 @@
     };
   }
 
-  /* ---------- 수량 할인 구간 편집 ---------- */
+  /* ---------- 수량 할인 구간 편집 (수량별 단가 탭) ----------
+     값을 바꾸면 단가표·견적 단가에 바로 반영하고, 구간 시작 수량이 표에 없으면 그 수량 행을 추가해 할인 효과가 보이게 합니다. */
   function drawTiers() {
     $("tiers").innerHTML = st.tiers.map((t, i) => `
-      <div class="margin-tier-row">
-        <div class="margin-field"><input class="form-control form-control-sm" type="number" step="1000" value="${t.min}" data-i="${i}" data-f="min" aria-label="할인 시작 수량"><span class="margin-field__unit">개</span></div>
-        <div class="margin-field"><input class="form-control form-control-sm" type="number" step="0.5" value="${t.d}" data-i="${i}" data-f="d" aria-label="할인율"><span class="margin-field__unit">%</span></div>
-        <button type="button" class="btn btn-secondary btn-icon" data-del="${i}" aria-label="구간 삭제">${ICON_X}</button>
+      <div class="margin-disc__item">
+        <div class="margin-field margin-w-qty"><input class="form-control form-control-sm" type="number" step="1000" value="${t.min}" data-i="${i}" data-f="min" aria-label="할인 시작 수량"><span class="margin-field__unit">개</span></div>
+        <span class="text-caption">이상</span>
+        <div class="margin-field margin-w-rate"><input class="form-control form-control-sm" type="number" step="0.5" value="${t.d}" data-i="${i}" data-f="d" aria-label="할인율"><span class="margin-field__unit">%</span></div>
+        <button type="button" class="btn btn-ghost btn-icon" data-del="${i}" aria-label="구간 삭제">${ICON_X}</button>
       </div>`).join("") || '<p class="text-caption">할인 구간이 없어요. 모든 수량에 정가가 적용돼요.</p>';
-    $("tiers").querySelectorAll("input").forEach((e) => e.addEventListener("input", () => {
-      const v = parseFloat(e.value);
-      st.tiers[e.dataset.i][e.dataset.f] = isNaN(v) ? 0 : v;
-      render();
-    }));
+    $("tiers").querySelectorAll("input").forEach((e) => {
+      e.addEventListener("input", () => {
+        const v = parseFloat(e.value);
+        st.tiers[e.dataset.i][e.dataset.f] = isNaN(v) || v < 0 ? 0 : v;
+        render();
+      });
+      if (e.dataset.f === "min") e.addEventListener("change", () => { if (ensureQtyRow(st.tiers[e.dataset.i].min)) render(); });
+    });
     $("tiers").querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => {
       st.tiers.splice(+b.dataset.del, 1);
       drawTiers();
@@ -141,10 +147,64 @@
     }));
   }
   $("add-tier").addEventListener("click", () => {
-    const last = st.tiers.length ? Math.max(...st.tiers.map((t) => t.min)) : 10000;
-    st.tiers.push({ min: last * 2, d: 0 });
+    const last = st.tiers.length ? st.tiers.reduce((a, b) => (b.min > a.min ? b : a)) : { min: 10000, d: 0 };
+    const t = { min: last.min * 2, d: last.d + 2 };
+    st.tiers.push(t);
+    ensureQtyRow(t.min);
     drawTiers();
     render();
+  });
+
+  /* 가격표에 없는 수량이면 행 추가 — 물류비 총액은 가장 가까운 수량 행에서 (수량비)^0.75 로 약식 추정 (수량이 늘수록 개당 물류비가 줄어드는 관행) */
+  function ensureQtyRow(q) {
+    if (!(q > 0) || st.qtyRows.some((row) => row.q === q)) return false;
+    const near = st.qtyRows.reduce((a, b) => (Math.abs(Math.log(b.q / q)) < Math.abs(Math.log(a.q / q)) ? b : a));
+    st.qtyRows.push({ q, l: Math.max(10000, Math.round((near.l * Math.pow(q / near.q, 0.75)) / 10000) * 10000) });
+    return true;
+  }
+
+  /* ---------- ERP 연동 (제조원가 · 1차 마진) ----------
+     서버 /api/margin-calculator/erp-cost 가 품목의 원가·1차 마진율을 돌려줍니다. (시연 단계: 예시 품목 1개)
+     받은 값은 세부 항목 칸에 채우고, 이후 직접 고치면 '수정됨'으로 표시합니다. */
+  const ERP_FIELDS = { raw: "raw", proc: "proc", pack: "pack", "r-raw": "rate_raw", "r-proc": "rate_proc", "r-pack": "rate_pack", loss: "loss" };
+  let erp = null;   // { item_code, item_name, synced_at, vals }
+
+  function erpDirty() {
+    if (!erp) return false;
+    return Object.keys(ERP_FIELDS).some((id) => Math.abs(num(id) - erp.vals[ERP_FIELDS[id]]) > 1e-9)
+      || $("sagup").checked !== erp.vals.sagup;
+  }
+
+  function syncErpStatus() {
+    const el = $("erp-status");
+    if (!erp) { el.textContent = "ERP 미연동 · 예시 값"; return; }
+    el.innerHTML = `${esc(erp.item_code)} ${esc(erp.item_name)} · `
+      + (erpDirty() ? '<span class="margin-erp-dirty">ERP 값에서 수정됨</span>' : `${esc(erp.synced_at.slice(11, 16))} 동기화`);
+  }
+
+  $("erp-sync").addEventListener("click", async () => {
+    const btn = $("erp-sync"), label = btn.textContent;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner spinner-sm"></span> 불러오는 중';
+    $("erp-err").textContent = "";
+    try {
+      const res = await fetch(root.dataset.erpUrl, { headers: { Accept: "application/json" } });
+      if (!res.ok || !(res.headers.get("Content-Type") || "").includes("json")) throw new Error();
+      const data = await res.json();
+      Object.keys(ERP_FIELDS).forEach((id) => { $(id).value = data[ERP_FIELDS[id]]; });
+      $("sagup").checked = !!data.sagup;
+      if (st.mInput !== "item") $("seg-minput").querySelector('[data-k="item"]').click();   // ERP 는 항목별 마진율
+      if (data.product_en) $("q-product").value = data.product_en;
+      erp = { item_code: data.item_code, item_name: data.item_name, synced_at: data.synced_at, vals: { ...data, sagup: !!data.sagup } };
+      render();
+      btn.textContent = "연동됨";
+      setTimeout(() => { btn.textContent = label; }, 1500);
+    } catch (e) {
+      $("erp-err").textContent = "ERP 원가를 불러오지 못했어요. 다시 로그인한 뒤 시도해 주세요.";
+      btn.textContent = label;
+    } finally {
+      btn.disabled = false;
+    }
   });
 
   /* ---------- 약식 포장/CBM 추정 (물류비 입력 보조) ----------
@@ -236,13 +296,26 @@
     $("sea-row").style.display = ["CFR", "CIF"].includes(inco) ? "grid" : "none";
     $("ins-box").style.visibility = inco === "CIF" ? "visible" : "hidden";
     $("err").textContent = p.error || "";
-    if (p.error) return;
+    syncErpStatus();
+    if (p.error) { $("cost-sum").textContent = "-"; return; }
     const r = forward(p);
+    renderInputSummary(p, r);
     renderCbm(p);
     renderForward(p, r);
     renderReverse(p, r);
     renderTier(p);
     renderFx(p, r);
+  }
+
+  /* 접힌 입력 섹션 요약 — 원가 합계(로스 포함) / 물류비 */
+  function renderInputSummary(p, r) {
+    $("cost-sum").textContent = won(r.C);
+    const exw = p.inco === "EXW";
+    $("logi-sum").textContent = exw ? "EXW · 미포함" : won(p.logi);
+    const peek = exw ? ["바이어 운송"] : [`개당 ${won(r.L)}`, `마진 ${pct(p.rates.logi)}`];
+    if (p.inco === "CFR" || p.inco === "CIF") peek.push(`해상 $${(p.freight || 0).toLocaleString()}`);
+    if (p.inco === "CIF") peek.push(`보험 ${(Math.round(p.ins * 10000) / 100)}%`);
+    $("logi-peek").textContent = peek.join(" · ");
   }
 
   function renderForward(p, r) {
@@ -271,11 +344,12 @@
       return `<div class="${s[2]}" style="width:${w}%" title="${s[0]} ${won(s[1])}">${w > 9 ? Math.round(s[1]).toLocaleString() : ""}</div>`;
     }).join("");
 
-    const low = r.m2after < p.m2min;
-    const tile = (label, value, cls = "") => `<div class="stat-tile"><span class="stat-tile__label">${label}</span><span class="stat-tile__value ${cls}">${value}</span></div>`;
+    /* 할인 후 영업마진은 판매가 대비 값이라 목표·최소도 판매가 대비(toSale)로 바꿔 비교 */
+    const low = r.m2after < toSale(p.m2min) - 1e-9;
+    const tile = (label, value, cls = "", note = "") => `<div class="stat-tile"><span class="stat-tile__label">${label}</span><span class="stat-tile__value ${cls}">${value}</span>${note}</div>`;
     $("stats").innerHTML = tile("원가", won(r.C))
       + tile("1차 마진 (물류 포함)", pct(r.m1eff))
-      + tile("할인 후 영업마진", pct(r.m2after), low ? "is-low" : "")
+      + tile("할인 후 영업마진", pct(r.m2after), low ? "is-low" : "", `<span class="text-caption">목표 ${pct(toSale(p.m2))} · 최소 ${pct(toSale(p.m2min))}</span>`)
       + tile("총 마진 (판매가 대비)", pct(r.marginTotal / r.P4));
 
     const n = (v) => `<td class="is-numeric">${v}</td>`;
@@ -712,7 +786,11 @@
     const surOn = st.moqMode === "surcharge";
     $("moq-sur").disabled = !surOn;
     $("sur-box").classList.toggle("is-disabled", !surOn);
-    const rows = st.qtyRows.map((row, i) => ({ ...row, i })).sort((a, b) => a.q - b.q);
+    /* 현재 주문 수량 행은 좌측 입력(주문수량·FOB 물류비)과 같은 값으로 계산 — 견적 계산 탭 단가와 항상 일치.
+       가격표에 현재 수량이 없으면 삭제할 수 없는 '현재 주문' 행(i = -1)을 임시로 넣습니다. */
+    const rows = st.qtyRows.map((row, i) => (row.q === p.qty ? { ...row, l: p.logi, i } : { ...row, i }));
+    if (!rows.some((row) => row.q === p.qty)) rows.push({ q: p.qty, l: p.logi, i: -1 });
+    rows.sort((a, b) => a.q - b.q);
     const data = rows.map((row) => {
       const r = forward(p, { qty: row.q, logi: row.l });
       return { ...row, r, off: r.belowMoq && st.moqMode === "block" };
@@ -731,10 +809,11 @@
     const vals = valid.map((x) => x.r.usd);
     const vMin = vals.length ? Math.min(...vals) : 0, vMax = vals.length ? Math.max(...vals) : 1;
     const barW = (v) => (vMax - vMin < 1e-9 ? 100 : 35 + ((v - vMin) / (vMax - vMin)) * 65);
-    $("tier-table").innerHTML = `<thead><tr><th>수량</th><th class="is-numeric">물류비 총액</th><th>${p.inco} 단가</th><th class="is-numeric">영업마진</th><th></th></tr></thead><tbody>`
+    const gS = toSale(p.m2), mnS = toSale(p.m2min);   // 영업마진 Badge 기준 (판매가 대비)
+    $("tier-table").innerHTML = `<thead><tr><th>수량</th><th class="is-numeric">물류비 총액</th><th>${p.inco} 단가</th><th class="is-numeric">영업마진<span class="margin-qtable__sub">목표 ${pct(gS)} · 최소 ${pct(mnS)}</span></th><th></th></tr></thead><tbody>`
       + data.map((x) => {
         const r = x.r, now = x.q === p.qty;
-        const zz = r.m2after < p.m2min - 1e-9 ? "red" : r.m2after < p.m2 - 1e-9 ? "yellow" : "green";
+        const zz = r.m2after < mnS - 1e-9 ? "red" : r.m2after < gS - 1e-9 ? "yellow" : "green";
         const fill = r.belowMoq ? "is-hatch" : now ? "is-cur" : "is-other";
         const pctS = (v) => Math.round(v * 1000) / 10 + "%";   // 표 안에서는 10.0% → 10%
         const notes = [now ? '<b class="is-now">현재 주문</b>' : ""];
@@ -750,11 +829,18 @@
           <td class="is-numeric"><div class="margin-qtable__line is-end"><div class="margin-field margin-w-logi"><input class="form-control form-control-sm" type="number" step="100000" value="${x.l}" data-qi="${x.i}" data-f="l" aria-label="물류비 총액"><span class="margin-field__unit">원</span></div></div><span class="margin-qtable__sub">개당 ${won(r.L)}</span></td>
           <td class="margin-qtable__price"><div class="margin-qtable__line">${price}</div><span class="margin-qtable__sub margin-qtable__notes">${notes.filter(Boolean).join("")}</span></td>
           <td class="is-numeric"><div class="margin-qtable__line is-end">${x.off ? "-" : badge(zz, pct(r.m2after))}</div></td>
-          <td><div class="margin-qtable__line"><button type="button" class="btn btn-ghost btn-icon" data-qdel="${x.i}" aria-label="수량 삭제"${st.qtyRows.length > 1 ? "" : " disabled"}>${ICON_X}</button></div></td></tr>`;
+          <td><div class="margin-qtable__line"><button type="button" class="btn btn-ghost btn-icon" data-qdel="${x.i}" aria-label="수량 삭제"${st.qtyRows.length > 1 && x.i >= 0 ? "" : " disabled"}>${ICON_X}</button></div></td></tr>`;
       }).join("") + "</tbody>";
+    /* 현재 주문 행의 물류비를 고치면 좌측 FOB 물류비에, 임시 행(i = -1)의 수량을 고치면 좌측 주문수량에 반영 */
     $("tier-table").querySelectorAll("input").forEach((e) => e.addEventListener("change", () => {
-      const v = parseFloat(e.value);
-      if (!isNaN(v) && v > 0) st.qtyRows[e.dataset.qi][e.dataset.f] = v;
+      const v = parseFloat(e.value), i = +e.dataset.qi;
+      if (!isNaN(v) && v > 0) {
+        const row = i >= 0 ? st.qtyRows[i] : null;
+        const cur = row ? row.q === p.qty : true;
+        if (e.dataset.f === "l" && cur) $("logi").value = v;
+        if (e.dataset.f === "q" && !row) $("qty").value = v;
+        if (row) row[e.dataset.f] = v;
+      }
       render();
     }));
     $("tier-table").querySelectorAll("[data-qdel]").forEach((b) => b.addEventListener("click", () => {
@@ -779,14 +865,12 @@
     copyText($("copy-tier"), lines.join("\n"));
   });
 
-  /* 견적 수량 추가 — 물류비 총액은 가장 가까운 수량 행에서 (수량비)^0.75 로 약식 추정 (수량이 늘수록 개당 물류비가 줄어드는 관행) */
+  /* 견적 수량 추가 — 물류비 총액은 ensureQtyRow 의 약식 추정 */
   function addQty() {
     const q = Math.round(num("qty-add"));
     const err = $("qty-add-err");
     if (isNaN(q) || q <= 0) { err.textContent = "0보다 큰 수량을 입력하세요."; $("qty-add").focus(); return; }
-    if (st.qtyRows.some((row) => row.q === q)) { err.textContent = `${q.toLocaleString()}개는 이미 표에 있어요.`; return; }
-    const near = st.qtyRows.reduce((a, b) => (Math.abs(Math.log(b.q / q)) < Math.abs(Math.log(a.q / q)) ? b : a));
-    st.qtyRows.push({ q, l: Math.max(10000, Math.round((near.l * Math.pow(q / near.q, 0.75)) / 10000) * 10000) });
+    if (!ensureQtyRow(q)) { err.textContent = `${q.toLocaleString()}개는 이미 표에 있어요.`; return; }
     err.textContent = "";
     $("qty-add").value = "";
     render();

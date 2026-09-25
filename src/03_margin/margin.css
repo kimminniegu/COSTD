@@ -65,10 +65,20 @@
 .margin-inline { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); flex-wrap: wrap; }
 .margin-inline--tight { justify-content: flex-start; }
 .margin-w-sm { width: 96px; }
-.margin-tiers { display: flex; flex-direction: column; gap: var(--space-2); }
-.margin-tier-row { display: grid; grid-template-columns: 1fr 1fr 44px; gap: var(--space-2); align-items: center; }
 .margin-check-sm { margin-top: var(--space-1); font-size: var(--font-size-label); }
-.margin-tier-row .btn-icon { width: 44px; height: 44px; }
+
+/* ① 견적 조건 — 입력 Card(스크롤 영역) 위쪽에 고정. 1열 화면에서는 고정하지 않음 */
+.margin-pin {
+  position: sticky;
+  top: calc(var(--space-6) * -1);
+  z-index: 1;
+  margin: calc(var(--space-6) * -1) calc(var(--space-6) * -1) 0;
+  padding: var(--space-6) var(--space-6) var(--space-4);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border-strong);
+}
+.margin-pin + .margin-group { padding-top: 0; border-top: 0; }
+.margin-group__tools { display: flex; align-items: center; gap: var(--space-2); }
 
 /* hidden 속성이 class 의 display 값에 덮이지 않도록 (팝업은 body 로 옮겨지므로 따로 지정) */
 .margin-page [hidden], #margin-quote-modal [hidden] { display: none; }
@@ -91,10 +101,15 @@
 .margin-drawer__title { display: flex; align-items: center; gap: var(--space-2); font-weight: var(--font-weight-bold); color: var(--color-text-strong); }
 .margin-drawer__title::before { content: "▸"; color: var(--color-text-placeholder); transition: transform var(--transition-base); }
 .margin-drawer[open] .margin-drawer__title::before { transform: rotate(90deg); }
+.margin-drawer__value { margin-left: auto; font-size: var(--font-size-sub); font-weight: var(--font-weight-extrabold); color: var(--color-text-primary); font-variant-numeric: tabular-nums; }
+.margin-drawer__peek { flex-basis: 100%; overflow: hidden; text-overflow: ellipsis; }
+.margin-erp-dirty { color: var(--color-warning); font-weight: var(--font-weight-bold); }
 .margin-drawer__head:focus-visible { outline: none; box-shadow: var(--shadow-focus); border-radius: var(--radius-lg); }
 .margin-drawer__body { display: flex; flex-direction: column; gap: var(--space-2); padding: 0 var(--space-4) var(--space-4); }
 .margin-drawer .form-control { background: var(--color-surface); }
 .margin-unit-wide .margin-field .form-control { padding-right: 48px; }
+.margin-cbm { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); padding-top: var(--space-3); border-top: 1px solid var(--color-border-strong); }
+.margin-cbm__title { font-size: var(--font-size-label); font-weight: var(--font-weight-bold); color: var(--color-text-strong); }
 .margin-cbm-out { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-3); background: var(--color-surface); border-radius: var(--radius-sm); font-size: var(--font-size-label); color: var(--color-text-secondary); }
 .margin-cbm-out__row { display: flex; justify-content: space-between; gap: var(--space-2); }
 .margin-cbm-out__row b { color: var(--color-text-primary); font-variant-numeric: tabular-nums; }
@@ -245,6 +260,18 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 .margin-qty-add { display: flex; gap: var(--space-2); }
 .margin-qty-add .margin-field { flex: 1; min-width: 0; }
 .margin-qty-add .btn { flex-shrink: 0; height: 44px; }
+/* 수량 할인 구간 (수량별 단가 탭 머리, 한 줄 전체) */
+.margin-disc { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.margin-disc__label { flex-basis: 100%; }
+.margin-disc__list { display: contents; }   /* 구간 칩과 '구간 추가' 버튼이 한 줄로 흐르며 줄바꿈 */
+.margin-disc__item { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-2); background: var(--color-surface-muted); border-radius: var(--radius-lg); }
+.margin-disc__item .btn-icon { width: 32px; height: 32px; }
+.margin-disc .margin-w-qty { width: 116px; }
+.margin-w-rate { width: 72px; }
+.margin-disc .margin-field .form-control { background: var(--color-surface); }
+.margin-disc input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.margin-disc input[type="number"]::-webkit-inner-spin-button,
+.margin-disc input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .margin-tier-summary.margin-verdict { flex-direction: row; flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: var(--space-1) var(--space-3); padding: var(--space-3) var(--space-4); }
 .margin-tier-summary .margin-verdict__title { font-size: var(--font-size-sub); }
 .margin-head .form-check { margin-top: var(--space-1); font-size: var(--font-size-label); }
@@ -358,6 +385,7 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 @container page (max-width: 880px) {
   .margin-layout { grid-template-columns: 1fr; }
   .margin-inputs { position: static; max-height: none; overflow: visible; }
+  .margin-pin { position: static; }
   .margin-rmid { grid-template-columns: 1fr; }
   .margin-options { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .margin-head--tier { grid-template-columns: 1fr 1fr; }

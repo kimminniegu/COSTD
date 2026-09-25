@@ -9,6 +9,7 @@
 - 현재 USD/KRW 환율: 수출 대금을 원화로 받는 기준인 TTB(전신환 받으실 때)를 씁니다.
   한국수출입은행 ttb(EXIM_API_KEY 있을 때) → 없거나 실패하면 ExchangeRate-API 중간값 × 0.99 추정 TTB(키 없음).
   둘 다 하루 1회 고시·갱신 값이라 10분 동안 메모리에 캐시합니다.
+- ERP 원가 연동: 품목의 제조원가·1차 마진율을 돌려줍니다. (시연 단계 — 예시 품목 1개, 실제 ERP 연결 시 erp_cost() 만 교체)
 """
 
 from __future__ import annotations
@@ -285,3 +286,27 @@ def usd_krw_rate():
             _fx_cache.update(at=now, data=data)
             return data
     raise RuntimeError("현재 환율을 불러오지 못했어요.")
+
+
+# ---------------------------------------------------------------------------
+# ERP 원가 연동 — 좌측 '제조원가 · 1차 마진'의 [ERP 연동] 버튼용
+# ---------------------------------------------------------------------------
+# 시연 단계라 예시 품목 1개만 돌려줍니다. 실제 ERP(원가 모듈)와 연결할 때는 erp_cost() 안만 바꾸고 응답 key 는 유지합니다.
+ERP_SAMPLE = {
+    "item_code": "TN-150",
+    "item_name": "토너 150ml",
+    "product_en": "Toner 150ml",
+    "raw": 880,          # 원재료 원가 (원/개)
+    "proc": 420,         # 임가공 원가
+    "pack": 640,         # 부자재 원가
+    "rate_raw": 20,      # 1차 마진율 (%)
+    "rate_proc": 10,
+    "rate_pack": 15,
+    "loss": 1,           # 로스율 (%)
+    "sagup": False,      # 부자재 사급 여부
+}
+
+
+def erp_cost():
+    """ERP 품목 원가 {"item_code", "item_name", "product_en", "raw", "proc", "pack", "rate_*", "loss", "sagup", "synced_at"}."""
+    return {**ERP_SAMPLE, "synced_at": datetime.now(KST).strftime("%Y-%m-%d %H:%M")}

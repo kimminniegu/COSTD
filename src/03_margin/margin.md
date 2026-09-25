@@ -7,6 +7,7 @@
 | 2.0 | 2026-09-23 | 화면 전면 재구성(견적 계산 / 역제안 분석 / 수량별 단가 / 환율 영향 4개 탭) 및 견적서 PDF 팝업 기준으로 명세 작성 | C |
 | 2.1 | 2026-09-24 | 물류비 약식 CBM 추정(접이식), 역제안 사양 변경(VE) 추천·영업 승인 가이드라인(R&R) Badge, '내부·대외 비교'를 견적서 발행 옵션으로 편입, 영문 이메일 제안문 복사 | C |
 | 2.2 | 2026-09-24 | 수량별 단가: 견적 수량 추가 입력칸, 막대 차트와 가격표를 '수량별 단가표' 한 Card로 통합(단가 칸 안 가로 막대, MOQ 수량 옆 MOQ 표시), 입력·표 정렬 정리 | C |
+| 2.3 | 2026-09-25 | 좌측 입력 재구성: ① 견적 조건(주문수량·인코텀즈·목표 영업마진·최소 마진 방어선) 상단 고정 ② 제조원가·1차 마진 **ERP 연동**(시연용 예시 품목 1개, 기본은 원가 합계만·펼치면 세부) ③ 물류비·CBM 추정을 접이식 한 묶음으로. 수량 할인 구간을 수량별 단가 탭으로 이동 | C |
 
 ## 1. 페이지 목적
 
@@ -26,9 +27,9 @@
 | `src/03_margin/margin.css` | 이 페이지 전용 스타일 (`margin-` 접두사, CSS Variable만 사용) |
 | `src/03_margin/margin.js` | 모든 계산·렌더링·이벤트 (IIFE, 전역 변수 없음) |
 | `src/03_margin/margin.md` | 이 기능 명세서 |
-| `src/03_margin/service.py` | 견적서 PDF: 회사 정보(`COMPANY`), 입력 검증, 합계 재계산, 영문 금액 표기, PDF 생성 / 현재 USD/KRW 환율 조회(10분 캐시) |
+| `src/03_margin/service.py` | 견적서 PDF: 회사 정보(`COMPANY`), 입력 검증, 합계 재계산, 영문 금액 표기, PDF 생성 / 현재 USD/KRW 환율 조회(10분 캐시) / ERP 원가 연동(시연용 예시 `ERP_SAMPLE`) |
 | `src/03_margin/margin_quote_document.html` | 견적서 PDF 전용 문서 템플릿 (xhtml2pdf용, base.html 비상속) |
-| `app.py` | `# [C]` 주석 아래 Backend Route 2개만 |
+| `app.py` | `# [C]` 주석 아래 Backend Route 4개만 |
 
 ## 3. URL
 
@@ -38,6 +39,7 @@
 | `/api/margin-calculator/quote-profile` | GET | `margin_quote_profile` | 견적서 팝업 자동 연동 값 (우리 회사 정보 + 로그인 담당자) |
 | `/api/margin-calculator/quote-pdf` | POST | `margin_quote_pdf` | 견적서 PDF 생성·다운로드 |
 | `/api/margin-calculator/fx-rate` | GET | `margin_fx_rate` | 현재 USD/KRW 환율 (기준 환율 옆 표시·적용용) |
+| `/api/margin-calculator/erp-cost` | GET | `margin_erp_cost` | ERP 품목 원가·1차 마진율 (좌측 **ERP 연동** 버튼, 시연 단계 예시 1개) |
 
 - API는 README 규칙 9에 따라 `/api/margin-calculator/` 접두사를 씁니다.
 - 모든 Route에 `@login_required`가 붙어 있어 로그인하지 않으면 `/login`으로 이동합니다.
@@ -54,38 +56,52 @@
 
 | 탭 | 기능 |
 |---|---|
-| 좌측 입력 › **약식 포장/CBM 추정** | 접이식(`<details>`) 보조 도구. 단품 프리셋 → 카톤 수·CBM 자동 산출 → **운임 반영** 버튼으로 FOB 물류비·해상운임 칸에 기본값 채움 (수동 수정 가능) |
+| 좌측 입력 › **견적 조건** | 주문수량 · 인코텀즈 · 목표 영업마진 · 최소 마진 방어선(+ 마진율/마크업). 미팅 중 가장 자주 바꾸는 값이라 입력 Card 맨 위에 두고, 입력 Card를 스크롤해도 위에 고정(sticky) |
+| 좌측 입력 › **제조원가 · 1차 마진** | **ERP 연동** 버튼으로 품목 원가·1차 마진율을 받아옴(시연 단계 예시 1개). 기본은 접힌 상태로 **원가 합계**와 연동 상태만, 펼치면 원재료·임가공·부자재·마진율·로스율·사급 세부 항목(수정 가능) |
+| 좌측 입력 › **물류비** | 접이식(`<details>`, 기본 접힘). 접힌 상태에서 물류비 총액과 `개당 · 마진 · 해상 · 보험` 요약. 펼치면 FOB 물류비·물류 마진율·해상운임·보험요율과 **약식 포장/CBM 추정**(단품 프리셋 → 카톤 수·CBM → **운임 반영**) |
 | **견적 계산** | 인코텀즈별 USD 단가(대표 수치), 단가 구성 막대(원가·1차 마진·물류비·물류 마진·영업마진·할인·할증), 핵심 지표 4개, 상세 탭 2개 |
 | └ 항목별 원가 | 원재료·임가공·부자재·물류비의 원가 / 마진율 / 공급가 / 마진 표 |
 | └ 견적서 | 통합형 / 분리형 / 오픈북형 미리보기, **원가 구성 숨김 / 마진 흡수 발행** 옵션(체크 시 흡수 Slider와 내부·대외 비교 표 노출), **견적서 PDF** 버튼 → 팝업에서 고객사 정보 입력 후 PDF 다운로드 → 완료 안내 + **영문 이메일 제안문 복사** |
 | **역제안 분석** | ① 상단 Card: 목표가·항목별 최소 마진 입력 + 종합 판정(판정·R&R Badge, 영업마진, 부족/여유 금액) + 가격 위치 Gauge / ② 중단 2분할: **사양 변경(VE) 추천** \| **마진 직접 조정** (둘 다 상단 판정·Gauge에 즉시 반영) / ③ 대응 방안 카드 한 줄 |
-| **수량별 단가** | MOQ·MOQ 미만 정책(소량 할증 / 주문 불가), **견적 수량 추가** 입력칸, 막대와 가격표를 합친 **수량별 단가표**(단가 칸 안 가로 막대, MOQ 수량 옆 `MOQ` 표시, 편집 가능), 바이어용 가격표 텍스트 복사, **영문 이메일 제안문 복사** |
+| **수량별 단가** | MOQ·MOQ 미만 정책(소량 할증 / 주문 불가), **견적 수량 추가** 입력칸, **수량 할인 구간** 편집(추가·수정·삭제, 단가표·견적 단가에 즉시 반영), 막대와 가격표를 합친 **수량별 단가표**(단가 칸 안 가로 막대, MOQ 수량 옆 `MOQ` 표시, 편집 가능), 바이어용 가격표 텍스트 복사, **영문 이메일 제안문 복사** |
 | **환율 영향** | ① 상단 Card: 계약 단가 · 결제 시점 환율(직접 입력 ↔ Slider) → 핵심 결과 3분할(실현 영업마진 · 환차손익 · 방어 단가) → 마지노선 환율 칩 3개 / ② 하단 Card: 환율 변동 시나리오 표(항상 표시) |
 
 ## 6. 사용자 입력
 
 ### 6.1 공통 입력 (좌측 입력 Card + 상단 기준 환율)
 
+좌측 입력 Card는 위에서부터 **① 견적 조건(상단 고정) → ② 제조원가 · 1차 마진(ERP, 접힘) → ③ 물류비(접힘)** 순서입니다.
+
 | 항목 | id | 단위 | 기본값 | 규칙 |
 |---|---|---|---|---|
 | 기준 환율 USD/KRW | `margin-fx` | 원 | 1400 | > 0 (상단 Tab Card 우측). 라벨 `기준 환율` 아래 알약 버튼 `TTB 1,351.1`(`margin-fxlive-apply`)을 누르면 현재 USD TTB(소수 1자리)로 바뀜 |
-| 1차 마진 입력 방식 | `margin-seg-minput` | - | 항목별 | 항목별 / 일괄 |
+| 주문수량 | `margin-qty` | 개 | 10000 | > 0 (① 견적 조건) |
+| 인코텀즈 | `margin-inco` | - | FOB | EXW / FOB / CFR / CIF (① 견적 조건) |
+| 영업마진 계산 방식 | `margin-seg-mmode` | - | 마진율 | 마진율(판매가 대비) / 마크업(원가 대비) — 모든 마진에 공통 적용 (① 견적 조건 머리, 옆에 `판매가 대비`/`원가 대비` 안내) |
+| 목표 영업마진 / 최소 마진 방어선 | `margin-m2` / `margin-m2min` | % | 20 / 15 | (① 견적 조건) |
+| ERP 연동 | `margin-erp-sync` | 버튼 | - | 원가·1차 마진율·로스율·사급을 세부 칸에 채움. 품목명(영문)은 견적서 팝업 `margin-q-product`에도 채움 |
+| 1차 마진 입력 방식 | `margin-seg-minput` | - | 항목별 | 항목별 / 일괄 (② 펼친 영역) |
 | 원재료·임가공·부자재 원가 (개당) | `margin-raw` / `-proc` / `-pack` | 원 | 850 / 400 / 650 | ≥ 0 |
 | 항목별 1차 마진율 | `margin-r-raw` / `-r-proc` / `-r-pack` | % | 20 / 10 / 15 | 마진율 방식이면 < 100 |
 | 일괄 1차 마진율 | `margin-m1` | % | 15 | "일괄" 선택 시에만 표시 |
 | 로스율 | `margin-loss` | % | 0 | 원가 세 항목에 곱해짐 |
 | 부자재 사급 | `margin-sagup` | 체크 | 해제 | 체크 시 부자재 마진 0% |
-| 영업마진 계산 방식 | `margin-seg-mmode` | - | 마진율 | 마진율(판매가 대비) / 마크업(원가 대비) — 모든 마진에 공통 적용 |
-| 영업마진 목표 / 최소 | `margin-m2` / `margin-m2min` | % | 20 / 15 | |
-| 인코텀즈 | `margin-inco` | - | FOB | EXW / FOB / CFR / CIF |
-| 주문수량 | `margin-qty` | 개 | 10000 | > 0 |
-| FOB 물류비 총액 | `margin-logi` | 원 | 1,200,000 | EXW면 0으로 계산 |
+| FOB 물류비 총액 | `margin-logi` | 원 | 1,200,000 | EXW면 0으로 계산 (③ 물류비) |
 | 물류 마진율 | `margin-r-logi` | % | 10 | |
 | 해상운임 총액 | `margin-freight` | $ | 1500 | CFR·CIF일 때만 표시 |
 | 보험요율 | `margin-ins` | % | 0.2 | CIF일 때만 표시 |
-| 수량 할인 구간 | `margin-tiers` | 개 / % | 20,000개 3%, 50,000개 5% | 추가·삭제 가능 |
 
-**약식 포장/CBM 추정** (`details#margin-cbm`, 기본 접힘 — 접힌 상태에서도 제목 아래에 `250카톤 · 6.25 CBM` 요약 표시)
+**ERP 연동 예시 값** (`service.ERP_SAMPLE`, 시연 단계 — 실제 ERP 연결 시 `erp_cost()`만 교체하고 응답 key 유지)
+
+| 품목 | 원재료 / 임가공 / 부자재 | 1차 마진율 | 로스율 | 사급 |
+|---|---|---|---|---|
+| `TN-150` 토너 150ml (Toner 150ml) | 880 / 420 / 640원 | 20 / 10 / 15% | 1% | 아님 |
+
+- 페이지를 처음 열면 기존 기본값(850 / 400 / 650원)으로 계산하고 상태는 `ERP 미연동 · 예시 값`입니다. (완료 조건의 $2.15 등은 이 기본값 기준)
+- 연동 후 상태는 `TN-150 토너 150ml · 13:10 동기화`, 세부 칸을 직접 고치면 `ERP 값에서 수정됨`(warning 색)으로 바뀝니다. 다시 누르면 ERP 값으로 되돌립니다.
+- 원가 합계는 로스율을 반영한 `C`(7.2)입니다.
+
+**약식 포장/CBM 추정** (③ 물류비 접이식 안의 `.margin-cbm#margin-cbm`, 제목 옆에 `250카톤 · 6.25 CBM` 요약 표시)
 
 | 항목 | id | 단위 | 기본값 | 규칙 |
 |---|---|---|---|---|
@@ -107,6 +123,7 @@
 | 역제안 분석 › VE | 코팅/후가공 생략 · 단상자 평량/단일도수 · 부자재 사급 전환 | `margin-ve-coat` / `-box` / `-sagup` | 해제 (항상 표시, 입력에서 이미 사급이면 사급 전환은 비활성) |
 | 수량별 단가 | MOQ / MOQ 미만 정책 / 소량 할증률 | `margin-moq` / `margin-seg-moqmode` / `margin-moq-sur` | 5000 / 소량 할증 / 10% (주문 불가면 할증률 칸 비활성) |
 | 수량별 단가 | 견적 수량 추가 | `margin-qty-add` + `margin-qty-add-btn` (Enter 가능) | 비어 있음 |
+| 수량별 단가 | 수량 할인 구간 (이 수량 이상 / 할인율, 추가·삭제) | `margin-tiers` + `margin-add-tier` | 20,000개 3%, 50,000개 5% |
 | 수량별 단가 | 가격표 행 (수량, 물류비 총액) | 표 안 입력 | 3천·5천·1만·2만·5만개 |
 | 환율 영향 | 계약 단가 / 현재 견적 단가 사용 | `margin-fx-contract` / `margin-fx-use-quote` | 체크(견적 단가 연동) |
 | 환율 영향 | 결제 시점 환율 (직접 입력 / Slider, 양방향 연동) | `margin-fx-settle-input` / `margin-fx-settle` | 기준 환율, 범위 ±10% (최소·목표 환율 포함, 최대 ±20%) |
@@ -222,6 +239,11 @@ P′            = priceLines({ ...p, pack: pack′, rates }, r′)
 ### 7.4 수량별 단가
 
 - 가격표의 각 행(수량, 물류비 총액)으로 7.2를 다시 계산합니다.
+- **좌측 입력과 연동**: 현재 주문 수량 행은 물류비 총액을 좌측 `margin-logi` 값으로 계산해 견적 계산 탭 단가와 항상 같습니다. 가격표에 현재 수량이 없으면 삭제할 수 없는 '현재 주문' 행을 임시로 보여줍니다. 표에서 현재 주문 행의 물류비를 고치면 좌측 FOB 물류비가, 임시 행의 수량을 고치면 좌측 주문수량이 바뀝니다.
+- 영업마진 Badge 기준(목표·최소)은 좌측 값을 판매가 대비(`toSale`)로 바꿔 비교하고, 표 머리에 `목표 20.0% · 최소 15.0%`로 표시합니다.
+- **수량 할인 구간**은 이 탭 머리 Card에서 편집합니다(좌측 입력에서 이동). 구간 칩 `[20,000개] 이상 [3%] ×` + **구간 추가**. 값을 바꾸면 즉시 단가표·견적 단가·대응 방안에 반영됩니다.
+  - 구간 추가: 가장 큰 구간의 수량 × 2, 할인율 + 2%p로 추가합니다.
+  - 구간 시작 수량이 가격표에 없으면(추가하거나 수량 입력을 마쳤을 때) 그 수량 행을 아래 '견적 수량 추가'와 같은 물류비 추정으로 자동 추가해 할인 효과가 표에 바로 보이게 합니다.
 - MOQ 미만: "소량 할증"이면 할증 적용, "주문 불가"면 단가 대신 "주문 불가"로 표시하고 복사 대상에서 제외합니다.
 - 요약: MOQ 수량 단가와 가장 낮은 단가, 그 차이(%)와 할인 후 영업마진.
 - 견적 수량 추가: 입력한 수량으로 행을 추가합니다. 물류비 총액은 표에서 수량이 가장 가까운 행(로그 거리 기준)을 골라 `물류비 × (새 수량 ÷ 그 수량)^0.75`를 1만원 단위로 반올림해 채웁니다(최소 1만원, 수량이 늘수록 개당 물류비가 줄어드는 약식). 채운 값은 표에서 바로 고칠 수 있습니다.
@@ -263,6 +285,7 @@ FOB 내륙물류비 = 청구 CBM × 내륙·통관 단가  → 1만원 단위 �
 ```
 
 - 기본값(10,000개, 토너 프리셋): 250카톤 · 6.25 CBM → 내륙 940,000원 · 해상 $313.
+- 견적 미팅에서 거의 손대지 않는 값이라 '물류비' 접이식 안에 두고, 접힌 상태에서는 물류비 총액과 요약(`개당 120원 · 마진 10.0%`, CFR·CIF면 `· 해상 $1,500`, CIF면 `· 보험 0.2%`, EXW면 `EXW · 미포함`)만 보여줍니다.
 - 주문수량·프리셋을 바꾸면 추정치는 즉시 다시 계산되지만, `margin-logi` / `margin-freight` 칸은 **운임 반영** 버튼을 눌렀을 때만 바뀝니다. 반영 후에도 두 칸은 직접 수정할 수 있습니다.
 - 해상운임은 FOB·EXW에서도 칸에 채워지며, CFR·CIF를 고를 때 단가에 더해집니다.
 - CBM이 15 이상이면 "20ft 컨테이너(FCL) 견적과 비교해 보세요." 안내를 보여줍니다.
@@ -393,7 +416,10 @@ Best regards,
 | 상황 | 처리 |
 |---|---|
 | 원가·수량·환율이 비었거나 수량·환율 ≤ 0, 원가 < 0 | 입력 Card 하단 `.form-error` "원가·수량·환율을 확인하세요…", 결과 갱신 중단 |
+| 최소 마진 방어선 > 목표 영업마진 | "최소 마진 방어선은 목표 영업마진보다 클 수 없어요.", 결과 갱신 중단 |
 | 마진율 방식에서 마진 ≥ 100% | "마진율 방식에서는 마진이 100% 미만이어야 해요." |
+| ERP 연동 실패 / 세션 만료 | 제조원가 섹션 아래 `.form-error` "ERP 원가를 불러오지 못했어요…", 기존 값 유지 |
+| 수량 할인 구간 값이 비었거나 음수 | 0으로 계산 |
 | 역제안 목표가·최소 마진 미입력 | 역제안 Card 안 오류 문구, 판정·Gauge 비움 |
 | 마진 직접 조정에 100% 이상(마진율 방식) / 숫자 아님 | 입력 무시 |
 | 환율 탭 계약 단가 미입력 | 상단 Card `#margin-fx-err`에 "계약 단가를 입력하세요.", 결과 갱신 중단 |
@@ -423,20 +449,22 @@ Best regards,
 .margin-page#margin-app
  ├─ .page-header  h1.page-title / p.page-description / .page-actions(← 홈으로 .btn-surface)
  └─ .margin-layout (360px + 1fr, 본문 폭 ≤ 880px에서 1열)
-     ├─ aside.card.margin-inputs (Desktop sticky)
-     │    원가와 1차 마진 / 영업마진 / 물류와 수량(+ details.margin-drawer#margin-cbm) / 수량 할인 구간 (.margin-group, 구분선)
+     ├─ aside.card.margin-inputs (Desktop sticky, 내부 스크롤)
+     │    ① .margin-group.margin-pin#margin-pin 견적 조건 (Card 안 sticky 고정, 880px 이하에서는 고정 해제)
+     │    ② 제조원가 · 1차 마진: 머리 [ERP 연동] + details.margin-drawer#margin-cost (summary: 원가 합계 · 연동 상태)
+     │    ③ details.margin-drawer#margin-logi-box 물류비 (summary: 총액 · 요약 / body: 물류비 입력 + .margin-cbm 약식 포장/CBM 추정)
      └─ .margin-results
           ├─ .card.card-sm.margin-toolbar : .tabs(견적 계산·역제안 분석·수량별 단가·환율 영향) + .margin-fxbox(라벨 `기준 환율` + 알약 버튼 `TTB 1,351.1` | 기준 환율 입력, 툴바 한 줄 유지)
           ├─ .tab-panel#margin-view-forward : 대표 단가 Card / 상세 Card(.tabs 2개: 항목별 원가 · 견적서)
           │    └ 견적서: 형식 · 견적서 PDF / .form-check#margin-abs-on / .margin-abs-box(hidden) / 미리보기
           ├─ .tab-panel#margin-view-reverse : ① .card(.margin-rtop: 입력 | #margin-verdict → #margin-gauge → 범례·안내 한 줄) / ② .margin-rmid(VE .card | 마진 직접 조정 .card) / ③ 대응 방안 .card
-          ├─ .tab-panel#margin-view-tier    : 한 줄 입력(MOQ · MOQ 미만 주문 · 할증률 · 견적 수량 추가, 모두 44px) / 한 줄 요약 / 수량별 단가표 Card(범례 · 가격표 복사 · 영문 이메일 제안문 복사, table.margin-qtable)
+          ├─ .tab-panel#margin-view-tier    : 한 줄 입력(MOQ · MOQ 미만 주문 · 할증률 · 견적 수량 추가, 모두 44px) / .margin-disc 수량 할인 구간 칩 + 구간 추가 / 한 줄 요약 / 수량별 단가표 Card(범례 · 가격표 복사 · 영문 이메일 제안문 복사, table.margin-qtable)
           └─ .tab-panel#margin-view-fx      : ① .card > .margin-fxdash(입력 2열 (Slider = input.margin-fxrange 게이지) → .margin-kpi 3분할 → .margin-chips) / ② .card(환율 변동 시나리오 표)
 .modal-backdrop#margin-quote-modal > .modal.modal-lg  (우리 회사 / 고객사 / 견적 조건 / 완료 안내 .alert / 영문 이메일 제안문 복사 · 닫기 · PDF 다운로드)
 ```
 
 - 공통 컴포넌트를 그대로 사용: `.card`, `.tabs`/`.tab`/`.tab-panel`(common.js `data-tab-target`), `.table`, `.badge`, `.stat-tile`, `.kpi-*`, `.input-group`, `.form-control(-sm)`, `.form-check`, `.btn`, `.alert`, `.modal`, `.spinner`.
-- 접이식 CBM 추정은 별도 JS 없이 네이티브 `<details>`/`<summary>`를 쓰고 모양만 `.margin-drawer*`로 지정합니다. 표시·숨김이 필요한 영역(흡수 옵션, 완료 안내)은 `hidden` 속성으로 토글하고, class의 `display`에 덮이지 않도록 `.margin-page [hidden]`, `#margin-quote-modal [hidden]`을 지정합니다.
+- 접이식(제조원가·물류비)은 별도 JS 없이 네이티브 `<details>`/`<summary>`를 쓰고 모양만 `.margin-drawer*`로 지정합니다. 표시·숨김이 필요한 영역(흡수 옵션, 완료 안내)은 `hidden` 속성으로 토글하고, class의 `display`에 덮이지 않도록 `.margin-page [hidden]`, `#margin-quote-modal [hidden]`을 지정합니다.
 - Panel 없이 값만 고르는 버튼 묶음(항목별/일괄, 마진율/마크업 등)은 `.tabs.margin-seg`로 모양만 쓰고 `.is-active`는 margin.js가 토글합니다.
 - 색·간격·글꼴은 CSS Variable만 사용합니다. 판정 4단계 색은 `--color-success / warning / danger`에서 파생한 `--margin-zone-*` 변수(`.margin-page` 범위)입니다.
 - 이 페이지에는 SVG 차트가 없습니다. 수량별 단가 막대는 표 칸 안의 `.margin-qbar`(CSS 막대)로 그립니다.
@@ -461,6 +489,10 @@ def margin_quote_pdf(): ...                # build_quote_context → render_temp
 @app.route("/api/margin-calculator/fx-rate", methods=["GET"])
 @login_required
 def margin_fx_rate(): ...                  # service.usd_krw_rate(), 실패 시 502
+
+@app.route("/api/margin-calculator/erp-cost", methods=["GET"])
+@login_required
+def margin_erp_cost(): ...                 # service.erp_cost() — 시연용 예시 품목
 ```
 
 | service.py 함수 | 역할 |
@@ -470,9 +502,10 @@ def margin_fx_rate(): ...                  # service.usd_krw_rate(), 실패 시 
 | `amount_in_words(amount)` | `SAY US DOLLARS … AND CENTS … ONLY.` |
 | `quote_filename(quote_no)` | 안전한 파일명 `Quotation_<번호>.pdf` |
 | `html_to_pdf(html)` | xhtml2pdf 변환(리소스 정책 제한), 실패 시 RuntimeError |
+| `erp_cost()` | ERP 품목 원가·1차 마진율 (`ERP_SAMPLE` + `synced_at`). 실제 ERP 연결 시 이 함수만 교체 |
 | `usd_krw_rate()` | 현재 USD/KRW TTB (수출입은행 `ttb` → ExchangeRate-API 중간값 × 0.99 순, 10분 캐시), 모두 실패 시 RuntimeError |
 
-- 템플릿의 API 주소는 `url_for()`로 `#margin-app`의 `data-profile-url`, `data-pdf-url`에 넣고 JS는 이 값만 사용합니다.
+- 템플릿의 API 주소는 `url_for()`로 `#margin-app`의 `data-profile-url`, `data-pdf-url`, `data-fx-url`, `data-erp-url`에 넣고 JS는 이 값만 사용합니다.
 - 페이지 Route `/margin-calculator`는 PM 관리 영역이므로 수정하지 않습니다.
 
 ## 14. 수정 가능 파일
@@ -494,7 +527,12 @@ def margin_fx_rate(): ...                  # service.usd_krw_rate(), 실패 시 
 
 - [ ] `python app.py` 실행 후 로그인 → `/margin-calculator`가 오류 없이 열린다.
 - [ ] 기본값에서 FOB 단가 **$2.15 / 개**, 원가 1,900원, 할인 후 영업마진 20.0%, 총 마진 32.8%가 표시된다.
-- [ ] 원가·마진·인코텀즈·수량·환율을 바꾸면 4개 탭이 즉시 다시 계산된다.
+- [ ] 원가·마진·인코텀즈·수량·환율을 바꾸면 4개 탭이 즉시 다시 계산된다. (좌측 모든 입력 → 견적 계산·역제안·수량별 단가·환율 영향 연동, 견적 계산의 '할인 후 영업마진' 아래에 목표·최소 표시)
+- [ ] 수량별 단가표의 현재 주문 행 단가가 견적 계산 탭 단가와 같다. (주문수량·FOB 물류비를 바꿔도 일치)
+- [ ] 좌측 입력 맨 위에 주문수량·인코텀즈·목표 영업마진·최소 마진 방어선이 있고, 입력 Card를 스크롤해도 위에 고정된다.
+- [ ] 제조원가 섹션은 기본으로 원가 합계(1,900원)만 보이고, 펼치면 세부 항목이 보인다. **ERP 연동**을 누르면 예시 품목(TN-150) 값이 채워지고 원가 합계 1,959원·연동 상태가 표시되며, 세부 칸을 고치면 `ERP 값에서 수정됨`으로 바뀐다.
+- [ ] 물류비 섹션은 기본 접힘이고 요약(총액 · 개당 · 마진)이 보인다.
+- [ ] 수량별 단가 탭에서 할인 구간을 추가·수정·삭제하면 단가표와 견적 단가가 즉시 바뀌고, 새 구간 수량 행이 표에 추가된다.
 - [ ] CBM 추정: 기본값에서 250카톤 · 6.25 CBM이 표시되고, **운임 반영** 시 FOB 물류비 940,000원 · 해상운임 $313이 채워지며 이후 직접 수정할 수 있다.
 - [ ] 마진율 ↔ 마크업, 항목별 ↔ 일괄, 부자재 사급, 로스율이 단가에 반영된다.
 - [ ] CFR·CIF 선택 시 해상운임·보험 입력이 나타나고 단가에 더해진다.

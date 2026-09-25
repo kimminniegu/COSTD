@@ -220,7 +220,7 @@ def home_api_regulations():
 
 
 # [C] 원가 경쟁력 및 마진 시뮬레이션 — 접두사: /api/margin-calculator/...
-# 계산은 브라우저 margin.js 에서 하고, 서버는 견적서 PDF 생성과 현재 환율 조회만 합니다. (src/03_margin/service.py)
+# 계산은 브라우저 margin.js 에서 하고, 서버는 견적서 PDF 생성·현재 환율 조회·ERP 원가(시연용 예시)만 합니다. (src/03_margin/service.py)
 margin_service = importlib.import_module("src.03_margin.service")
 
 
@@ -252,6 +252,12 @@ def margin_fx_rate():
         return jsonify(margin_service.usd_krw_rate())
     except RuntimeError as e:
         return jsonify(error=str(e)), 502
+
+
+@app.route("/api/margin-calculator/erp-cost", methods=["GET"])
+@login_required
+def margin_erp_cost():
+    return jsonify(margin_service.erp_cost())
 
 
 # [D] AI 제형/샘플 시뮬레이션 — 접두사: /api/ai-formulation/...

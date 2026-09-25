@@ -17,7 +17,8 @@
 <div class="margin-page" id="margin-app"
      data-profile-url="{{ url_for('margin_quote_profile') }}"
      data-pdf-url="{{ url_for('margin_quote_pdf') }}"
-     data-fx-url="{{ url_for('margin_fx_rate') }}">
+     data-fx-url="{{ url_for('margin_fx_rate') }}"
+     data-erp-url="{{ url_for('margin_erp_cost') }}">
   <div class="page-header">
     <div>
       <h1 class="page-title">원가 경쟁력 및 마진 시뮬레이션</h1>
@@ -32,91 +33,108 @@
     <!-- 공통 입력 -->
     <aside class="card margin-inputs" id="margin-inputs" aria-label="시뮬레이션 입력">
       <div class="card-body">
-        <div class="margin-group">
+        <!-- ① 견적 조건 — 미팅 중 가장 자주 바꾸는 값. 입력 Card 를 스크롤해도 위에 고정 -->
+        <div class="margin-group margin-pin" id="margin-pin">
           <div class="margin-group__head">
-            <h3 class="margin-group__title">원가와 1차 마진</h3>
-            <div class="tabs margin-seg" id="margin-seg-minput" role="tablist" aria-label="1차 마진 입력 방식">
-              <button type="button" class="tab is-active" data-k="item" role="tab" aria-selected="true">항목별</button>
-              <button type="button" class="tab" data-k="all" role="tab" aria-selected="false">일괄</button>
-            </div>
-          </div>
-          <div class="margin-cost-row"><span></span><span class="form-label">원가 (개당)</span><span class="form-label">마진율</span></div>
-          <div class="margin-cost-row"><span class="margin-cost-row__name">원재료</span>{{ field('raw', 850, '원', '원재료 원가') }}<div class="margin-item-rate">{{ field('r-raw', 20, '%', '원재료 마진율', 0.5) }}</div></div>
-          <div class="margin-cost-row"><span class="margin-cost-row__name">임가공</span>{{ field('proc', 400, '원', '임가공 원가') }}<div class="margin-item-rate">{{ field('r-proc', 10, '%', '임가공 마진율', 0.5) }}</div></div>
-          <div class="margin-cost-row"><span class="margin-cost-row__name">부자재</span>{{ field('pack', 650, '원', '부자재 원가') }}<div class="margin-item-rate">{{ field('r-pack', 15, '%', '부자재 마진율', 0.5) }}</div></div>
-          <div class="margin-cost-row" id="margin-all-row" style="display:none"><span class="margin-cost-row__name">1차 마진</span><span class="text-caption">세 항목에 같은 마진율</span>{{ field('m1', 15, '%', '일괄 1차 마진율', 0.5) }}</div>
-          <div class="margin-cost-row">
-            <span class="margin-cost-row__name">로스율</span>
-            <span class="text-caption">원가 세 항목에 적용</span>
-            {{ field('loss', 0, '%', '로스율', 0.5) }}
-          </div>
-          <label class="form-check margin-check-sm"><input type="checkbox" id="margin-sagup"> 부자재 사급 (부자재 마진 0%)</label>
-        </div>
-
-        <div class="margin-group">
-          <div class="margin-group__head">
-            <h3 class="margin-group__title">영업마진</h3>
-            <div class="tabs margin-seg" id="margin-seg-mmode" role="tablist" aria-label="영업마진 계산 방식">
-              <button type="button" class="tab is-active" data-k="margin" role="tab" aria-selected="true">마진율</button>
-              <button type="button" class="tab" data-k="markup" role="tab" aria-selected="false">마크업</button>
+            <h3 class="margin-group__title">견적 조건</h3>
+            <div class="margin-group__tools">
+              <span class="text-caption" id="margin-mode-hint">판매가 대비</span>
+              <div class="tabs margin-seg" id="margin-seg-mmode" role="tablist" aria-label="영업마진 계산 방식">
+                <button type="button" class="tab is-active" data-k="margin" role="tab" aria-selected="true">마진율</button>
+                <button type="button" class="tab" data-k="markup" role="tab" aria-selected="false">마크업</button>
+              </div>
             </div>
           </div>
           <div class="margin-pair">
-            <div class="form-group"><span class="form-label">목표 · <span id="margin-mode-hint">판매가 대비</span></span>{{ field('m2', 20, '%', '영업마진 목표', 0.5) }}</div>
-            <div class="form-group"><span class="form-label">최소 영업마진</span>{{ field('m2min', 15, '%', '최소 영업마진', 0.5) }}</div>
-          </div>
-        </div>
-
-        <div class="margin-group">
-          <div class="margin-group__head"><h3 class="margin-group__title">물류와 수량</h3></div>
-          <div class="margin-pair">
+            <div class="form-group"><span class="form-label">주문수량</span>{{ field('qty', 10000, '개', '주문수량', 1000) }}</div>
             <div class="form-group"><label class="form-label" for="margin-inco">인코텀즈</label>
               <select class="form-control form-control-sm" id="margin-inco"><option>EXW</option><option selected>FOB</option><option>CFR</option><option>CIF</option></select></div>
-            <div class="form-group"><span class="form-label">주문수량</span>{{ field('qty', 10000, '개', '주문수량', 1000) }}</div>
           </div>
           <div class="margin-pair">
-            <div class="form-group"><span class="form-label">FOB 물류비 총액</span>{{ field('logi', 1200000, '원', 'FOB 물류비 총액', 100000) }}</div>
-            <div class="form-group"><span class="form-label">물류 마진율</span>{{ field('r-logi', 10, '%', '물류 마진율', 0.5) }}</div>
+            <div class="form-group"><span class="form-label">목표 영업마진</span>{{ field('m2', 20, '%', '목표 영업마진', 0.5) }}</div>
+            <div class="form-group"><span class="form-label">최소 마진 방어선</span>{{ field('m2min', 15, '%', '최소 영업마진 (방어선)', 0.5) }}</div>
           </div>
-          <div class="margin-pair" id="margin-sea-row" style="display:none">
-            <div class="form-group"><span class="form-label">해상운임 총액</span>{{ field('freight', 1500, '$', '해상운임 총액') }}</div>
-            <div class="form-group" id="margin-ins-box"><span class="form-label">보험요율</span>{{ field('ins', 0.2, '%', '보험요율', 0.05) }}</div>
-          </div>
-
-          <!-- 약식 포장/CBM 추정 — 운임 반영을 눌렀을 때만 위 물류비·해상운임 칸에 값이 들어가요 -->
-          <details class="margin-drawer" id="margin-cbm">
-            <summary class="margin-drawer__head">
-              <span class="margin-drawer__title">약식 포장/CBM 추정</span>
-              <span class="text-caption" id="margin-cbm-peek"></span>
-            </summary>
-            <div class="margin-drawer__body">
-              <div class="form-group"><label class="form-label" for="margin-cbm-preset">단품 용량/형태</label>
-                <select class="form-control form-control-sm" id="margin-cbm-preset">
-                  <option value="toner" selected>토너/에센스 100~150ml</option>
-                  <option value="cream">크림/단지 50ml</option>
-                  <option value="mask">마스크팩</option>
-                </select></div>
-              <div class="margin-pair">
-                <div class="form-group"><span class="form-label">카톤당 입수</span>{{ field('cbm-ea', 40, 'ea', '카톤당 입수', 10) }}</div>
-                <div class="form-group margin-unit-wide"><span class="form-label">카톤 부피</span>{{ field('cbm-box', 0.025, 'CBM', '카톤당 CBM', 0.001) }}</div>
-              </div>
-              <div class="margin-pair">
-                <div class="form-group"><span class="form-label">내륙·통관 <span class="text-caption">/CBM</span></span>{{ field('cbm-inland', 150000, '원', 'CBM당 FOB 내륙물류비', 10000) }}</div>
-                <div class="form-group"><span class="form-label">LCL 운임 <span class="text-caption">/CBM</span></span>{{ field('cbm-lcl', 50, '$', 'CBM당 LCL 해상운임', 5) }}</div>
-              </div>
-              <div class="margin-cbm-out" id="margin-cbm-out"></div>
-              <button type="button" class="btn btn-soft btn-sm btn-block" id="margin-cbm-apply">운임 반영</button>
-            </div>
-          </details>
         </div>
 
+        <!-- ② 제조원가 · 1차 마진 — ERP 에서 받아오는 값. 기본은 합계만, 펼치면 세부 항목 -->
         <div class="margin-group">
           <div class="margin-group__head">
-            <h3 class="margin-group__title">수량 할인 구간</h3>
-            <button type="button" class="btn btn-secondary btn-sm" id="margin-add-tier">구간 추가</button>
+            <h3 class="margin-group__title">제조원가 · 1차 마진</h3>
+            <button type="button" class="btn btn-soft btn-sm" id="margin-erp-sync">ERP 연동</button>
           </div>
-          <div class="margin-tier-row"><span class="form-label">이 수량 이상</span><span class="form-label">할인율</span></div>
-          <div class="margin-tiers" id="margin-tiers"></div>
+          <details class="margin-drawer" id="margin-cost">
+            <summary class="margin-drawer__head">
+              <span class="margin-drawer__title">원가 합계 <span class="text-caption">개당</span></span>
+              <b class="margin-drawer__value" id="margin-cost-sum"></b>
+              <span class="margin-drawer__peek text-caption" id="margin-erp-status"></span>
+            </summary>
+            <div class="margin-drawer__body">
+              <div class="margin-inline">
+                <span class="form-label">1차 마진 입력</span>
+                <div class="tabs margin-seg" id="margin-seg-minput" role="tablist" aria-label="1차 마진 입력 방식">
+                  <button type="button" class="tab is-active" data-k="item" role="tab" aria-selected="true">항목별</button>
+                  <button type="button" class="tab" data-k="all" role="tab" aria-selected="false">일괄</button>
+                </div>
+              </div>
+              <div class="margin-cost-row"><span></span><span class="form-label">원가 (개당)</span><span class="form-label">마진율</span></div>
+              <div class="margin-cost-row"><span class="margin-cost-row__name">원재료</span>{{ field('raw', 850, '원', '원재료 원가') }}<div class="margin-item-rate">{{ field('r-raw', 20, '%', '원재료 마진율', 0.5) }}</div></div>
+              <div class="margin-cost-row"><span class="margin-cost-row__name">임가공</span>{{ field('proc', 400, '원', '임가공 원가') }}<div class="margin-item-rate">{{ field('r-proc', 10, '%', '임가공 마진율', 0.5) }}</div></div>
+              <div class="margin-cost-row"><span class="margin-cost-row__name">부자재</span>{{ field('pack', 650, '원', '부자재 원가') }}<div class="margin-item-rate">{{ field('r-pack', 15, '%', '부자재 마진율', 0.5) }}</div></div>
+              <div class="margin-cost-row" id="margin-all-row" style="display:none"><span class="margin-cost-row__name">1차 마진</span><span class="text-caption">세 항목에 같은 마진율</span>{{ field('m1', 15, '%', '일괄 1차 마진율', 0.5) }}</div>
+              <div class="margin-cost-row">
+                <span class="margin-cost-row__name">로스율</span>
+                <span class="text-caption">원가 세 항목에 적용</span>
+                {{ field('loss', 0, '%', '로스율', 0.5) }}
+              </div>
+              <label class="form-check margin-check-sm"><input type="checkbox" id="margin-sagup"> 부자재 사급 (부자재 마진 0%)</label>
+            </div>
+          </details>
+          <p class="form-error" id="margin-erp-err" role="alert"></p>
+        </div>
+
+        <!-- ③ 물류비 — 미팅에서 거의 손대지 않는 값. 기본 접힘, 요약만 표시 -->
+        <div class="margin-group">
+          <details class="margin-drawer" id="margin-logi-box">
+            <summary class="margin-drawer__head">
+              <span class="margin-drawer__title">물류비</span>
+              <b class="margin-drawer__value" id="margin-logi-sum"></b>
+              <span class="margin-drawer__peek text-caption" id="margin-logi-peek"></span>
+            </summary>
+            <div class="margin-drawer__body">
+              <div class="margin-pair">
+                <div class="form-group"><span class="form-label">FOB 물류비 총액</span>{{ field('logi', 1200000, '원', 'FOB 물류비 총액', 100000) }}</div>
+                <div class="form-group"><span class="form-label">물류 마진율</span>{{ field('r-logi', 10, '%', '물류 마진율', 0.5) }}</div>
+              </div>
+              <div class="margin-pair" id="margin-sea-row" style="display:none">
+                <div class="form-group"><span class="form-label">해상운임 총액</span>{{ field('freight', 1500, '$', '해상운임 총액') }}</div>
+                <div class="form-group" id="margin-ins-box"><span class="form-label">보험요율</span>{{ field('ins', 0.2, '%', '보험요율', 0.05) }}</div>
+              </div>
+
+              <!-- 약식 포장/CBM 추정 — 운임 반영을 눌렀을 때만 위 물류비·해상운임 칸에 값이 들어가요 -->
+              <div class="margin-cbm" id="margin-cbm">
+                <div class="margin-inline">
+                  <span class="margin-cbm__title">약식 포장/CBM 추정</span>
+                  <span class="text-caption" id="margin-cbm-peek"></span>
+                </div>
+                <div class="form-group"><label class="form-label" for="margin-cbm-preset">단품 용량/형태</label>
+                  <select class="form-control form-control-sm" id="margin-cbm-preset">
+                    <option value="toner" selected>토너/에센스 100~150ml</option>
+                    <option value="cream">크림/단지 50ml</option>
+                    <option value="mask">마스크팩</option>
+                  </select></div>
+                <div class="margin-pair">
+                  <div class="form-group"><span class="form-label">카톤당 입수</span>{{ field('cbm-ea', 40, 'ea', '카톤당 입수', 10) }}</div>
+                  <div class="form-group margin-unit-wide"><span class="form-label">카톤 부피</span>{{ field('cbm-box', 0.025, 'CBM', '카톤당 CBM', 0.001) }}</div>
+                </div>
+                <div class="margin-pair">
+                  <div class="form-group"><span class="form-label">내륙·통관 <span class="text-caption">/CBM</span></span>{{ field('cbm-inland', 150000, '원', 'CBM당 FOB 내륙물류비', 10000) }}</div>
+                  <div class="form-group"><span class="form-label">LCL 운임 <span class="text-caption">/CBM</span></span>{{ field('cbm-lcl', 50, '$', 'CBM당 LCL 해상운임', 5) }}</div>
+                </div>
+                <div class="margin-cbm-out" id="margin-cbm-out"></div>
+                <button type="button" class="btn btn-soft btn-sm btn-block" id="margin-cbm-apply">운임 반영</button>
+              </div>
+            </div>
+          </details>
         </div>
         <p class="form-error" id="margin-err" role="alert"></p>
       </div>
@@ -334,6 +352,12 @@
                 </div>
               </div>
               <p class="form-error margin-head__err" id="margin-qty-add-err" role="alert"></p>
+              <!-- 수량 할인 구간 — 바꾸면 아래 단가표·견적 단가에 바로 반영 -->
+              <div class="margin-disc">
+                <span class="form-label margin-disc__label">수량 할인 구간</span>
+                <div class="margin-disc__list" id="margin-tiers"></div>
+                <button type="button" class="btn btn-secondary btn-sm" id="margin-add-tier">구간 추가</button>
+              </div>
               <div class="margin-verdict is-info margin-tier-summary" id="margin-tier-summary"></div>
             </div>
           </div>
