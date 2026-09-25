@@ -150,7 +150,7 @@
 /* 견적 계산 — 대표 단가 / 구성 막대 */
 .margin-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-5); }
 .margin-hero__sub { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-1); font-size: var(--font-size-label); color: var(--color-text-secondary); text-align: right; }
-.margin-bar { display: flex; height: 40px; overflow: hidden; border-radius: var(--radius-sm); background: var(--color-background); }
+.margin-bar { display: flex; gap: 2px; height: 40px; overflow: hidden; border-radius: var(--radius-sm); background: var(--color-surface); }   /* 구간 사이 2px 흰 틈 */
 .margin-bar > div {
   display: flex;
   align-items: center;
@@ -163,10 +163,12 @@
 }
 
 /* 막대·범례 공통 색 */
-.margin-page .is-cost { background: var(--color-text-inverse-secondary); color: var(--color-text-primary); }
-.margin-page .is-m1 { background: var(--color-primary-light); color: var(--color-text-primary); }
-.margin-page .is-logi { background: var(--color-text-placeholder); color: var(--color-text-inverse); }
-.margin-page .is-logi-m { background: color-mix(in srgb, var(--color-text-placeholder) 45%, var(--color-surface)); color: var(--color-text-primary); }
+/* 단가 구성 막대 팔레트 — 원가(중립 회색) · 마진(브랜드 파랑 연→진) · 물류(청록: 브랜드 파랑의 색상만 청록 쪽으로 돌림, 물류비 진·물류 마진 연).
+   인접 색 구분은 dataviz 검증 스크립트로 확인: 일반 시각 ΔE ≥ 16.3, 색각 이상 ΔE ≥ 14.1 (막대 안 숫자 + 범례로 보조) */
+.margin-page .is-cost { background: color-mix(in srgb, var(--color-text-inverse-secondary) 75%, var(--color-surface)); color: var(--color-text-primary); }
+.margin-page .is-m1 { background: color-mix(in srgb, var(--color-primary-bright) 70%, var(--color-surface)); color: var(--color-text-primary); }
+.margin-page .is-logi { background: oklch(from var(--color-primary-bright) calc(l - 0.02) calc(c - 0.07) calc(h - 58)); color: var(--color-text-inverse); }
+.margin-page .is-logi-m { background: oklch(from var(--color-primary-bright) calc(l + 0.28) calc(c - 0.14) calc(h - 58)); color: var(--color-text-primary); }
 .margin-page .is-m2 { background: var(--color-primary); color: var(--color-text-inverse); }
 .margin-page .is-disc { background: repeating-linear-gradient(45deg, var(--color-warning-soft) 0 6px, var(--color-surface) 6px 12px); color: var(--color-warning); }
 .margin-page .is-sur { background: var(--color-warning); color: var(--color-text-inverse); }

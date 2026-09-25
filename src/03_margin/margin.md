@@ -13,6 +13,7 @@
 | 2.6 | 2026-09-25 | 좌측 입력 Card 높이를 화면 아래 끝에 맞춤(JS `fitAside`) + 맨 아래 **현재 견적 요약**(`#margin-quick`), 역제안 판정 게이지·범례를 맑은 톤(`--margin-gauge-*`)으로 | C |
 | 2.7 | 2026-09-25 | 좌측 제조원가·물류비·현재 견적 요약 사이 간격만 축소(견적 조건·입력 간격은 그대로) — 토글을 접은 상태에서 브라우저 높이 800px까지 스크롤 없음. 견적 계산 '할인 후 영업마진' 보조 줄 잘림 방지(`목표`·`최소` 단위로 줄바꿈) | C |
 | 2.8 | 2026-09-25 | 입력 Card 높이를 처음 화면 기준으로 고정 — 스크롤해도 요약 박스만 내려가지 않고 요소 간격 유지 (내용이 길 때만 내용 높이까지 늘림) | C |
+| 2.9 | 2026-09-25 | 견적 계산 단가 구성 막대 팔레트 재정리: 원가(중립 회색) · 마진(브랜드 파랑 연→진: 1차 마진 `--color-primary-bright` 70% / 영업마진 `--color-primary`) · 물류(청록: `--color-primary-bright`의 색상을 청록 쪽으로 −58° 돌린 `oklch(from …)`, 물류비 진 / 물류 마진 연) 3계열, 구간 사이 2px 흰 틈. 인접 색 구분 검증(일반 시각 ΔE ≥ 16.3, 색각 이상 ΔE ≥ 14.1) | C |
 
 ## 1. 페이지 목적
 
@@ -483,6 +484,7 @@ Best regards,
 - 접이식(제조원가·물류비)은 별도 JS 없이 네이티브 `<details>`/`<summary>`를 쓰고 모양만 `.margin-drawer*`로 지정합니다. 표시·숨김이 필요한 영역(흡수 옵션, 완료 안내)은 `hidden` 속성으로 토글하고, class의 `display`에 덮이지 않도록 `.margin-page [hidden]`, `#margin-quote-modal [hidden]`을 지정합니다.
 - Panel 없이 값만 고르는 버튼 묶음(항목별/일괄, 마진율/마크업 등)은 `.tabs.margin-seg`로 모양만 쓰고 `.is-active`는 margin.js가 토글합니다.
 - 색·간격·글꼴은 CSS Variable만 사용합니다. 판정 4단계 색은 `--color-success / warning / danger`에서 파생한 `--margin-zone-*` 변수(`.margin-page` 범위)입니다.
+- 단가 구성 막대 색: 원가 회색(`--color-text-inverse-secondary` 75%) → 1차 마진 파랑(`--color-primary-bright` 70%) → 물류비 청록(`oklch(from var(--color-primary-bright) calc(l − 0.02) calc(c − 0.07) calc(h − 58))`, 흰 글자) → 물류 마진 연청록(같은 색상, 밝기 +0.28) → 영업마진 `--color-primary` → 수량 할인 빗금 / 소량 할증 `--color-warning`. 공통 토큰에서 `color-mix`/`oklch(from …)`로 만든 값이고 구간 사이는 2px 흰 틈으로 나눕니다.
 - 이 페이지에는 SVG 차트가 없습니다. 수량별 단가 막대는 표 칸 안의 `.margin-qbar`(CSS 막대)로 그립니다.
 - 페이지 머리 ↔ 본문 간격만 이 페이지에서 32px로 줄였습니다. (`.margin-page .page-header`, 공통 CSS 미수정)
 - 팝업은 `.container`가 Container Query 기준이라 fixed 배치가 본문 기준이 되므로, margin.js가 로드 시 `document.body`로 옮깁니다.
