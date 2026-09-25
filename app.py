@@ -160,6 +160,17 @@ def dev_request():
 
 # [A] Home — 접두사: /api/home/...  (명세: src/01_home/home.md 9-1)
 
+@app.context_processor
+def home_asset_version():
+    """홈 CSS·JS 링크에 ?v=수정시각 을 붙여, 파일이 바뀌면 브라우저가 캐시 대신 새 파일을 받게 합니다 (담당자 A 페이지 전용)"""
+    home_dir = SRC_DIR / "01_home"
+    try:
+        ver = int(max(p.stat().st_mtime for p in (home_dir / "home.css", home_dir / "home.js")))
+    except OSError:
+        ver = 0
+    return {"home_asset_v": ver}
+
+
 @app.template_filter("home_highlight")
 def home_highlight(text, q):
     """원문에서 검색어를 찾고 각 조각을 escape 해서 안전하게 강조합니다."""

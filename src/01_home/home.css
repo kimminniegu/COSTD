@@ -280,6 +280,16 @@
 /* 최근 12개월 꺾은선 — Chart 라이브러리 없이 inline SVG (design_system: 선 primary-bright, 영역 primary-soft) */
 .home-tsum__trend { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding-left: var(--space-3); border-left: 1px solid var(--color-border-strong); }
 .home-tsum__trend .home-chart { flex: 1; min-height: 0; padding-top: 6px; }
+/* 이전 버전 home.js(캐시)가 그리는 구형 차트도 깨지지 않게 두는 안전장치 */
+.home-tsum__chart { flex: 1; width: 100%; min-height: 0; overflow: visible; }
+.home-tsum__axis { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); margin-top: var(--space-1); }
+.home-tsum__axis small { font-size: 0.625rem; line-height: 1; text-align: center; color: var(--color-text-placeholder); white-space: nowrap; }
+.home-tsum__axis small:nth-child(even) { visibility: hidden; }
+.home-tsum__axis small.is-current { visibility: visible; font-weight: var(--font-weight-bold); color: var(--color-primary); }
+.home-rated__chart { width: 100%; height: 120px; overflow: visible; }
+.home-rated__axis { display: flex; justify-content: space-between; }
+.home-rated__axis small { font-size: 0.625rem; line-height: 1; color: var(--color-text-placeholder); }
+.home-rated__axis small.is-hidden { display: none; }
 .home-tsum__area { fill: var(--color-primary-soft); }
 .home-tsum__line { fill: none; stroke: var(--color-primary-bright); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .home-tsum__dot { fill: var(--color-primary); stroke: var(--color-surface); stroke-width: 2; vector-effect: non-scaling-stroke; }
