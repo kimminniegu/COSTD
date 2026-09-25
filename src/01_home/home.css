@@ -199,7 +199,8 @@
 /* 4. 아래 영역: 왼쪽 수출입 카드 3개 (약 52%) / 오른쪽 뉴스 + 규제 (약 48%) */
 /* 행을 minmax(0,1fr) 로 명시해 목록 내용량과 무관하게 Card 높이가 남은 공간에 고정되게 합니다 (auto 행이면 내용만큼 늘어남) */
 .home-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 10fr); grid-template-rows: minmax(0, 1fr); gap: var(--space-5); }
-.home-trade-col { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-5); }
+/* 요약 카드는 내용 높이만큼(auto), 남는 높이는 상위국·품목 카드가 나눠 가짐 → 그래프가 화면 높이에 따라 늘어나지 않음 */
+.home-trade-col { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-5); }
 .home-side { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1.22fr) minmax(0, 1fr); gap: var(--space-5); }
 .home-side > .card { min-width: 0; }
 
@@ -286,7 +287,7 @@
 .home-tsum__trend { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; min-height: 0; padding: 10px 12px 8px; border-radius: var(--radius-lg); background: var(--color-surface-muted); }
 .home-tsum__trend-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); white-space: nowrap; }
 .home-tsum__trend-head small { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 0.6875rem; font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
-.home-tsum__trend .home-chart { flex: 1; min-height: 0; padding-top: 4px; }
+.home-tsum__trend .home-chart { flex: none; height: 96px; padding-top: 4px; }   /* 그래프 높이 고정 */
 .home-tsum__trend .home-chart__last { box-shadow: var(--shadow-card); }
 @media (max-width: 1400px) {   /* 좁은 화면: 값 글자를 줄여 한 줄에 유지 */
   .home-tsum__row { grid-template-columns: 46px minmax(0, 1fr) auto; }
@@ -342,7 +343,6 @@
   .is-home .app-footer { display: flex; }
   .home-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; }
   .home-trade-col { grid-template-rows: auto auto auto; }
-  .home-tcard--summary .home-tsum { min-height: 200px; }
   .home-tcard .home-rank { min-height: 150px; }
   .home-side { grid-template-rows: auto auto; }
   .home-list { overflow: visible; }
@@ -360,7 +360,6 @@
   .is-home .app-footer { display: flex; }
   .home-body { grid-template-rows: auto; align-items: start; }
   .home-trade-col { grid-template-rows: auto auto auto; }
-  .home-tcard--summary .home-tsum { min-height: 150px; }
   .home-tcard .home-rank { min-height: 124px; }
   .home-side { grid-template-rows: minmax(360px, auto) minmax(300px, auto); }
   .home-list { overflow: visible; }
