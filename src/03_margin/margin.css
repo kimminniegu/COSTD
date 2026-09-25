@@ -61,9 +61,9 @@
 .margin-inputs > .card-body { display: flex; flex-direction: column; padding: var(--space-6); }
 
 /* 현재 견적 요약 — 입력 Card 맨 아래 (margin-top: auto 로 남는 높이를 채움) */
-.margin-quick { display: flex; flex-direction: column; gap: var(--space-1); margin-top: auto; padding: var(--space-4); background: var(--color-primary-soft); border-radius: var(--radius-lg); }
+.margin-quick { display: flex; flex-direction: column; gap: 2px; margin-top: auto; padding: var(--space-3) var(--space-4); background: var(--color-primary-soft); border-radius: var(--radius-lg); }
 .margin-quick:empty { display: none; }
-.margin-group:has(#margin-logi-box) { margin-bottom: var(--space-6); }   /* 마지막 입력 그룹 ↔ 견적 요약 최소 간격 */
+.margin-group:has(#margin-logi-box) { margin-bottom: var(--space-3); }   /* 마지막 입력 그룹 ↔ 견적 요약 최소 간격 */
 .margin-quick__row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); font-size: var(--font-size-label); color: var(--color-text-secondary); }
 .margin-quick__row b { font-variant-numeric: tabular-nums; color: var(--color-text-primary); }
 .margin-quick__price { font-size: var(--font-size-card-title); font-weight: var(--font-weight-extrabold); color: var(--color-primary); }
@@ -91,8 +91,10 @@
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border-strong);
 }
-.margin-pin + .margin-group { padding-top: 0; border-top: 0; }
-.margin-pin ~ .margin-group + .margin-group { margin-top: var(--space-6); padding-top: 0; border-top: 0; }   /* 접이식 그룹끼리는 선 없이 간격만 */
+.margin-pin + .margin-group { margin-top: var(--space-3); padding-top: 0; border-top: 0; }
+.margin-pin ~ .margin-group + .margin-group { margin-top: var(--space-3); padding-top: 0; border-top: 0; }   /* 접이식 그룹끼리는 선 없이 간격만 (촘촘하게) */
+.margin-pin ~ .margin-group { gap: var(--space-2); }   /* 제조원가·물류비: 제목 ↔ 접이식 박스 */
+.margin-pin ~ .margin-group .margin-drawer__head { padding-top: var(--space-2); padding-bottom: var(--space-2); }
 .margin-group > .margin-drawer { margin-top: 0; }
 .margin-group__tools { display: flex; align-items: center; gap: var(--space-2); }
 
