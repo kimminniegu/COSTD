@@ -17,6 +17,11 @@
   --margin-fxrange-bad: oklch(from var(--color-danger) calc(l + 0.06) calc(c + 0.02) h);
   --margin-fxrange-warn: oklch(from var(--color-warning) calc(l + 0.14) calc(c + 0.04) h);
   --margin-fxrange-good: oklch(from var(--color-success) calc(l + 0.12) calc(c + 0.03) h);
+  /* 역제안 판정 게이지·범례 4색 — 환율 게이지와 같은 맑은 톤 (영업마진 양보는 노랑 쪽으로) */
+  --margin-gauge-bad: var(--margin-fxrange-bad);
+  --margin-gauge-warn: var(--margin-fxrange-warn);
+  --margin-gauge-caution: oklch(from var(--color-warning) calc(l + 0.22) calc(c + 0.02) calc(h + 18));
+  --margin-gauge-good: var(--margin-fxrange-good);
 }
 
 /* 페이지 머리 ↔ 본문 간격 (공통 72px은 입력형 화면에 넓어서 이 페이지만 줄임) */
@@ -53,7 +58,16 @@
 .margin-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--layout-card-gap); }
 
 /* 입력 그룹 */
-.margin-inputs > .card-body { padding: var(--space-6); }
+.margin-inputs > .card-body { display: flex; flex-direction: column; padding: var(--space-6); }
+
+/* 현재 견적 요약 — 입력 Card 맨 아래 (margin-top: auto 로 남는 높이를 채움) */
+.margin-quick { display: flex; flex-direction: column; gap: var(--space-1); margin-top: auto; padding: var(--space-4); background: var(--color-primary-soft); border-radius: var(--radius-lg); }
+.margin-quick:empty { display: none; }
+.margin-group:has(#margin-logi-box) { margin-bottom: var(--space-6); }   /* 마지막 입력 그룹 ↔ 견적 요약 최소 간격 */
+.margin-quick__row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); font-size: var(--font-size-label); color: var(--color-text-secondary); }
+.margin-quick__row b { font-variant-numeric: tabular-nums; color: var(--color-text-primary); }
+.margin-quick__price { font-size: var(--font-size-card-title); font-weight: var(--font-weight-extrabold); color: var(--color-primary); }
+.margin-quick .is-low { color: var(--color-danger); }
 .margin-group { display: flex; flex-direction: column; gap: var(--space-3); }
 .margin-group + .margin-group { margin-top: var(--space-5); padding-top: var(--space-5); border-top: var(--border-default); }
 .margin-group__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: 32px; }
@@ -154,10 +168,10 @@
 .margin-page .is-m2 { background: var(--color-primary); color: var(--color-text-inverse); }
 .margin-page .is-disc { background: repeating-linear-gradient(45deg, var(--color-warning-soft) 0 6px, var(--color-surface) 6px 12px); color: var(--color-warning); }
 .margin-page .is-sur { background: var(--color-warning); color: var(--color-text-inverse); }
-.margin-page .is-good { background: var(--margin-zone-good); }
-.margin-page .is-caution { background: var(--margin-zone-caution); }
-.margin-page .is-warn { background: var(--margin-zone-warn); }
-.margin-page .is-bad { background: var(--margin-zone-bad); }
+.margin-page .is-good { background: var(--margin-gauge-good); }
+.margin-page .is-caution { background: var(--margin-gauge-caution); }
+.margin-page .is-warn { background: var(--margin-gauge-warn); }
+.margin-page .is-bad { background: var(--margin-gauge-bad); }
 .margin-page .is-cur { background: var(--color-primary-bright); }
 .margin-page .is-other { background: var(--color-primary-light); }
 .margin-page .is-hatch { background: repeating-linear-gradient(45deg, var(--color-text-inverse-secondary) 0 3px, var(--color-background) 3px 6px); }
@@ -392,6 +406,7 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
   .margin-layout { grid-template-columns: 1fr; }
   .margin-inputs { position: static; max-height: none; overflow: visible; }
   .margin-pin { position: static; }
+  .margin-inputs { height: auto !important; }   /* 1열에서는 화면 높이 맞춤 해제 */
   .margin-rmid { grid-template-columns: 1fr; }
   .margin-options { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .margin-head--tier { grid-template-columns: 1fr 1fr; }

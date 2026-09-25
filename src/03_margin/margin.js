@@ -318,6 +318,12 @@
     if (p.inco === "CFR" || p.inco === "CIF") peek.push(`해상 $${(p.freight || 0).toLocaleString()}`);
     if (p.inco === "CIF") peek.push(`보험 ${(Math.round(p.ins * 10000) / 100)}%`);
     $("logi-peek").textContent = peek.join(" · ");
+
+    /* 입력 Card 아래 현재 견적 요약 */
+    const low = r.m2after < toSale(p.m2min) - 1e-9;
+    $("quick").innerHTML = `<div class="margin-quick__row"><span>현재 견적 · ${p.inco} ${p.qty.toLocaleString()}개</span><b class="margin-quick__price">${usd(r.usd)}</b></div>
+      <div class="margin-quick__row"><span>주문 총액</span><b>$${Math.round((Math.round(r.usd * 100) / 100) * p.qty).toLocaleString()}</b></div>
+      <div class="margin-quick__row"><span>할인 후 영업마진</span><b class="${low ? "is-low" : ""}">${pct(r.m2after)}</b></div>`;
   }
 
   function renderForward(p, r) {
@@ -911,8 +917,21 @@
   $("inputs").querySelectorAll("input, select").forEach((e) => e.addEventListener("input", render));
   ["fx", "target", "item-floor", "abs-on", "abs-c", "abs-l", "fx-contract", "fx-use-quote", "ve-coat", "ve-box", "ve-sagup"].forEach((id) => $(id).addEventListener("input", render));
 
+  /* 입력 Card 높이를 화면 아래 끝까지 맞춤 — 처음(헤더 아래)과 스크롤 후(sticky) 모두 바닥이 화면 끝에 닿게.
+     1열 배치(position: static)에서는 적용하지 않습니다. */
+  const aside = $("inputs");
+  function fitAside() {
+    if (getComputedStyle(aside).position !== "sticky") { aside.style.height = ""; return; }
+    const gap = parseFloat(getComputedStyle(aside).top) || 0;   // sticky top 과 같은 여백을 아래에도
+    aside.style.height = Math.max(320, window.innerHeight - Math.max(aside.getBoundingClientRect().top, gap) - gap) + "px";
+  }
+  window.addEventListener("resize", fitAside);
+  window.addEventListener("scroll", fitAside, { passive: true });
+  document.querySelectorAll(".app-main, .container").forEach((el) => el.addEventListener("scroll", fitAside, { passive: true }));
+
   drawTiers();
   render();
+  fitAside();
   loadLiveFx();
   setInterval(loadLiveFx, FX_REFRESH_MS);
 })();
