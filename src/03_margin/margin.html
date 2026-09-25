@@ -52,7 +52,7 @@
           </div>
           <div class="margin-pair">
             <div class="form-group"><span class="form-label">목표 영업마진</span>{{ field('m2', 20, '%', '목표 영업마진', 0.5) }}</div>
-            <div class="form-group"><span class="form-label">최소 마진 방어선</span>{{ field('m2min', 15, '%', '최소 영업마진 (방어선)', 0.5) }}</div>
+            <div class="form-group"><span class="form-label" title="최종 판매가 기준으로 우리 회사가 절대 밑돌면 안 되는 영업마진 한계선입니다.">최소 영업마진 (방어선)</span>{{ field('m2min', 15, '%', '최소 영업마진 (방어선)', 0.5) }}</div>
           </div>
         </div>
 
@@ -236,7 +236,7 @@
         </div>
       </section>
 
-      <!-- 역제안 분석 — ① 목표가·판정·게이지 → ② 솔루션 2분할(VE | 마진 조정) → ③ 대응 방안 -->
+      <!-- 역제안 분석 — ① 목표가·판정·게이지 → ② 대응 방안 → ③ 내부 원가 절감 시뮬레이션 2분할(VE | 마진 조정) -->
       <section class="tab-panel" id="margin-view-reverse">
         <div class="margin-stack">
           <!-- ① 목표가 입력 + 종합 판정 + 게이지 (VE·마진 조정 결과가 여기 반영) -->
@@ -249,8 +249,8 @@
                 <div class="margin-rtop__inputs">
                   <label class="form-label" for="margin-target">바이어 목표가</label>
                   {{ field('target', 1.95, '$', '바이어 목표가 (USD)', 0.01) }}
-                  <label class="form-label" for="margin-item-floor">항목별 최소 마진</label>
-                  {{ field('item-floor', 5, '%', '항목별 최소 마진', 0.5) }}
+                  <label class="form-label" for="margin-item-floor" title="원재료, 임가공, 부자재, 물류비 각각의 1차 마진에서 최대 어디까지 양보(인하)할 수 있는지 지정하는 기준선입니다.">1차 마진 양보 한계치 (항목별)</label>
+                  <div title="원재료, 임가공, 부자재, 물류비 각각의 1차 마진에서 최대 어디까지 양보(인하)할 수 있는지 지정하는 기준선입니다.">{{ field('item-floor', 5, '%', '1차 마진 양보 한계치 (항목별)', 0.5) }}</div>
                 </div>
                 <div class="margin-verdict" id="margin-verdict"></div>
               </div>
@@ -268,7 +268,16 @@
             </div>
           </div>
 
-          <!-- ② 솔루션 시뮬레이션 2분할 -->
+          <!-- ② 대응 방안 (카운터 오퍼) — 판정 바로 아래에서 브리핑·선택 -->
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">대응 방안</h3>
+              <p class="text-caption">바이어에게 다시 제안할 수 있는 선택지</p>
+            </div>
+            <div class="card-body"><div class="margin-options" id="margin-options"></div></div>
+          </div>
+
+          <!-- ③ 내부 원가 절감 시뮬레이션 2분할 (VE | 마진 직접 조정) — 목표가를 꼭 맞춰야 할 때 -->
           <div class="margin-rmid">
             <div class="card">
               <div class="card-header">
@@ -313,14 +322,6 @@
             </div>
           </div>
 
-          <!-- ③ 대응 방안 -->
-          <div class="card">
-            <div class="card-header">
-              <h3 class="card-title">대응 방안</h3>
-              <p class="text-caption">바이어에게 다시 제안할 수 있는 선택지</p>
-            </div>
-            <div class="card-body"><div class="margin-options" id="margin-options"></div></div>
-          </div>
         </div>
       </section>
 

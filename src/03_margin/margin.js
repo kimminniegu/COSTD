@@ -84,7 +84,7 @@
     if (st.mMode === "margin" && (Object.values(rates).some((v) => v >= 1) || p.m2 >= 1)) {
       return { error: "마진율 방식에서는 마진이 100% 미만이어야 해요." };
     }
-    if (p.m2min > p.m2) return { error: "최소 마진 방어선은 목표 영업마진보다 클 수 없어요." };
+    if (p.m2min > p.m2) return { error: "최소 영업마진(방어선)은 목표 영업마진보다 클 수 없어요." };
     p.rates = rates;
     return p;
   }
@@ -224,7 +224,7 @@
       return;
     }
     const cartons = Math.ceil(p.qty / ea), cbm = cartons * box, billed = Math.max(1, cbm);
-    cbmEst = { logi: Math.round((billed * inland) / 10000) * 10000, freight: Math.ceil(billed * lcl) };
+    cbmEst = { cartons, cbm, logi: Math.round((billed * inland) / 10000) * 10000, freight: Math.ceil(billed * lcl) };
     $("cbm-peek").textContent = `${cartons.toLocaleString()}카톤 · ${cbm.toFixed(2)} CBM`;
     $("cbm-out").innerHTML = `<div class="margin-cbm-out__row"><span>카톤 ${cartons.toLocaleString()}박스</span><b>${cbm.toFixed(2)} CBM</b></div>
       <div class="margin-cbm-out__row"><span>FOB 내륙물류비</span><b>${won(cbmEst.logi)}</b></div>
@@ -299,20 +299,21 @@
     syncErpStatus();
     if (p.error) { $("cost-sum").textContent = "-"; return; }
     const r = forward(p);
+    renderCbm(p);            // 물류비 요약이 CBM 추정값을 쓰므로 먼저 계산
     renderInputSummary(p, r);
-    renderCbm(p);
     renderForward(p, r);
     renderReverse(p, r);
     renderTier(p);
     renderFx(p, r);
   }
 
-  /* 접힌 입력 섹션 요약 — 원가 합계(로스 포함) / 물류비 */
+  /* 접힌 입력 섹션 요약 — 원가 합계(로스 포함) / 물류비 (접힌 상태에서도 부피 스펙이 보이도록 CBM·카톤 수 포함) */
   function renderInputSummary(p, r) {
     $("cost-sum").textContent = won(r.C);
     const exw = p.inco === "EXW";
     $("logi-sum").textContent = exw ? "EXW · 미포함" : won(p.logi);
     const peek = exw ? ["바이어 운송"] : [`개당 ${won(r.L)}`, `마진 ${pct(p.rates.logi)}`];
+    if (cbmEst) peek.unshift(`${cbmEst.cbm.toFixed(2)} CBM (${cbmEst.cartons.toLocaleString()}박스)`);
     if (p.inco === "CFR" || p.inco === "CIF") peek.push(`해상 $${(p.freight || 0).toLocaleString()}`);
     if (p.inco === "CIF") peek.push(`보험 ${(Math.round(p.ins * 10000) / 100)}%`);
     $("logi-peek").textContent = peek.join(" · ");
@@ -610,7 +611,7 @@
   function renderReverse(p, r) {
     const t = num("target"), floor = num("item-floor") / 100;
     const bad = isNaN(t) || t <= 0 || isNaN(floor);
-    $("r-err").textContent = bad ? "목표가와 항목별 최소 마진을 입력하세요." : "";
+    $("r-err").textContent = bad ? "목표가와 1차 마진 양보 한계치를 입력하세요." : "";
     if (bad) { $("verdict").className = "margin-verdict"; $("verdict").innerHTML = ""; $("gauge").innerHTML = ""; $("gauge-note").textContent = ""; return; }
 
     const { toUsd, withM2, supMaxFor, keys, cost, T } = reverseCtx(p, r, t);

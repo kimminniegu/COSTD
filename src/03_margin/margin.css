@@ -214,7 +214,7 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 
 /* 역제안 ① 상단 — 목표가 입력 | 종합 판정, 아래 게이지 */
 .margin-rtop__row { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: var(--space-4); align-items: center; }
-.margin-rtop__inputs { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--space-2) var(--space-3); }
+.margin-rtop__inputs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(112px, 1fr); align-items: center; gap: var(--space-2) var(--space-3); }   /* 라벨이 길면 줄바꿈, 입력칸은 최소 112px */
 .margin-rtop .margin-verdict { padding: var(--space-3) var(--space-4); }
 .margin-rtop__foot { margin-top: var(--space-2); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-1) var(--space-3); }
 .margin-rtop__foot .margin-legend { margin-top: 0; }
@@ -223,7 +223,7 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 .margin-rsum__gap.is-short { color: var(--color-danger); }
 .margin-rsum__gap.is-ok { color: var(--color-success); }
 
-/* 역제안 ② 중단 — 솔루션 2분할 (VE | 마진 직접 조정) */
+/* 역제안 ③ 하단 — 내부 원가 절감 시뮬레이션 2분할 (VE | 마진 직접 조정) */
 .margin-rmid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--layout-card-gap); align-items: stretch; }
 .margin-rmid__foot { margin-top: var(--space-3); }
 .margin-rmid__foot b { color: var(--color-text-primary); }
@@ -342,8 +342,8 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 .margin-gauge__tick.is-row2::before { height: calc(var(--space-8) + var(--space-2)); margin-top: calc(var(--space-8) * -1); }
 .margin-gauge__tick b { display: block; color: var(--color-text-primary); }
 
-/* 역제안 — 대응 방안 */
-.margin-options { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--space-2); }
+/* 역제안 ② 중단 — 대응 방안 (한 줄 균등, 본문 880px 이하 2열) */
+.margin-options { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--space-2); }   /* 카드 2~4개를 한 줄 균등 (4개면 4열) */
 .margin-option { padding: var(--space-3) var(--space-4); background: var(--color-surface-muted); border: var(--border-default); border-color: transparent; border-radius: var(--radius-lg); }
 .margin-option.is-best { background: var(--color-primary-soft); border-color: var(--color-primary-light); }
 .margin-option__label { font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
