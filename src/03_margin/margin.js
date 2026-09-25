@@ -917,17 +917,32 @@
   $("inputs").querySelectorAll("input, select").forEach((e) => e.addEventListener("input", render));
   ["fx", "target", "item-floor", "abs-on", "abs-c", "abs-l", "fx-contract", "fx-use-quote", "ve-coat", "ve-box", "ve-sagup"].forEach((id) => $(id).addEventListener("input", render));
 
-  /* 입력 Card 높이를 화면 아래 끝까지 맞춤 — 처음(헤더 아래)과 스크롤 후(sticky) 모두 바닥이 화면 끝에 닿게.
+  /* 입력 Card 높이 — 처음 화면(헤더 아래)에서 바닥이 화면 끝에 닿는 높이로 고정하고, 스크롤해도 늘리지 않습니다.
+     (늘리면 남는 높이가 요약 박스 위로 몰려 간격이 벌어짐)
+     단, 내용이 그 높이보다 길면(작은 화면·토글 펼침) 스크롤 중 화면에 남는 만큼 내용 높이까지만 늘려 Card 안 스크롤을 줄입니다.
      1열 배치(position: static)에서는 적용하지 않습니다. */
   const aside = $("inputs");
+  const asideBody = aside.querySelector(".card-body");
+  function asideNatural() {   // 요약 박스를 입력 바로 아래에 붙였을 때의 내용 높이
+    const top = aside.getBoundingClientRect().top - aside.scrollTop;
+    let bottom = 0;
+    [...asideBody.children].forEach((e) => {
+      if (e === $("quick") || !e.offsetHeight) return;
+      bottom = Math.max(bottom, e.getBoundingClientRect().bottom + (parseFloat(getComputedStyle(e).marginBottom) || 0));
+    });
+    return bottom - top + $("quick").offsetHeight + (parseFloat(getComputedStyle(asideBody).paddingBottom) || 0);
+  }
   function fitAside() {
     if (getComputedStyle(aside).position !== "sticky") { aside.style.height = ""; return; }
     const gap = parseFloat(getComputedStyle(aside).top) || 0;   // sticky top 과 같은 여백을 아래에도
-    aside.style.height = Math.max(320, window.innerHeight - Math.max(aside.getBoundingClientRect().top, gap) - gap) + "px";
+    const layoutTop = aside.parentElement.getBoundingClientRect().top + window.scrollY;   // 스크롤과 무관한 Card 시작 위치
+    const first = window.innerHeight - layoutTop - gap;                                    // 처음 화면 기준 높이
+    const avail = window.innerHeight - Math.max(aside.getBoundingClientRect().top, gap) - gap;
+    aside.style.height = Math.max(320, first, Math.min(asideNatural(), avail)) + "px";
   }
   window.addEventListener("resize", fitAside);
   window.addEventListener("scroll", fitAside, { passive: true });
-  document.querySelectorAll(".app-main, .container").forEach((el) => el.addEventListener("scroll", fitAside, { passive: true }));
+  ["cost", "logi-box"].forEach((id) => $(id).addEventListener("toggle", fitAside));
 
   drawTiers();
   render();

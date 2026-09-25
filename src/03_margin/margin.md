@@ -12,6 +12,7 @@
 | 2.5 | 2026-09-25 | 전체 UI 정리: 좌측 입력 간격·그룹 구조 통일(제목 + 접이식 박스, 접이식끼리는 선 없이 간격), 견적 계산 Stat Tile 라벨 한 줄 + 보조 줄, 단가 구성 범례는 막대에 있는 항목만, 수량별 단가표 가로 스크롤 제거(영업마진 기준을 Card 부제로), 할인 구간 제목 줄에 `+ 구간 추가`, 역제안 Card 문구 한 줄로 | C |
 | 2.6 | 2026-09-25 | 좌측 입력 Card 높이를 화면 아래 끝에 맞춤(JS `fitAside`) + 맨 아래 **현재 견적 요약**(`#margin-quick`), 역제안 판정 게이지·범례를 맑은 톤(`--margin-gauge-*`)으로 | C |
 | 2.7 | 2026-09-25 | 좌측 제조원가·물류비·현재 견적 요약 사이 간격만 축소(견적 조건·입력 간격은 그대로) — 토글을 접은 상태에서 브라우저 높이 800px까지 스크롤 없음. 견적 계산 '할인 후 영업마진' 보조 줄 잘림 방지(`목표`·`최소` 단위로 줄바꿈) | C |
+| 2.8 | 2026-09-25 | 입력 Card 높이를 처음 화면 기준으로 고정 — 스크롤해도 요약 박스만 내려가지 않고 요소 간격 유지 (내용이 길 때만 내용 높이까지 늘림) | C |
 
 ## 1. 페이지 목적
 
@@ -476,7 +477,7 @@ Best regards,
 .modal-backdrop#margin-quote-modal > .modal.modal-lg  (우리 회사 / 고객사 / 견적 조건 / 완료 안내 .alert / 영문 이메일 제안문 복사 · 닫기 · PDF 다운로드)
 ```
 
-- 입력 Card 높이: margin.js `fitAside()`가 `innerHeight − max(Card 위치, sticky top) − sticky top`으로 높이를 정해, 처음 화면(헤더 아래)과 스크롤 뒤(sticky) 모두 Card 바닥이 화면 아래 끝(24px 여백)에 닿습니다. resize·scroll 때 다시 계산하고, 1열 배치(position: static)에서는 해제합니다. 내용이 더 길면 Card 안에서 스크롤, 남는 높이는 현재 견적 요약 위 여백이 됩니다.
+- 입력 Card 높이: margin.js `fitAside()`가 **처음 화면 기준**(`innerHeight − Card 시작 위치 − 24px`)으로 높이를 정해 바닥이 화면 아래 끝에 닿게 하고, 스크롤해도 늘리지 않아 제조원가·물류비·현재 견적 요약 사이 간격이 그대로 유지됩니다. 내용이 그 높이보다 길면(작은 화면·토글 펼침) 스크롤 중 화면에 남는 만큼 **내용 높이까지만** 늘립니다. resize·scroll·접이식 toggle 때 다시 계산하고, 1열 배치(position: static)에서는 해제합니다.
 - 역제안 판정 게이지 트랙·범례와 환율 마지노선 칩의 색 점은 `--margin-gauge-bad / -warn / -caution / -good`(환율 게이지와 같은 맑은 톤, `oklch(from …)`)을 씁니다. 판정 박스 배경(`--margin-zone-*-soft`)은 그대로입니다.
 - 공통 컴포넌트를 그대로 사용: `.card`, `.tabs`/`.tab`/`.tab-panel`(common.js `data-tab-target`), `.table`, `.badge`, `.stat-tile`, `.kpi-*`, `.input-group`, `.form-control(-sm)`, `.form-check`, `.btn`, `.alert`, `.modal`, `.spinner`.
 - 접이식(제조원가·물류비)은 별도 JS 없이 네이티브 `<details>`/`<summary>`를 쓰고 모양만 `.margin-drawer*`로 지정합니다. 표시·숨김이 필요한 영역(흡수 옵션, 완료 안내)은 `hidden` 속성으로 토글하고, class의 `display`에 덮이지 않도록 `.margin-page [hidden]`, `#margin-quote-modal [hidden]`을 지정합니다.
