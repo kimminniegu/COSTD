@@ -240,7 +240,7 @@
   }
 
   /* 2-1. 수출입 상세 모달 (5-9): 카드 클릭 → /api/home/trade?hs&months&country&metric ---- */
-  var tradeTab = "countries", tradeLast = null, worldCache = {}, worldTimer = null, tradeFoot = "";
+  var tradeTab = "countries", tradeLast = null, tradeFoot = "";
   function svgLine(points, W, H, zeroPct) {
     var padT = 8, padB = 4, n = points.length;
     if (n < 2) return '<p class="home-rated__nochart">표시할 달이 부족해요</p>';
@@ -285,46 +285,6 @@
       '<th class="is-numeric">#</th><th>' + esc(nameHead) + '</th><th></th><th class="is-numeric">' + esc(metricName) + '</th><th class="is-numeric">비중</th><th class="is-numeric">전년비</th>' +
       "</tr></thead><tbody>" + rows + "</tbody></table></div>";
   }
-  /* 세계 수입시장 탭 (5-10): UN Comtrade 연간 자료. 처음엔 백그라운드 수집이라 15초마다 다시 확인 */
-  function worldHs4() { var h = state.tradeFilter.hs; return h && h !== "all" ? h.slice(0, 4) : "3304"; }
-  function renderWorldList(w) {
-    var box = $("home-trade-world");
-    if (!box) return;
-    if (!w.ok) {
-      box.innerHTML = '<div class="state state-empty home-traded__state">' +
-        (w.refreshing ? '<div class="spinner" aria-hidden="true"></div>' : "") +
-        '<p class="state-title">' + esc(w.message || "세계 수입시장 자료를 불러오지 못했어요") + "</p>" +
-        (w.refreshing ? "<p>받는 동안 다른 탭을 봐도 돼요</p>" : "") + "</div>";
-      return;
-    }
-    var rows = w.importers.map(function (it) {
-      return '<tr title="' + esc(it.name_en + " · 총수입 $" + it.imports_musd + "M · 한국산 $" + it.from_korea_musd + "M") + '">' +
-        '<td class="is-numeric home-traded__no">' + it.rank + "</td>" +
-        '<td class="home-traded__name">' + esc(it.name) + "<small>" + esc(it.iso) + "</small></td>" +
-        '<td class="home-traded__barcell"><span class="home-rank__bar" aria-hidden="true"><span style="width:' + Number(it.bar || 0) + '%"></span></span></td>' +
-        '<td class="is-numeric home-traded__val">$' + esc(it.imports_musd) + "M</td>" +
-        '<td class="is-numeric home-traded__share">' + esc(it.world_share) + "%</td>" +
-        '<td class="is-numeric">' + (it.korea_share == null ? '<span class="badge">—</span>' : '<span class="badge' + (it.korea_share >= 10 ? " badge-primary" : "") + '">' + esc(it.korea_share) + "%</span>") + "</td></tr>";
-    }).join("");
-    box.innerHTML = '<div class="table-wrap"><table class="table home-traded__table"><thead><tr>' +
-      '<th class="is-numeric">#</th><th>수입국</th><th></th><th class="is-numeric">총수입</th><th class="is-numeric">세계 비중</th><th class="is-numeric">한국산</th>' +
-      "</tr></thead><tbody>" + rows + "</tbody></table></div>";
-  }
-  function loadWorld(force) {
-    var hs4 = worldHs4(), c = worldCache[hs4];
-    if (!force && c && Date.now() - c.at < 10 * 60 * 1000 && c.data.ok) { renderWorldList(c.data); return; }
-    fetch("/api/home/world?hs=" + encodeURIComponent(hs4), { credentials: "same-origin" })
-      .then(function (r) { return r.json(); })
-      .then(function (w) {
-        worldCache[hs4] = { at: Date.now(), data: w };
-        renderWorldList(w);
-        var meta = $("home-trade-world-meta");
-        if (meta) meta.textContent = w.ok ? "Comtrade " + w.year + " · " + w.reporters + "개국 $" + w.world_total_musd + "M" + (w.has_korea ? " · 한국산 " + w.korea_share_total + "%" : "") : "UN Comtrade · HS " + w.hs4;
-        clearTimeout(worldTimer);
-        if (!w.ok && w.refreshing && tradeTab === "world" && document.querySelector("#home-trade-modal.is-open")) worldTimer = setTimeout(function () { loadWorld(true); }, 15000);
-      })
-      .catch(function () { renderWorldList({ ok: false, message: "세계 수입시장 자료를 불러오지 못했어요" }); });
-  }
   function renderTradeRight(d) {
     var box = $("home-trade-right");
     if (!box) return;
@@ -333,15 +293,7 @@
       '<div class="home-traded__head"><div class="tabs" role="tablist" aria-label="순위 기준">' +
         seg("data-trade-tab", "countries", "국가별", tab === "countries") +
         seg("data-trade-tab", "products", "품목별", tab === "products") +
-        seg("data-trade-tab", "world", "세계 수입시장", tab === "world") +
-      '</div><span class="text-caption home-traded__meta" id="home-trade-world-meta">' + (tab === "world" ? "UN Comtrade · HS " + esc(worldHs4()) : "전년 동기 대비") + "</span></div>";
-    if (tab === "world") {
-      box.innerHTML += '<div id="home-trade-world"><div class="state state-empty home-traded__state"><div class="spinner" aria-hidden="true"></div><p class="state-title">불러오는 중이에요</p></div></div>';
-      $("home-trade-foot").textContent = "UN Comtrade · 각국의 연간 총수입과 그중 한국산 비중 · 관세청 수출 통계와 집계 기준이 달라 금액이 정확히 맞지는 않아요";
-      loadWorld(false);
-      return;
-    }
-    $("home-trade-foot").textContent = tradeFoot;
+      '</div><span class="text-caption home-traded__meta">상위 10 · 전년 동기 대비</span></div>';
     var isC = tab === "countries";
     box.innerHTML += tradeTable(isC ? d.countries : d.products, d.metric_name, isC ? "국가" : "품목 (HS 6단위)") +
       (isC && d.country ? '<p class="form-help">국가를 고른 상태예요. 품목별 탭은 ' + esc(d.country_name) + " 기준으로 보여요.</p>" : "");
