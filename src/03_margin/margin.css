@@ -218,6 +218,9 @@
 .margin-modal-section { display: flex; align-items: baseline; gap: var(--space-2); margin: var(--space-6) 0 var(--space-3); font-size: var(--font-size-sub); }
 .margin-modal-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-3); }
 .margin-modal-grid__wide { grid-column: 1 / -1; }
+/* 팝업 가격 조건: 인코텀즈 | 지정 장소 선택 | (직접 입력일 때만) 입력칸 */
+.margin-term { display: grid; grid-template-columns: 96px minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-2); }
+.margin-term:has(#margin-q-place[hidden]) { grid-template-columns: 96px minmax(0, 1fr); }
 .margin-modal-grid .form-control[readonly] { color: var(--color-text-secondary); cursor: default; }
 textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; font-size: var(--font-size-sub); }
 #margin-q-err { margin-top: var(--space-3); }
@@ -421,5 +424,7 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 }
 @container page (max-width: 560px) {
   .margin-rtop__row, .margin-head--tier, .margin-fxdash__inputs, .margin-fxdash__kpis, .margin-modal-grid { grid-template-columns: 1fr; }
+  .margin-term, .margin-term:has(#margin-q-place[hidden]) { grid-template-columns: 96px minmax(0, 1fr); }
+  #margin-q-place { grid-column: 1 / -1; }
   .margin-sec-title .btn { margin-left: 0; }
 }

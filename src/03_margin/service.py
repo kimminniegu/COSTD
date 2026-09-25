@@ -43,6 +43,8 @@ COMPANY = {
 MAX_TEXT = 200
 MAX_LINES = 20
 INCOTERMS = {"EXW", "FOB", "CFR", "CIF"}
+# 지정 장소가 비어 있을 때 기본값 — FOB 는 선적항 부산 (화면 margin.js 의 PLACE_DEFAULT 와 같게 유지)
+NAMED_PLACE_DEFAULT = {"EXW": "Korea", "FOB": "Busan, Korea"}
 MODES = {"one", "split", "open"}
 
 # 한글 회사명·주소도 깨지지 않도록 시스템의 한글 TTF 를 찾아 씁니다. (없으면 Helvetica — 영문만 표시)
@@ -192,7 +194,7 @@ def build_quote_context(payload, user=None):
         },
         "incoterm": incoterm,
         "named_place": _text(payload, "named_place", "지정 장소")
-        or ("Korea" if incoterm in ("EXW", "FOB") else "Port of destination"),
+        or NAMED_PLACE_DEFAULT.get(incoterm, "Port of destination"),
         "payment": _text(payload, "payment", "결제 조건") or "T/T",
         "lead_time": _text(payload, "lead_time", "납기"),
         "moq": _text(payload, "moq", "MOQ"),

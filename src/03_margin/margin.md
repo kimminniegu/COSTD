@@ -14,6 +14,8 @@
 | 2.7 | 2026-09-25 | 좌측 제조원가·물류비·현재 견적 요약 사이 간격만 축소(견적 조건·입력 간격은 그대로) — 토글을 접은 상태에서 브라우저 높이 800px까지 스크롤 없음. 견적 계산 '할인 후 영업마진' 보조 줄 잘림 방지(`목표`·`최소` 단위로 줄바꿈) | C |
 | 2.8 | 2026-09-25 | 입력 Card 높이를 처음 화면 기준으로 고정 — 스크롤해도 요약 박스만 내려가지 않고 요소 간격 유지 (내용이 길 때만 내용 높이까지 늘림) | C |
 | 2.9 | 2026-09-25 | 견적 계산 단가 구성 막대 팔레트 재정리: 원가(중립 회색) · 마진(브랜드 파랑 연→진: 1차 마진 `--color-primary-bright` 70% / 영업마진 `--color-primary`) · 물류(청록: `--color-primary-bright`의 색상을 청록 쪽으로 −58° 돌린 `oklch(from …)`, 물류비 진 / 물류 마진 연) 3계열, 구간 사이 2px 흰 틈. 인접 색 구분 검증(일반 시각 ΔE ≥ 16.3, 색각 이상 ΔE ≥ 14.1) | C |
+| 2.10 | 2026-09-25 | 견적서 지정 장소: FOB 기본값 `Busan, Korea`(기존 `Korea`), 팝업 칸에 인코텀즈별 기본값 자동 채움·직접 수정 가능(주요 항구 추천 목록), PDF·미리보기·영문 제안문·가격표 복사가 같은 값 사용 | C |
+| 2.11 | 2026-09-25 | 견적서 팝업 **가격 조건**: 인코텀즈 선택(`margin-q-inco`)을 좌측 인코텀즈와 양방향 연동, 지정 장소를 인코텀즈별 선택지(EXW 공장 소재지 / FOB 한국 선적항 / CFR·CIF 도착항) + `직접 입력…`으로 | C |
 
 ## 1. 페이지 목적
 
@@ -137,6 +139,21 @@
 
 ### 6.3 견적서 PDF 팝업 (`#margin-quote-modal`)
 
+**가격 조건 = 인코텀즈 + 지정 장소 (Named place)** — PDF의 `FOB Busan, Korea`처럼 인코텀즈 뒤에 붙는 장소입니다. 팝업 `견적 조건` 맨 위 한 줄: `[인코텀즈] [지정 장소 선택] [(직접 입력일 때만) 입력칸]`.
+- 인코텀즈 `margin-q-inco`는 좌측 `margin-inco`와 **양방향 연동**합니다. 팝업에서 바꾸면 좌측이 바뀌고 4개 탭이 다시 계산됩니다.
+- 지정 장소 선택 `margin-q-place-sel` — 인코텀즈 의미별 선택지(기본값 굵게):
+
+  | 인코텀즈 | 의미 | 선택지 |
+  |---|---|---|
+  | EXW | 판매자 공장 소재지 | **Korea**, Seller's factory, Hwaseong, Pyeongtaek, Sejong, Eumseong (, Korea) |
+  | FOB | 한국 선적항 | **Busan**, Incheon, Pyeongtaek, Gwangyang, Ulsan (, Korea) |
+  | CFR · CIF | 바이어 쪽 도착항 | (기본 비움 → `Port of destination`) Los Angeles · Long Beach · New York, USA / Vancouver, Canada / Shanghai, China / Hong Kong / Tokyo · Osaka, Japan / Singapore / Ho Chi Minh City, Vietnam / Bangkok, Thailand / Port Klang, Malaysia / Jakarta, Indonesia / Jebel Ali, UAE / Rotterdam, Netherlands / Hamburg, Germany / Sydney, Australia |
+
+- 모든 목록 끝에 `직접 입력…` — 고르면 입력칸 `margin-q-place`가 나타납니다. 실제 값은 `margin-q-place` 하나입니다.
+- 직접 고르거나 입력한 값은 **같은 의미 안(CFR ↔ CIF)에서는 유지**하고, 의미가 바뀌면(EXW ↔ FOB ↔ CFR·CIF) 선택지를 바꾸고 기본값으로 되돌립니다(선적항이 도착항으로 잘못 나가는 것 방지).
+- 서버 기본값 `NAMED_PLACE_DEFAULT`(EXW `Korea` · FOB `Busan, Korea`)는 화면 기본값과 같게 유지합니다.
+- 같은 값을 견적서 PDF(Price Term·Terms), 견적서 미리보기 조건 줄, 팝업 요약, 영문 이메일 제안문, 바이어용 가격표 복사가 함께 씁니다.
+
 | 구분 | 항목 | id | 필수 | 기본값 |
 |---|---|---|---|---|
 | 우리 회사 (자동 연동) | 회사명 | `margin-q-company` | - | `service.COMPANY["name"]`, 수정 불가 |
@@ -146,7 +163,8 @@
 | 견적 조건 | 견적 번호 | `margin-q-no` | ○ | `QT-YYYYMMDD-01` |
 | | 유효기간 | `margin-q-validity` | | 30일 |
 | | 품목명(영문) | `margin-q-product` | ○ | Toner 150ml (미리보기에도 반영) |
-| | 결제 조건 / 지정 장소 / 납기 / 비고 | `margin-q-payment` / `-place` / `-lead` / `-remarks` | | T/T / (EXW·FOB: Korea, CFR·CIF: Port of destination) |
+| | 가격 조건 (인코텀즈 · 지정 장소) | `margin-q-inco` / `margin-q-place-sel` + `margin-q-place` | | 좌측 인코텀즈 연동 / 인코텀즈별 기본값 (위 표) |
+| | 결제 조건 / 납기 / 비고 | `margin-q-payment` / `-lead` / `-remarks` | | T/T |
 | 버튼 | 영문 이메일 제안문 복사 / 닫기 / PDF 다운로드 | `margin-copy-mail` / `data-modal-close` / `margin-q-pdf` | | PDF 저장 후 `#margin-q-done` 완료 안내 표시 |
 
 ## 7. 처리 과정
@@ -320,7 +338,7 @@ Dear Glow Beauty Inc.,                         ← 담당자(Attn.)가 있으면
 
 Thank you for your interest in our products. Please find the attached official quotation QT-20260924-01 for Toner 150ml.
 
-- Unit price: $2.15 per pc (FOB Korea)         ← 지정 장소 없으면 EXW·FOB: Korea / CFR·CIF: Port of destination
+- Unit price: $2.15 per pc (FOB Busan, Korea)  ← 팝업 지정 장소 값 (비어 있으면 FOB: Busan, Korea / EXW: Korea / CFR·CIF: Port of destination)
 - Quantity: 10,000 pcs (Total $21,500.00)
 - MOQ: 5,000 pcs
 - Volume pricing: 5,000 pcs $2.23 / 20,000 pcs $2.08 / ...   ← 가격표 중 MOQ 이상, 현재 수량 제외
@@ -353,7 +371,7 @@ Best regards,
 | 역제안 분석 | 상단: 종합 판정 박스(판정 Badge(→ 적용 후 Badge) + R&R Badge / 영업마진(→ 적용 후) + 부족·여유 금액 / 설명) + Gauge(적용 후 기준선 안내) / 중단: 대응 방안 카드 2~4개 한 줄 / 하단: VE 체크리스트 + 절감 요약, 마진 조정 4행 + 조정 합계 요약 |
 | 수량별 단가 | 요약 박스, 수량별 단가표(Card 부제 `영업마진 배지 기준 · 목표 20% · 최소 15%`, 가로 스크롤 없음): 수량 · 물류비 총액(+ 개당 물류) · 단가 막대(+ 현재 주문/할인/할증 · 주문 총액) · 영업마진 Badge · 삭제 |
 | 환율 영향 | 상단 Card: 결제 환율 입력·변동률·Slider(트랙 = 위험/안전 구간 색, 손잡이 = 현재 환율), 결과 박스 3개(실현 영업마진+Badge · 환차손익 총액 · 방어 단가), 마지노선 환율 칩 3개 / 하단 Card: 환율 변동 시나리오 표 |
-| 가격표 복사 | 영문 텍스트: `Price list (FOB Korea, USD per pc)` / `MOQ: 5,000 pcs` / `10,000 pcs : $2.15 (volume discount 3%)` … |
+| 가격표 복사 | 영문 텍스트: `Price list (FOB Busan, Korea, USD per pc)` / `MOQ: 5,000 pcs` / `10,000 pcs : $2.15 (volume discount 3%)` … |
 | 영문 이메일 제안문 복사 | 7.8의 커버레터 텍스트 (Subject 포함) |
 | 견적서 PDF (A4 1장) | 회사명·연락처 / QUOTATION / 고객사·견적번호·일자·유효기간·담당자 / 거래 조건(Price Term·Currency·Payment·MOQ) / 품목 표 / 합계·영문 금액(SAY US DOLLARS … ONLY.) / 오픈북형 원가 구성 / Terms & Conditions / 비고 / 서명란 / 쪽 번호 |
 
@@ -475,7 +493,7 @@ Best regards,
           ├─ .tab-panel#margin-view-reverse : ① .card(.margin-rtop: 입력(목표가 · 1차 마진 양보 한계치, title 툴팁) | #margin-verdict → #margin-gauge → 범례·안내 한 줄) / ② 대응 방안 .card(.margin-options) / ③ .margin-rmid(VE .card | 마진 직접 조정 .card)
           ├─ .tab-panel#margin-view-tier    : 한 줄 입력(MOQ · MOQ 미만 주문 · 할증률 · 견적 수량 추가, 모두 44px) / .margin-disc 수량 할인 구간 칩 + 구간 추가 / 한 줄 요약 / 수량별 단가표 Card(범례 · 가격표 복사 · 영문 이메일 제안문 복사, table.margin-qtable)
           └─ .tab-panel#margin-view-fx      : ① .card > .margin-fxdash(입력 2열 (Slider = input.margin-fxrange 게이지) → .margin-kpi 3분할 → .margin-chips) / ② .card(환율 변동 시나리오 표)
-.modal-backdrop#margin-quote-modal > .modal.modal-lg  (우리 회사 / 고객사 / 견적 조건 / 완료 안내 .alert / 영문 이메일 제안문 복사 · 닫기 · PDF 다운로드)
+.modal-backdrop#margin-quote-modal > .modal.modal-lg  (우리 회사 / 고객사 / 견적 조건(맨 위 .margin-term 가격 조건: 인코텀즈 | 지정 장소 선택 | 직접 입력) / 완료 안내 .alert / 영문 이메일 제안문 복사 · 닫기 · PDF 다운로드)
 ```
 
 - 입력 Card 높이: margin.js `fitAside()`가 **처음 화면 기준**(`innerHeight − Card 시작 위치 − 24px`)으로 높이를 정해 바닥이 화면 아래 끝에 닿게 하고, 스크롤해도 늘리지 않아 제조원가·물류비·현재 견적 요약 사이 간격이 그대로 유지됩니다. 내용이 그 높이보다 길면(작은 화면·토글 펼침) 스크롤 중 화면에 남는 만큼 **내용 높이까지만** 늘립니다. resize·scroll·접이식 toggle 때 다시 계산하고, 1열 배치(position: static)에서는 해제합니다.

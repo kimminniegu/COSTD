@@ -327,6 +327,7 @@
   }
 
   function renderForward(p, r) {
+    syncPlace(p.inco);
     $("hero-cap").textContent = `${p.inco} 단가 · ${p.qty.toLocaleString()}개`;
     $("hero-usd").innerHTML = usd(r.usd) + '<span class="kpi-unit">/ 개</span>';
     const unit = Math.round(r.usd * 100) / 100;
@@ -427,7 +428,7 @@
     $("quote").innerHTML = `<div class="margin-quote__head"><strong>QUOTATION</strong><span class="text-caption">${today} · Validity 30 days</span></div>
       <table class="table"><thead><tr><th>Description</th><th class="is-numeric">Q'ty</th><th class="is-numeric">Unit price (${p.inco})</th><th class="is-numeric">Amount</th></tr></thead>
       <tbody>${rowsHtml}<tr class="margin-total"><td>Total</td><td></td><td></td>${n(money(st.quote.total))}</tr></tbody></table>${bdHtml}
-      <p class="text-caption margin-quote__terms">Terms: ${p.inco} · Payment T/T · MOQ ${st.moq.toLocaleString()} pcs${r.d > 0 ? ` · Volume discount ${pct(r.d)} included` : ""}</p>`;
+      <p class="text-caption margin-quote__terms">Terms: ${p.inco} ${esc(placeFor(p.inco))} · Payment T/T · MOQ ${st.moq.toLocaleString()} pcs${r.d > 0 ? ` · Volume discount ${pct(r.d)} included` : ""}</p>`;
     renderQuoteSummary();
   }
 
@@ -435,13 +436,66 @@
   const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
   const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ESC[c]);
   const qv = (id) => $(id).value.trim();
+
+  /* 가격 조건 — 인코텀즈(좌측 margin-inco 와 양방향 연동) + 지정 장소(Named place).
+     지정 장소는 인코텀즈의 의미별로 선택지가 다릅니다: EXW = 판매자 공장 소재지, FOB = 한국 선적항, CFR·CIF = 도착항.
+     선택지에 없으면 '직접 입력'. 직접 고른·입력한 값은 같은 의미 안(CFR ↔ CIF)에서는 유지하고, 의미가 바뀌면 기본값으로 되돌립니다.
+     실제 값은 #margin-q-place 하나이고 PDF·미리보기·팝업 요약·영문 제안문·가격표 복사가 같은 값을 씁니다. */
+  const DEST_PORTS = ["Los Angeles, USA", "Long Beach, USA", "New York, USA", "Vancouver, Canada", "Shanghai, China", "Hong Kong",
+    "Tokyo, Japan", "Osaka, Japan", "Singapore", "Ho Chi Minh City, Vietnam", "Bangkok, Thailand", "Port Klang, Malaysia",
+    "Jakarta, Indonesia", "Jebel Ali, UAE", "Rotterdam, Netherlands", "Hamburg, Germany", "Sydney, Australia"];
+  const PLACE_GROUPS = {
+    EXW: { hint: "EXW 지정 장소 = 판매자 공장 소재지", def: "Korea", list: ["Korea", "Seller's factory, Korea", "Hwaseong, Korea", "Pyeongtaek, Korea", "Sejong, Korea", "Eumseong, Korea"] },
+    FOB: { hint: "FOB 지정 장소 = 한국 선적항", def: "Busan, Korea", list: ["Busan, Korea", "Incheon, Korea", "Pyeongtaek, Korea", "Gwangyang, Korea", "Ulsan, Korea"] },
+    DEST: { hint: "CFR·CIF 지정 장소 = 바이어 쪽 도착항", def: "", list: DEST_PORTS },
+  };
+  const PLACE_CUSTOM = "__custom";
+  const placeGroupOf = (inco) => (inco === "CFR" || inco === "CIF" ? "DEST" : inco);
+  const placeFor = (inco) => qv("q-place") || PLACE_GROUPS[placeGroupOf(inco)].def || "Port of destination";
+  let placeTouched = false, placeCustom = false, placeGroup = null;
+
+  function syncPlace(inco) {
+    $("q-inco").value = inco;   // 팝업 인코텀즈 ← 좌측
+    const key = placeGroupOf(inco), g = PLACE_GROUPS[key];
+    if (key !== placeGroup) {   // 의미가 바뀌면 선택지 교체 + 기본값으로
+      placeGroup = key;
+      placeTouched = false;
+      placeCustom = false;
+      $("q-place-sel").innerHTML = (g.def ? "" : '<option value="">도착항 선택</option>')
+        + g.list.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join("")
+        + `<option value="${PLACE_CUSTOM}">직접 입력…</option>`;
+      $("q-place").placeholder = g.def || "예: Manila, Philippines";
+      $("q-place-hint").textContent = g.hint + " — 좌측 인코텀즈와 연동";
+    }
+    if (!placeTouched) $("q-place").value = g.def;
+    const v = qv("q-place");
+    const custom = placeCustom || (v !== "" && !g.list.includes(v));
+    $("q-place-sel").value = custom ? PLACE_CUSTOM : v;
+    $("q-place").hidden = !custom;
+  }
+
+  /* 팝업 인코텀즈 → 좌측 인코텀즈 (다시 계산) */
+  $("q-inco").addEventListener("change", () => { $("inco").value = $("q-inco").value; render(); });
+  $("q-place-sel").addEventListener("change", () => {
+    const v = $("q-place-sel").value;
+    if (v === PLACE_CUSTOM) {
+      placeCustom = true;
+      $("q-place").hidden = false;
+      $("q-place").focus();
+      return;
+    }
+    placeCustom = false;
+    placeTouched = true;
+    $("q-place").value = v;
+    render();
+  });
   const MODE_NAMES = { one: "통합형", split: "분리형", open: "오픈북형" };
   let profileLoaded = false;
 
   function renderQuoteSummary() {
     const q = st.quote;
     if (!q) return;
-    $("q-summary").textContent = `${MODE_NAMES[q.mode]} · ${q.incoterm} · ${q.lines[0].qty} · 합계 ${money(q.total)} — 견적 계산 값이 그대로 들어가요`;
+    $("q-summary").textContent = `${MODE_NAMES[q.mode]} · ${q.incoterm} ${placeFor(q.incoterm)} · ${q.lines[0].qty} · 합계 ${money(q.total)} — 견적 계산 값이 그대로 들어가요`;
   }
 
   async function loadProfile() {
@@ -525,7 +579,7 @@
     const or = (id, fb) => qv(id) || fb;
     const company = or("q-buyer-company", "[Customer]");
     const qno = or("q-no", "[Quotation No.]"), product = or("q-product", "[Product]");
-    const place = qv("q-place") || (["EXW", "FOB"].includes(q.incoterm) ? "Korea" : "Port of destination");
+    const place = placeFor(q.incoterm);
     const validity = parseInt(qv("q-validity"), 10) || 30;
     const tiers = st.tierData ? st.tierData.data.filter((x) => !x.r.belowMoq && x.q !== q.qty) : [];
     const lines = [
@@ -556,7 +610,8 @@
   }));
   $("quote-modal").querySelectorAll("input, textarea").forEach((e) => e.addEventListener("input", () => {
     e.classList.remove("is-error");
-    if (e.id === "margin-q-product") render();
+    if (e.id === "margin-q-place") placeTouched = placeCustom || qv("q-place") !== "";   // 직접 입력 중이면 유지, 아니면 비울 때 기본값
+    if (e.id === "margin-q-product" || e.id === "margin-q-place") render();
   }));
 
   /* ---------- 역제안 공통 (판정 · Gauge · VE 미리보기가 같이 씀) ---------- */
@@ -873,7 +928,7 @@
   $("copy-tier").addEventListener("click", () => {
     if (!st.tierData) return;
     const { data, p } = st.tierData;
-    const lines = [`Price list (${p.inco} Korea, USD per pc)`, `MOQ: ${st.moq.toLocaleString()} pcs`]
+    const lines = [`Price list (${p.inco} ${placeFor(p.inco)}, USD per pc)`, `MOQ: ${st.moq.toLocaleString()} pcs`]
       .concat(data.filter((x) => !x.off).map((x) => `${x.q.toLocaleString()} pcs : ${usd(x.r.usd)}${x.r.d > 0 ? ` (volume discount ${Math.round(x.r.d * 100)}%)` : ""}${x.r.sur > 0 ? " (small-lot surcharge incl.)" : ""}`));
     copyText($("copy-tier"), lines.join("\n"));
   });

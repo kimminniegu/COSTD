@@ -485,11 +485,19 @@
 
         <h3 class="margin-modal-section">견적 조건</h3>
         <div class="margin-modal-grid">
+          <!-- 가격 조건 = 인코텀즈(좌측 입력과 양방향 연동) + 지정 장소(인코텀즈별 선택지 · 직접 입력) -->
+          <div class="form-group margin-modal-grid__wide">
+            <label class="form-label" for="margin-q-inco">가격 조건 <span class="text-caption" id="margin-q-place-hint">인코텀즈 · 지정 장소 — 좌측 인코텀즈와 연동</span></label>
+            <div class="margin-term">
+              <select class="form-control form-control-sm" id="margin-q-inco" aria-label="인코텀즈 (좌측과 연동)"><option>EXW</option><option selected>FOB</option><option>CFR</option><option>CIF</option></select>
+              <select class="form-control form-control-sm" id="margin-q-place-sel" aria-label="지정 장소 선택"></select>
+              <input class="form-control form-control-sm" type="text" id="margin-q-place" maxlength="200" aria-label="지정 장소 직접 입력" hidden>
+            </div>
+          </div>
           <div class="form-group"><label class="form-label" for="margin-q-no">견적 번호 <span class="is-required">*</span></label><input class="form-control form-control-sm" type="text" id="margin-q-no" placeholder="QT-20260923-01" maxlength="200"></div>
           <div class="form-group"><label class="form-label" for="margin-q-validity">유효기간</label><div class="margin-field"><input class="form-control form-control-sm" type="number" id="margin-q-validity" value="30" min="1" step="1"><span class="margin-field__unit">일</span></div></div>
           <div class="form-group"><label class="form-label" for="margin-q-product">품목명 (영문) <span class="is-required">*</span></label><input class="form-control form-control-sm" type="text" id="margin-q-product" placeholder="Toner 150ml" value="Toner 150ml" maxlength="200"></div>
           <div class="form-group"><label class="form-label" for="margin-q-payment">결제 조건</label><input class="form-control form-control-sm" type="text" id="margin-q-payment" placeholder="T/T 30% deposit, 70% before shipment" value="T/T" maxlength="200"></div>
-          <div class="form-group"><label class="form-label" for="margin-q-place">지정 장소</label><input class="form-control form-control-sm" type="text" id="margin-q-place" placeholder="Busan, Korea" maxlength="200"></div>
           <div class="form-group"><label class="form-label" for="margin-q-lead">납기</label><input class="form-control form-control-sm" type="text" id="margin-q-lead" placeholder="45 days after PO" maxlength="200"></div>
           <div class="form-group margin-modal-grid__wide"><label class="form-label" for="margin-q-remarks">비고</label><textarea class="form-control margin-modal-remarks" id="margin-q-remarks" rows="2" maxlength="200" placeholder="Remarks (English)"></textarea></div>
         </div>
