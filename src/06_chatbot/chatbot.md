@@ -196,3 +196,34 @@ python app.py                       # 본 서버. .env 에 CHATBOT_URL=http://12
 - [x] `python -m unittest src/06_chatbot/tests/test_chatbot.py` 통과 (외부 API 호출 없음)
 - [ ] Render 에 챗봇 서비스 배포 후 `/health` 200 확인, 본 서버 `.env` 에 `CHATBOT_URL` 연결 (담당자 수행)
 - [ ] 실제 OpenAI 키로 환율·규제·메일 초안 3가지 시나리오 확인 (담당자 수행)
+
+---
+
+## 부록. README 반영 예정 내용 (PM 이 직접 반영)
+
+README 는 PM 관리 파일이라 여기에만 적어 둔다. 반영 위치와 문구는 아래와 같다.
+
+**프로젝트 구조 트리** (`src/` 아래)
+```
+    └── 06_chatbot/           server.py / tools.py / chatbot_widget.html / .css / .js / .md   [F] AI 챗봇 (Render 별도 서비스)
+```
+
+**페이지 URL 표**
+```
+| `/api/chatbot/message` | `chatbot_message` | 위젯 → 챗봇 서버 중계 (로그인 필요) | F |
+```
+
+**팀원별 담당 폴더 표**
+```
+| **F** | AI 챗봇 (우하단 위젯 + 별도 서버) | `src/06_chatbot/`, `app.py`의 `[F]` 영역 |
+```
+
+**.env 설정 블록** (본 서버에는 두 개만 필요. `OPENAI_API_KEY` 는 챗봇 서버에만)
+```
+CHATBOT_URL=          # 챗봇 서버 주소 (로컬 http://127.0.0.1:5100)
+CHATBOT_SECRET=       # 본 서버 ↔ 챗봇 서버 공유 비밀값 (양쪽 동일)
+```
+
+**Git 작업 시 주의사항의 Branch 예시**에 `feature/chatbot` 추가.
+
+**설치 및 실행**에 한 줄: 챗봇을 함께 쓰려면 터미널 하나에서 `python src/06_chatbot/server.py` 를 추가로 실행한다. (Render 설정은 이 문서 13장)
