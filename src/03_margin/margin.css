@@ -180,8 +180,9 @@
 .margin-legend--zone { margin-top: 0; }
 .margin-swatch { display: inline-block; width: 10px; height: 10px; margin-right: var(--space-1); border-radius: 3px; vertical-align: -1px; }
 .margin-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); margin-top: var(--space-6); }
-.margin-stats .stat-tile__label, .margin-stat-note { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.margin-stats .stat-tile__label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }   /* 보조 줄(목표·최소 등)은 좁으면 줄바꿈 — 잘림 방지 */
 .margin-stat-note { font-size: var(--font-size-caption); color: var(--color-text-placeholder); }
+.margin-stat-note > span { white-space: nowrap; }   /* '목표 20%'·'최소 15%'는 끊지 않고 그 사이에서만 줄바꿈 */
 .margin-tier-crit { font-size: var(--font-size-caption); color: var(--color-text-placeholder); }
 .margin-nowrap { flex-wrap: nowrap; flex-shrink: 0; }
 .margin-stats .is-low { color: var(--color-danger); }

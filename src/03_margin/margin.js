@@ -361,7 +361,7 @@
     const tile = (label, value, note, cls = "") => `<div class="stat-tile"><span class="stat-tile__label">${label}</span><span class="stat-tile__value ${cls}">${value}</span><span class="margin-stat-note">${note}</span></div>`;
     $("stats").innerHTML = tile("원가", won(r.C), r.C > 0 && p.loss > 0 ? `로스 ${pct(p.loss)} 포함` : "개당 제조원가")
       + tile("1차 마진", pct(r.m1eff), "물류 포함")
-      + tile("할인 후 영업마진", pct(r.m2after), `목표 ${pctN(toSale(p.m2))} · 최소 ${pctN(toSale(p.m2min))}`, low ? "is-low" : "")
+      + tile("할인 후 영업마진", pct(r.m2after), `<span>목표 ${pctN(toSale(p.m2))}</span> · <span>최소 ${pctN(toSale(p.m2min))}</span>`, low ? "is-low" : "")
       + tile("총 마진", pct(r.marginTotal / r.P4), "판매가 대비");
 
     const n = (v) => `<td class="is-numeric">${v}</td>`;
