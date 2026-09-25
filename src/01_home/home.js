@@ -72,18 +72,55 @@
     if (n == null || isNaN(n)) return "—";
     return Number(n).toLocaleString("ko-KR", { minimumFractionDigits: digits == null ? 2 : digits, maximumFractionDigits: digits == null ? 2 : digits });
   }
+  /* 공통 꺾은선 차트: 세로축 눈금값(단위 포함)·격자선·마지막 값 표시·점별 툴팁. 홈 카드(12개월), 환율 상세(30일), 수출입 상세(월별)에서 같이 씁니다.
+     o = { values:[숫자], labels:[문자], fmt:함수(값→"$1,250M"), aria:설명, zeroBase:0을 축에 포함할지, current:강조할 index, every:x 라벨 간격 } */
+  function lineChart(o) {
+    var v = o.values, n = v.length;
+    if (n < 2) return '<p class="home-chart__none">표시할 자료가 부족해요</p>';
+    var vmin = Math.min.apply(null, v), vmax = Math.max.apply(null, v);
+    var lo = o.zeroBase ? Math.min(0, vmin) : vmin, hi = o.zeroBase ? Math.max(0, vmax) : vmax;
+    if (!o.zeroBase) { var pad = (hi - lo) * 0.12 || Math.abs(hi) * 0.01 || 1; lo -= pad; hi += pad; }
+    if (hi === lo) hi = lo + 1;
+    var y = function (val) { return (1 - (val - lo) / (hi - lo)) * 100; };
+    var step = 100 / (n - 1), base = y(o.zeroBase ? Math.max(0, lo) : lo);
+    var pts = v.map(function (val, i) { return [i * step, y(val)]; });
+    var line = pts.map(function (p) { return p[0].toFixed(2) + "," + p[1].toFixed(2); }).join(" ");
+    var area = "0," + base.toFixed(2) + " " + line + " 100," + base.toFixed(2);
+    var ticks = [hi, (hi + lo) / 2, lo];
+    var grid = ticks.map(function (t) { var yy = y(t).toFixed(2); return '<line class="home-chart__grid" x1="0" x2="100" y1="' + yy + '" y2="' + yy + '"></line>'; }).join("");
+    var zero = o.zeroBase && lo < 0 && hi > 0 ? '<line class="home-chart__zero" x1="0" x2="100" y1="' + y(0).toFixed(2) + '" y2="' + y(0).toFixed(2) + '"></line>' : "";
+    var cur = o.current != null && o.current >= 0 ? o.current : n - 1;
+    var hover = v.map(function (val, i) {
+      var x0 = Math.max(0, (i - 0.5) * step), w = Math.min(100, (i + 0.5) * step) - x0;
+      return '<rect class="home-chart__hit" x="' + x0.toFixed(2) + '" y="0" width="' + w.toFixed(2) + '" height="100"><title>' + esc(o.labels[i] + " · " + o.fmt(val)) + "</title></rect>";
+    }).join("");
+    var every = o.every || Math.max(1, Math.ceil(n / 6));
+    var xs = o.labels.map(function (l, i) {
+      var show = (i % every === 0 || i === n - 1 || i === cur) &&
+        (i === cur || Math.abs(i - cur) > 1) &&            /* 강조 라벨 바로 옆은 숨김 (겹침 방지) */
+        (i === n - 1 || i === cur || n - 1 - i > 1);       /* 마지막 라벨 바로 옆도 숨김 */
+      return '<small class="' + (i === cur ? "is-current" : "") + (show ? "" : " is-hidden") + '" style="left:' + (i * step).toFixed(2) + '%">' + esc(l) + "</small>";
+    }).join("");
+    var last = pts[cur];
+    var lastPos = (last[1] < 32 ? " is-below" : "") + (last[0] < 18 ? " is-left" : "");   /* 위쪽·왼쪽 끝이면 말풍선을 안쪽으로 */
+    var lastLabel = '<span class="home-chart__last' + lastPos + '" style="left:' + last[0].toFixed(2) + "%;top:" + last[1].toFixed(2) + '%">' + esc(o.fmt(v[cur])) + "</span>";
+    return '<div class="home-chart" role="img" aria-label="' + esc(o.aria || "") + '">' +
+      '<div class="home-chart__y"><span>' + esc(o.fmt(ticks[0])) + "</span><span>" + esc(o.fmt(ticks[1])) + "</span><span>" + esc(o.fmt(ticks[2])) + "</span></div>" +
+      '<div class="home-chart__plot"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' + grid + zero +
+        '<polygon class="home-tsum__area" points="' + area + '"></polygon>' +
+        '<polyline class="home-tsum__line" points="' + line + '"></polyline>' +
+        '<circle class="home-tsum__dot" cx="' + last[0].toFixed(2) + '" cy="' + last[1].toFixed(2) + '" r="3.5"></circle>' + hover +
+      "</svg>" + lastLabel + "</div>" +
+      '<div class="home-chart__x">' + xs + "</div></div>";
+  }
+  function musdNum(t) { return Number(String(t).replace(/,/g, "")) || 0; }
+  function fmtMusd(v) { var a = Math.abs(v); return (v < 0 ? "−" : "") + "$" + a.toLocaleString("ko-KR", { maximumFractionDigits: a >= 100 ? 0 : 1 }) + "M"; }
   function rateChart(hist) {
-    var W = 320, H = 110, padT = 10, padB = 6, n = hist.length;
-    if (n < 2) return '<p class="home-rated__nochart">이력이 아직 하루치뿐이에요</p>';
-    var stepX = W / (n - 1);
-    var pts = hist.map(function (h, i) { return [i * stepX, padT + (H - padT - padB) * (1 - Number(h.pct || 0) / 100)]; });
-    var line = pts.map(function (p) { return p[0].toFixed(1) + "," + p[1].toFixed(1); }).join(" ");
-    var area = "0," + H + " " + line + " " + W + "," + H;
-    var last = pts[n - 1];
-    return '<svg class="home-rated__chart" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-hidden="true">' +
-      '<polygon class="home-tsum__area" points="' + area + '"></polygon>' +
-      '<polyline class="home-tsum__line" points="' + line + '"></polyline>' +
-      '<circle class="home-tsum__dot" cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="3.5"></circle></svg>';
+    return lineChart({
+      values: hist.map(function (h) { return Number(h.rate); }), labels: hist.map(function (h) { return h.label; }),
+      fmt: function (v) { return v.toLocaleString("ko-KR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "원"; },
+      aria: "최근 30영업일 매매기준율 추이", zeroBase: false, every: Math.ceil(hist.length / 4),
+    });
   }
   function renderRateDetail(d) {
     var body = $("home-rate-body");
@@ -93,10 +130,6 @@
       '<span class="home-rated__change is-' + esc(d.direction) + '">' + arrow(d.direction) + " " + esc(d.diff_text) + "원 (" + esc(d.change_text) + ")</span>";
     var warn = d.warning ? '<span class="badge badge-warning home-rated__warn">전일 대비 급변 · 값 확인 필요</span>' : "";
     var hist = d.history || [];
-    var ticks = hist.map(function (h, i) {
-      var show = i === 0 || i === hist.length - 1 || (hist.length > 6 && i === Math.floor(hist.length / 2));
-      return '<small class="' + (show ? "" : "is-hidden") + '">' + esc(h.label) + "</small>";
-    }).join("");
     var calc =
       '<div class="home-rated__section home-rated__calc">' +
         '<div class="home-rated__section-head"><span>환산 계산기</span><small>매매기준율 기준</small></div>' +
@@ -122,7 +155,7 @@
       '<div class="home-rated__col">' +
       '<div class="home-rated__section">' +
         '<div class="home-rated__section-head"><span>최근 ' + s.points + "영업일 추이</span><small>" + esc(s.from_text) + " ~ " + esc(s.to_text) + "</small></div>" +
-        rateChart(hist) + '<div class="home-rated__axis">' + ticks + "</div>" +
+        rateChart(hist) +
         '<dl class="home-rated__stats">' +
           "<div><dt>최고</dt><dd>" + esc(s.high_text) + "<small>" + esc(s.high_date_text) + "</small></dd></div>" +
           "<div><dt>최저</dt><dd>" + esc(s.low_text) + "<small>" + esc(s.low_date_text) + "</small></dd></div>" +
@@ -189,24 +222,11 @@
   }
   /* 최근 12개월 수출액 꺾은선 — 라이브러리 없이 inline SVG (선: primary-bright / 영역: primary-soft) */
   function trendChart(trend, currentYymm) {
-    var W = 300, H = 100, padT = 8, padB = 4, n = trend.length;
-    var stepX = n > 1 ? W / (n - 1) : 0;
-    var pts = trend.map(function (m, i) {
-      return [i * stepX, padT + (H - padT - padB) * (1 - Number(m.pct || 0) / 100)];
-    });
-    var line = pts.map(function (p) { return p[0].toFixed(1) + "," + p[1].toFixed(1); }).join(" ");
-    var area = "0," + H + " " + line + " " + W + "," + H;
     var cur = trend.findIndex(function (m) { return m.yymm === currentYymm; });
-    var dot = cur >= 0 ? '<circle class="home-tsum__dot" cx="' + pts[cur][0].toFixed(1) + '" cy="' + pts[cur][1].toFixed(1) + '" r="3.5"></circle>' : "";
-    var title = trend.map(function (m) { return m.label + " $" + m.musd + "M"; }).join(" · ");
-    return '<div class="home-tsum__trend" role="img" aria-label="최근 12개월 월별 수출액" title="' + esc(title) + '">' +
-      '<svg class="home-tsum__chart" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-hidden="true">' +
-        '<polygon class="home-tsum__area" points="' + area + '"></polygon>' +
-        '<polyline class="home-tsum__line" points="' + line + '"></polyline>' + dot +
-      "</svg>" +
-      '<div class="home-tsum__axis">' + trend.map(function (m) {
-        return '<small class="' + (m.yymm === currentYymm ? "is-current" : "") + '">' + esc(m.label) + "</small>";
-      }).join("") + "</div></div>";
+    return '<div class="home-tsum__trend">' + lineChart({
+      values: trend.map(function (m) { return musdNum(m.musd); }), labels: trend.map(function (m) { return m.label; }),
+      fmt: fmtMusd, aria: "최근 12개월 월별 수출액 (백만 달러)", zeroBase: true, current: cur, every: 2,
+    }) + "</div>";
   }
   function renderTradeCards(t) {
     var sumBody = $("home-tsum-body"), sumMonth = $("home-tsum-month"), sumMeta = $("home-tsum-meta");
@@ -241,19 +261,11 @@
 
   /* 2-1. 수출입 상세 모달 (5-9): 카드 클릭 → /api/home/trade?hs&months&country&metric ---- */
   var tradeTab = "countries", tradeLast = null, tradeFoot = "";
-  function svgLine(points, W, H, zeroPct) {
-    var padT = 8, padB = 4, n = points.length;
-    if (n < 2) return '<p class="home-rated__nochart">표시할 달이 부족해요</p>';
-    var stepX = W / (n - 1), y0 = padT + (H - padT - padB) * (1 - Number(zeroPct || 0) / 100);
-    var pts = points.map(function (p, i) { return [i * stepX, padT + (H - padT - padB) * (1 - Number(p.pct || 0) / 100)]; });
-    var line = pts.map(function (p) { return p[0].toFixed(1) + "," + p[1].toFixed(1); }).join(" ");
-    var area = "0," + y0.toFixed(1) + " " + line + " " + W + "," + y0.toFixed(1);
-    var last = pts[n - 1];
-    return '<svg class="home-rated__chart" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-hidden="true">' +
-      '<polygon class="home-tsum__area" points="' + area + '"></polygon>' +
-      (zeroPct > 0 ? '<line class="home-traded__zero" x1="0" x2="' + W + '" y1="' + y0.toFixed(1) + '" y2="' + y0.toFixed(1) + '"></line>' : "") +
-      '<polyline class="home-tsum__line" points="' + line + '"></polyline>' +
-      '<circle class="home-tsum__dot" cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="3.5"></circle></svg>';
+  function tradeChart(points, metricName) {
+    return lineChart({
+      values: points.map(function (p) { return musdNum(p.musd); }), labels: points.map(function (p) { return p.label; }),
+      fmt: fmtMusd, aria: "월별 " + metricName + " (백만 달러)", zeroBase: true, every: Math.max(1, Math.ceil(points.length / 6)),
+    });
   }
   function seg(attr, value, label, active, extra) {   /* 공통 Tabs(Segmented Control) 항목 — ui_components.md 13장 */
     return '<button class="tab' + (active ? " is-active" : "") + '" type="button" role="tab" aria-selected="' + (active ? "true" : "false") + '" ' + attr + '="' + esc(value) + '"' + (extra || "") + ">" + esc(label) + "</button>";
@@ -331,10 +343,7 @@
       body.innerHTML = controls + '<div class="state state-empty home-traded__state"><p class="state-title">' + esc(d.message || d.error || "수출입 실적을 불러오지 못했어요") + "</p><p>다른 품목이나 기간을 골라 보세요</p></div>";
       return;
     }
-    var s = d.summary, ticks = d.trend.map(function (t, i) {
-      var show = i === 0 || i === d.trend.length - 1 || (d.trend.length > 8 && i === Math.floor(d.trend.length / 2));
-      return '<small class="' + (show ? "" : "is-hidden") + '">' + esc(t.label) + "</small>";
-    }).join("");
+    var s = d.summary;
     var tile = function (label, musd, yoy) {   /* 공통 Stat Tile(ui_components.md 5장) + kpi-delta */
       var neg = String(musd).indexOf("-") === 0;
       var dl = !yoy || yoy.change == null ? '<span class="kpi-delta">' + (d.has_prior ? "—" : "전년 자료 없음") + "</span>"
@@ -347,7 +356,7 @@
           '<div class="home-traded__head"><span class="home-traded__title">' + esc(d.period_text) + ' 합계</span><span class="text-caption">백만 달러</span></div>' +
           '<div class="home-traded__tiles">' + tile("수출", s.exp_musd, s.exp_yoy) + tile("수입", s.imp_musd, s.imp_yoy) + tile("무역수지", s.bal_musd, s.bal_yoy) + "</div>" +
           '<div class="home-traded__head"><span class="home-traded__title">월별 ' + esc(d.metric_name) + '</span><span class="text-caption">' + esc(d.trend.length) + "개월 추이</span></div>" +
-          '<div class="home-traded__chart">' + svgLine(d.trend, 320, 120, d.zero_pct) + '<div class="home-rated__axis">' + ticks + "</div></div>" +
+          '<div class="home-traded__chart">' + tradeChart(d.trend, d.metric_name) + "</div>" +
         "</div>" +
         '<div class="home-traded__col" id="home-trade-right"></div>' +
       "</div>";

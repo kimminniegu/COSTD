@@ -75,11 +75,30 @@
 .home-rated__section { display: flex; flex-direction: column; gap: var(--space-2); }
 .home-rated__section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
 .home-rated__section-head small { font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
-.home-rated__chart { width: 100%; height: 120px; overflow: visible; }
-.home-rated__nochart { margin: 0; padding: var(--space-4) 0; font-size: var(--font-size-caption); color: var(--color-text-placeholder); text-align: center; }
-.home-rated__axis { display: flex; justify-content: space-between; }
-.home-rated__axis small { font-size: 0.625rem; line-height: 1; color: var(--color-text-placeholder); }
-.home-rated__axis small.is-hidden { display: none; }
+.home-rated .home-chart { height: 124px; }
+
+/* 공통 꺾은선 차트 (lineChart): 세로축 눈금값 + 격자 + 마지막 값 + 점 툴팁 */
+.home-chart { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; column-gap: 6px; row-gap: 3px; min-height: 0; min-width: 0; }
+.home-chart__y { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; padding: 0; font-size: 0.625rem; line-height: 1; color: var(--color-text-placeholder); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.home-chart__y span:first-child { transform: translateY(-1px); }
+.home-chart__y span:last-child { transform: translateY(1px); }
+.home-chart__plot { position: relative; min-height: 0; min-width: 0; }
+.home-chart__plot svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.home-chart__grid { stroke: var(--color-border-strong); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.home-chart__zero { stroke: var(--color-text-placeholder); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.home-chart__hit { fill: transparent; }
+.home-chart__hit:hover { fill: rgba(49, 130, 246, 0.08); }
+.home-chart__last { position: absolute; transform: translate(-100%, calc(-100% - 6px)); padding: 2px 6px; border-radius: var(--radius-pill); background: var(--color-surface); box-shadow: var(--shadow-card-hover, 0 2px 6px rgba(25, 31, 40, 0.12)); font-size: 0.6875rem; font-weight: var(--font-weight-bold); color: var(--color-primary); white-space: nowrap; pointer-events: none; }
+.home-chart__x { grid-column: 2; position: relative; height: 12px; }
+.home-chart__x small { position: absolute; top: 0; transform: translateX(-50%); font-size: 0.625rem; line-height: 1; color: var(--color-text-placeholder); white-space: nowrap; }
+.home-chart__x small:first-child { transform: translateX(0); }
+.home-chart__x small:last-child { transform: translateX(-100%); }
+.home-chart__x small.is-hidden { display: none; }
+.home-chart__last.is-below { transform: translate(-100%, 8px); }
+.home-chart__last.is-left { transform: translate(0, calc(-100% - 6px)); }
+.home-chart__last.is-below.is-left { transform: translate(0, 8px); }
+.home-chart__x small.is-current { font-weight: var(--font-weight-bold); color: var(--color-primary); }
+.home-chart__none { margin: 0; padding: var(--space-4) 0; font-size: var(--font-size-caption); color: var(--color-text-placeholder); text-align: center; }
 .home-rated__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2) var(--space-3); margin: var(--space-2) 0 0; }
 .home-rated__stats > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .home-rated__stats dt { font-size: 0.6875rem; font-weight: var(--font-weight-bold); color: var(--color-text-placeholder); }
@@ -131,7 +150,7 @@
 
 /* 추이 그래프: 회색 패널 안 */
 .home-traded__chart { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px 6px; border-radius: var(--radius-lg); background: var(--color-surface-muted); }
-.home-traded__chart .home-rated__chart { height: 104px; }
+.home-traded__chart .home-chart { height: 112px; }
 .home-traded__zero { stroke: var(--color-border-strong); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
 
 /* 순위: 공통 Table을 촘촘하게 */
@@ -260,14 +279,10 @@
 .home-tsum__value small { margin-left: 1px; font-size: var(--font-size-label); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
 /* 최근 12개월 꺾은선 — Chart 라이브러리 없이 inline SVG (design_system: 선 primary-bright, 영역 primary-soft) */
 .home-tsum__trend { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding-left: var(--space-3); border-left: 1px solid var(--color-border-strong); }
-.home-tsum__chart { flex: 1; width: 100%; min-height: 0; overflow: visible; }
+.home-tsum__trend .home-chart { flex: 1; min-height: 0; padding-top: 6px; }
 .home-tsum__area { fill: var(--color-primary-soft); }
 .home-tsum__line { fill: none; stroke: var(--color-primary-bright); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .home-tsum__dot { fill: var(--color-primary); stroke: var(--color-surface); stroke-width: 2; vector-effect: non-scaling-stroke; }
-.home-tsum__axis { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); margin-top: var(--space-1); }
-.home-tsum__axis small { font-size: 0.625rem; line-height: 1; text-align: center; color: var(--color-text-placeholder); white-space: nowrap; }
-.home-tsum__axis small:nth-child(even) { visibility: hidden; }
-.home-tsum__axis small.is-current { visibility: visible; font-weight: var(--font-weight-bold); color: var(--color-primary); }
 
 /* 순위 목록: 이름 / 막대 / 금액 / 비중 / 전년비 */
 .home-rank { min-height: 0; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; justify-content: space-around; overflow: hidden; }
