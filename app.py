@@ -367,6 +367,40 @@ def require_requisition_user():
 app.register_blueprint(requisition_service.blueprint)
 
 
+# [F] AI 챗봇 — 접두사: /api/chatbot/...  (명세: src/06_chatbot/chatbot.md 13항)
+#     화면 위젯은 src/06_chatbot/chatbot_widget.html (base.html 마지막에 include). 답변 생성·도구 호출은 별도 챗봇 서버
+#     (src/06_chatbot/server.py, Render 별도 배포)가 하고, 여기서는 로그인 세션을 확인한 뒤 CHATBOT_URL 로 전달만 합니다.
+#     OPENAI_API_KEY 는 챗봇 서버에만 둡니다. 본 서버에는 CHATBOT_URL / CHATBOT_SECRET 만 필요합니다.
+import requests as _chatbot_requests
+
+
+@app.route("/api/chatbot/message", methods=["POST"])
+def chatbot_message():
+    """브라우저 위젯 → 챗봇 서버 중계. body {"messages": [{"role", "content"}, …]} 를 그대로 전달하고 응답을 돌려줍니다."""
+    user = auth.current_user()
+    if not user:
+        return jsonify({"ok": False, "error": "로그인 후 이용해 주세요."}), 401
+    base_url = os.getenv("CHATBOT_URL", "").strip().rstrip("/")
+    secret = os.getenv("CHATBOT_SECRET", "").strip()
+    if not base_url or not secret:
+        return jsonify({"ok": False, "error": "AI 비서가 아직 연결되지 않았어요. 서버의 CHATBOT_URL / CHATBOT_SECRET 을 설정해 주세요."}), 503
+    body = request.get_json(silent=True) or {}
+    payload = {"messages": body.get("messages"), "user": {"name": user.get("name"), "team": user.get("team")}}
+    try:
+        upstream = _chatbot_requests.post(base_url + "/chat", json=payload, headers={"X-Chatbot-Secret": secret}, timeout=(5, 90))
+    except _chatbot_requests.exceptions.Timeout:
+        return jsonify({"ok": False, "error": "AI 비서 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요."}), 504
+    except _chatbot_requests.exceptions.RequestException:
+        return jsonify({"ok": False, "error": "AI 비서 서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요."}), 502
+    try:
+        data = upstream.json()
+    except ValueError:
+        data = None
+    if not isinstance(data, dict):
+        return jsonify({"ok": False, "error": "AI 비서 응답을 읽지 못했어요. 잠시 후 다시 시도해 주세요."}), 502
+    return jsonify(data), upstream.status_code
+
+
 if __name__ == "__main__":
     app.run(
         host="127.0.0.1",

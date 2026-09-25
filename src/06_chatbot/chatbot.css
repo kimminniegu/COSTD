@@ -1,0 +1,82 @@
+/* ==========================================================================
+   AI 챗봇 위젯 (담당자 F) — 우하단 플로팅. 명세: src/06_chatbot/chatbot.md 12장
+   - 공통 Token(디자인 시스템 Variable)만 사용하고, Button·Input 은 공통 Class 를 그대로 씁니다.
+   - 모든 Class 는 chatbot- 접두사. z-index 는 Sidebar/Header 위, Modal 아래.
+   ========================================================================== */
+
+.chatbot { position: fixed; right: var(--space-6); bottom: var(--space-6); z-index: calc(var(--z-modal) - 10); font-family: var(--font-family-base); }
+
+/* 런처 버튼 ------------------------------------------------------------- */
+.chatbot__launcher {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 56px; height: 56px; border: 0; border-radius: var(--radius-pill);
+  background: var(--color-primary); color: var(--color-text-inverse);
+  box-shadow: var(--shadow-overlay); cursor: pointer;
+  transition: background var(--transition-base), transform 0.1s ease, box-shadow var(--transition-base);
+}
+.chatbot__launcher:hover { background: var(--color-primary-hover); box-shadow: 0 6px 16px rgba(27, 100, 218, 0.28); }
+.chatbot__launcher:active { transform: scale(0.95); }
+.chatbot__launcher-close { display: none; }
+.chatbot.is-open .chatbot__launcher-open { display: none; }
+.chatbot.is-open .chatbot__launcher-close { display: block; }
+
+/* 패널 ------------------------------------------------------------------- */
+.chatbot__panel {
+  position: absolute; right: 0; bottom: calc(56px + var(--space-3));
+  display: flex; flex-direction: column;
+  width: 380px; height: min(640px, calc(100vh - 56px - var(--space-6) * 2 - var(--space-3)));
+  background: var(--color-surface); border-radius: var(--radius-2xl); box-shadow: var(--shadow-overlay);
+  overflow: hidden;
+  animation: chatbot-enter 0.28s cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+.chatbot__panel[hidden] { display: none; }
+@keyframes chatbot-enter { from { opacity: 0; transform: translateY(12px) scale(0.98); } }
+
+.chatbot__head { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-5) var(--space-5) var(--space-4); border-bottom: var(--border-default); }
+.chatbot__avatar { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: var(--radius-sm); background: var(--color-primary-soft); color: var(--color-primary); flex: 0 0 auto; }
+.chatbot__title-wrap { flex: 1; min-width: 0; }
+.chatbot__title { margin: 0; font-size: var(--font-size-body); font-weight: var(--font-weight-bold); color: var(--color-text-primary); line-height: 1.3; }
+.chatbot__sub { margin: 0; font-size: var(--font-size-caption); color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chatbot__iconbtn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 0; border-radius: var(--radius-xs); background: none; color: var(--color-text-secondary); cursor: pointer; transition: background var(--transition-base), color var(--transition-base); }
+.chatbot__iconbtn:hover { background: var(--color-background); color: var(--color-text-primary); }
+
+/* 메시지 영역 ----------------------------------------------------------- */
+.chatbot__body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-4) var(--space-5); display: flex; flex-direction: column; gap: var(--space-3); background: var(--color-surface); }
+
+.chatbot__empty { margin: auto 0; padding: var(--space-4) 0; text-align: center; }
+.chatbot__empty-title { margin: 0 0 var(--space-2); font-size: var(--font-size-card-title); font-weight: var(--font-weight-bold); color: var(--color-text-primary); }
+.chatbot__empty-text { margin: 0 0 var(--space-4); font-size: var(--font-size-label); color: var(--color-text-secondary); line-height: var(--line-height-base); }
+.chatbot__chips { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); }
+.chatbot__chip { height: 32px; padding: 0 14px; border: 0; border-radius: var(--radius-pill); background: var(--color-primary-soft); color: var(--color-primary); font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); cursor: pointer; transition: background var(--transition-base); }
+.chatbot__chip:hover { background: #d9eaff; }
+
+.chatbot__msg { display: flex; flex-direction: column; max-width: 88%; gap: var(--space-1); }
+.chatbot__msg--user { align-self: flex-end; align-items: flex-end; }
+.chatbot__msg--assistant { align-self: flex-start; align-items: flex-start; }
+.chatbot__bubble { padding: 10px 14px; border-radius: var(--radius-lg); font-size: var(--font-size-sub); line-height: var(--line-height-base); word-break: break-word; overflow-wrap: anywhere; white-space: pre-wrap; }
+.chatbot__msg--user .chatbot__bubble { background: var(--color-primary); color: var(--color-text-inverse); border-bottom-right-radius: var(--space-1); }
+.chatbot__msg--assistant .chatbot__bubble { background: var(--color-background); color: var(--color-text-primary); border-bottom-left-radius: var(--space-1); }
+.chatbot__msg--error .chatbot__bubble { background: var(--color-danger-soft); color: var(--color-danger); }
+.chatbot__bubble ul { margin: var(--space-1) 0; padding-left: 18px; }
+.chatbot__bubble li { margin: 2px 0; }
+.chatbot__bubble a { color: inherit; text-decoration: underline; }
+.chatbot__msg--assistant .chatbot__bubble a { color: var(--color-primary); }
+.chatbot__meta { font-size: var(--font-size-caption); color: var(--color-text-placeholder); }
+.chatbot__pending { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--color-text-secondary); font-size: var(--font-size-caption); }
+
+/* 입력 ------------------------------------------------------------------- */
+.chatbot__form { display: flex; align-items: flex-end; gap: var(--space-2); padding: var(--space-3) var(--space-4) var(--space-4); border-top: var(--border-default); }
+/* 공통 textarea.form-control(min-height 120px)보다 우선하도록 요소+Class 선택자 사용 */
+textarea.chatbot__input { flex: 1; min-height: 44px; max-height: 120px; height: 44px; padding: 11px 14px; line-height: 1.4; resize: none; overflow-y: auto; }
+.chatbot__form .btn-icon { flex: 0 0 auto; }
+
+/* Mobile: 전체 화면 ------------------------------------------------------- */
+@media (max-width: 640px) {
+  .chatbot { right: var(--space-4); bottom: var(--space-4); }
+  .chatbot.is-open .chatbot__launcher { display: none; }
+  .chatbot__panel { position: fixed; inset: 0; width: auto; height: auto; border-radius: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chatbot__panel { animation: none; }
+}

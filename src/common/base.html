@@ -109,5 +109,6 @@
 
   <script src="{{ url_for('asset', filename='common/common.js') }}"></script>
   {% block page_js %}{% endblock %}
+  {% include "06_chatbot/chatbot_widget.html" ignore missing %}{# [F] AI 챗봇 우하단 위젯 — src/06_chatbot/ #}
 </body>
 </html>

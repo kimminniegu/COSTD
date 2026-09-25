@@ -1,0 +1,50 @@
+{# 담당자 F — AI 챗봇 위젯 (우하단 플로팅). base.html 마지막에 include 됩니다. 명세: src/06_chatbot/chatbot.md
+   대화 처리는 /api/chatbot/message (app.py [F]) → 별도 챗봇 서버. 화면 동작은 chatbot.js, 스타일은 chatbot.css #}
+<link rel="stylesheet" href="{{ url_for('asset', filename='06_chatbot/chatbot.css') }}">
+<div class="chatbot" id="chatbot" data-endpoint="{{ url_for('chatbot_message') }}" data-login="{{ url_for('login') }}">
+
+  <button class="chatbot__launcher" id="chatbot-launcher" type="button" aria-label="AI 비서 열기" aria-expanded="false" aria-controls="chatbot-panel">
+    <svg class="chatbot__launcher-open" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H8l-4 3v-6.5A8 8 0 1 1 21 12z"></path><path d="M8.5 12h.01M12 12h.01M15.5 12h.01"></path></svg>
+    <svg class="chatbot__launcher-close" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+  </button>
+
+  <section class="chatbot__panel" id="chatbot-panel" role="dialog" aria-label="COSMOA AI 비서" hidden>
+    <header class="chatbot__head">
+      <span class="chatbot__avatar" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path></svg>
+      </span>
+      <div class="chatbot__title-wrap">
+        <h2 class="chatbot__title">AI 비서</h2>
+        <p class="chatbot__sub">환율 · 규제 · 뉴스 · 메일 초안</p>
+      </div>
+      <button class="chatbot__iconbtn" id="chatbot-clear" type="button" title="대화 지우기" aria-label="대화 지우기">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg>
+      </button>
+      <button class="chatbot__iconbtn" id="chatbot-close" type="button" aria-label="닫기">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+      </button>
+    </header>
+
+    <div class="chatbot__body" id="chatbot-messages" aria-live="polite">
+      <div class="chatbot__empty" id="chatbot-empty">
+        <p class="chatbot__empty-title">무엇을 도와드릴까요?</p>
+        <p class="chatbot__empty-text">환율·규제·뉴스·수출입 데이터를 조회하고, 바이어 메일 초안이나 단가 계산도 도와드려요.</p>
+        <div class="chatbot__chips">
+          <button class="chatbot__chip" type="button" data-chatbot-prompt="오늘 환율 알려줘">오늘 환율</button>
+          <button class="chatbot__chip" type="button" data-chatbot-prompt="화장품 최신 뉴스 5개 요약해줘">최신 뉴스</button>
+          <button class="chatbot__chip" type="button" data-chatbot-prompt="레티놀은 EU에서 어떤 규제가 있어?">성분 규제</button>
+          <button class="chatbot__chip" type="button" data-chatbot-prompt="최근 화장품 수출 실적과 상위국 알려줘">수출 실적</button>
+          <button class="chatbot__chip" type="button" data-chatbot-prompt="바이어에게 샘플 발송 안내 메일 영어로 써줘">메일 초안</button>
+        </div>
+      </div>
+    </div>
+
+    <form class="chatbot__form" id="chatbot-form" autocomplete="off">
+      <textarea class="form-control form-control-sm chatbot__input" id="chatbot-input" rows="1" maxlength="4000" placeholder="메시지를 입력하세요" title="Enter 전송 · Shift+Enter 줄바꿈" aria-label="메시지 입력"></textarea>
+      <button class="btn btn-primary btn-icon chatbot__send" id="chatbot-send" type="submit" aria-label="보내기">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"></path></svg>
+      </button>
+    </form>
+  </section>
+</div>
+<script src="{{ url_for('asset', filename='06_chatbot/chatbot.js') }}"></script>
