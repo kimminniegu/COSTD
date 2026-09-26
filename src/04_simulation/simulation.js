@@ -568,14 +568,47 @@ function paintSerum(path, x, y, rx, ry) {
  ctx.strokeStyle='rgba(239,251,255,.75)';ctx.lineWidth=1.2;ctx.stroke(path);
  ctx.restore();
 }
+// 제곱근 스케일: 저점도는 얇고 넓게, 초고점도는 좁고 두터운 돔. 30,000 cPs 이상은 팁에서 떨어지지 않습니다.
+function geometry(){
+ const thick=Math.min(1,Math.sqrt(Math.max(0,current.v)/50000));
+ return {thick,energy:1-thick,dropTime:.58+thick*.16,hanging:current.v>=30000,spread:110*(1-thick*.65),domeHeight:3+thick*45};
+}
+// 착지 반응. 저점도는 크라운·비산 방울·여러 겹 파문과 출렁임, 고점도는 튐 없이 쌓였다 천천히 합쳐집니다.
+// 좌표는 착지점(웅덩이 꼭대기) 기준이며 실측 유체 해석이 아닌 시연용 표현입니다.
+let impact=null;
+function spawnImpact(){
+ const {thick,energy}=geometry(),drops=[];
+ const count=thick<.6?Math.round(energy*energy*16):0;
+ for(let i=0;i<count;i++){
+  const side=i%2?1:-1;
+  drops.push({x:side*(3+Math.random()*8),y:0,vx:side*(40+Math.random()*130)*energy,vy:-(110+Math.random()*240)*energy**1.5,r:1+Math.random()*2.2*energy,land:-1});
+ }
+ impact={age:0,drops};
+}
+function stepImpact(dt){
+ if(!impact)return;
+ const {spread,domeHeight}=geometry();
+ impact.age+=dt;
+ for(const d of impact.drops){
+  if(d.land>=0)continue;
+  d.vy+=900*dt;d.x+=d.vx*dt;d.y+=d.vy*dt;
+  // 웅덩이 안이면 수면 높이에서, 밖이면 샬레 바닥에서 멈춥니다.
+  const inside=Math.abs(d.x)<spread,surface=inside?domeHeight*(1-(d.x/spread)**2):0;
+  if(d.vy>0&&d.y>=domeHeight-surface){d.y=domeHeight-surface;d.inside=inside;d.land=impact.age;}
+ }
+ if(impact.age>5)impact=null;
+}
 function drawScene(){
  if(!current||!width||!height)return;
  ctx.clearRect(0,0,width,height);
  const x=width/2,tip=130,floor=height*.8;
- // 제곱근 스케일: 저점도는 얇고 넓게, 초고점도는 좁고 두터운 돔. 30,000 cPs 이상은 팁에서 떨어지지 않습니다.
- const thick=Math.min(1,Math.sqrt(Math.max(0,current.v)/50000)),dropTime=.58+thick*.16,hanging=current.v>=30000;
- const spread=110*(1-thick*.65),domeHeight=3+thick*45;
- const maxNeck=(floor-tip-domeHeight)*(.18+thick*.3);
+ const {thick,energy,dropTime,hanging,spread:restSpread,domeHeight:restDome}=geometry();
+ const maxNeck=(floor-tip-restDome)*(.18+thick*.3);
+ // 이미 고인 액체의 반응: 저점도는 움푹 꺼졌다 튀어 오르며 출렁이고, 고점도는 거의 움직이지 않습니다.
+ const age=impact?impact.age:9;
+ const wobble=energy>.3?-(4+restDome*.15)*energy*Math.exp(-age*(3+thick*10))*Math.cos(age*(18-thick*14)):0;
+ const pulse=.08*energy*Math.exp(-age*2.5)*(1-Math.exp(-age*14));
+ const spread=restSpread*(1+pulse),domeHeight=Math.max(1.5,restDome+wobble);
  // Faint reference scales are illustrative, not a calibrated measurement.
  ctx.save();ctx.strokeStyle='#e2e8f0';ctx.fillStyle='#94a3b8';ctx.lineWidth=.7;ctx.font='9px monospace';
  const rulerX=x-100;
@@ -613,11 +646,76 @@ function drawScene(){
  ctx.fillStyle='rgba(255,255,255,.66)';ctx.fill();
  ctx.beginPath();ctx.moveTo(x-spread*.8,floor+1);ctx.bezierCurveTo(x-spread*.35,floor+8,x+spread*.5,floor+8,x+spread*.86,floor-1);
  ctx.strokeStyle='rgba(213,245,255,.88)';ctx.lineWidth=1.4;ctx.stroke();
- if(!hanging&&phase>.9){
- const t=(phase-.9)/.1;ctx.beginPath();ctx.ellipse(x,floor-domeHeight*.35,spread*(.15+t*.7),3+t*5,0,0,Math.PI*2);
- ctx.strokeStyle=`rgba(255,255,255,${(1-t)*.5})`;ctx.lineWidth=1;ctx.stroke();
+ // 파문: 점도가 낮을수록 빠르고 여러 겹으로 멀리 퍼지며, 높을수록 한 겹이 짧게 사라집니다.
+ if(impact){
+  const rings=energy>.6?3:energy>.3?2:1;
+  for(let j=0;j<rings;j++){
+   const a=age-j*.12;if(a<=0)continue;
+   const r=a*(40+260*energy);if(r>=spread)continue;
+   const alpha=(1-r/spread)*(.2+energy*.5)*Math.exp(-a*thick*3);
+   ctx.beginPath();ctx.ellipse(x,floor-domeHeight*.35,r,r*.16+1.5,0,0,Math.PI*2);
+   ctx.strokeStyle=`rgba(255,255,255,${alpha})`;ctx.lineWidth=1.2;ctx.stroke();
+   ctx.beginPath();ctx.ellipse(x,floor-domeHeight*.35+1.5,r,r*.16+1.5,0,0,Math.PI);
+   ctx.strokeStyle=`rgba(29,112,175,${alpha*.45})`;ctx.lineWidth=1;ctx.stroke();
+  }
+  // 웅덩이에 다시 떨어진 비산 방울이 만드는 작은 파문
+  for(const d of impact.drops){
+   if(d.land<0||!d.inside)continue;
+   const a=age-d.land;if(a>.4)continue;
+   ctx.beginPath();ctx.ellipse(x+d.x,floor-domeHeight+d.y,2+a*40,.6+a*6,0,0,Math.PI*2);
+   ctx.strokeStyle=`rgba(255,255,255,${(1-a/.4)*.6})`;ctx.lineWidth=.8;ctx.stroke();
+  }
  }
  ctx.restore();
+ if(impact){
+  const top=floor-domeHeight;
+  // 고점도: 방울이 튀지 않고 수면 위에 쌓였다가 점도에 비례한 시간 동안 천천히 퍼지며 합쳐집니다.
+  if(thick>.3){
+   const merge=1-Math.exp(-age/(.2+thick*1.8)),rd=12-thick*3;
+   const bw=rd*(1.1+merge*1.8),bh=rd*(.4+thick*1.2)*(1-merge);
+   if(bh>.5){
+    const mound=new Path2D();
+    mound.moveTo(x-bw,top+2);
+    mound.bezierCurveTo(x-bw*.7,top+2-bh*.9,x-bw*.35,top+2-bh,x,top+2-bh);
+    mound.bezierCurveTo(x+bw*.35,top+2-bh,x+bw*.7,top+2-bh*.9,x+bw,top+2);
+    mound.quadraticCurveTo(x,top+5,x-bw,top+2);mound.closePath();
+    paintSerum(mound,x,top+2-bh*.5,bw,bh*.5+1);
+    // 겹쳐 쌓인 경계선이 합쳐지는 동안 점점 옅어집니다.
+    ctx.beginPath();ctx.ellipse(x,top+2,bw*.8,1.6,0,0,Math.PI);
+    ctx.strokeStyle=`rgba(29,112,175,${(1-merge)*.35})`;ctx.lineWidth=1;ctx.stroke();
+   }
+  }
+  // 저점도: 착지 직후 수면이 왕관 모양으로 솟았다 가라앉습니다.
+  if(energy>.55&&age<.32){
+   const k=age/.32,cr=6+k*34*energy,ch=26*energy**1.5*Math.sin(Math.PI*k),spikes=8;
+   if(ch>1){
+    const crown=new Path2D();crown.moveTo(x-cr,top);
+    for(let i=0;i<=spikes;i++){
+     const px=x-cr+2*cr*i/spikes,lift=ch*(i%2?1:.55)*(.55+.45*Math.sin(Math.PI*i/spikes));
+     crown.lineTo(px,top-lift);
+    }
+    crown.lineTo(x+cr,top);crown.quadraticCurveTo(x,top+4,x-cr,top);crown.closePath();
+    ctx.save();ctx.globalAlpha=1-k*.5;paintSerum(crown,x,top-ch*.5,cr,ch*.5);ctx.restore();
+   }
+  }
+  // 튀어 오른 방울은 날아가는 방향으로 늘어나고, 샬레 바닥에 떨어진 방울은 작은 비드로 남았다 사라집니다.
+  for(const d of impact.drops){
+   const px=x+d.x,py=top+d.y;
+   if(d.land<0){
+    const stretch=Math.min(1.8,1+Math.hypot(d.vx,d.vy)/400),angle=Math.atan2(d.vy,d.vx);
+    ctx.save();ctx.translate(px,py);ctx.rotate(angle);
+    ctx.beginPath();ctx.ellipse(0,0,d.r*stretch,d.r,0,0,Math.PI*2);
+    ctx.fillStyle='rgba(56,149,209,.6)';ctx.fill();
+    ctx.beginPath();ctx.ellipse(-d.r*.3,-d.r*.3,d.r*.35,d.r*.3,0,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,.85)';ctx.fill();
+    ctx.restore();
+   }else if(!d.inside){
+    const a=age-d.land,fade=Math.max(0,1-a/2.5);if(!fade)continue;
+    ctx.beginPath();ctx.ellipse(px,floor-d.r*.4,d.r*1.3,d.r*.55,0,0,Math.PI*2);
+    ctx.fillStyle=`rgba(56,149,209,${.5*fade})`;ctx.fill();
+    ctx.beginPath();ctx.ellipse(px-d.r*.4,floor-d.r*.6,d.r*.4,d.r*.18,0,0,Math.PI*2);ctx.fillStyle=`rgba(255,255,255,${.8*fade})`;ctx.fill();
+   }
+  }
+ }
  // The 98px nozzle is 1.86 times the reference length, with a smooth taper.
  const nozzle=ctx.createLinearGradient(x-15,0,x+15,0);
  nozzle.addColorStop(0,'#52677b');nozzle.addColorStop(.18,'#a5b7c6');nozzle.addColorStop(.38,'#edf4f8');nozzle.addColorStop(.54,'#b5c6d3');nozzle.addColorStop(.82,'#6d859b');nozzle.addColorStop(1,'#3e556c');
@@ -638,14 +736,14 @@ function drawScene(){
  }else{
  const t=(phase-dropTime)/(1-dropTime);
  rx=12-thick*3;ry=12+thick*4;
- cy=tip+maxNeck+(floor-domeHeight-tip-maxNeck)*t*t;
+ cy=tip+maxNeck+(floor-restDome-tip-maxNeck)*t*t;
  drop.ellipse(x,cy,rx,ry,0,0,Math.PI*2);
  }
  paintSerum(drop,x,cy,rx,ry);
  ctx.save();ctx.clip(drop);ctx.beginPath();ctx.ellipse(x-rx*.32,cy-ry*.3,Math.max(1,rx*.17),ry*.38,.25,0,Math.PI*2);
  ctx.fillStyle='rgba(255,255,255,.82)';ctx.fill();ctx.restore();
 }
-function tick(time){frame=0;if(paused||document.hidden){last=0;return;}const dt=last?Math.min((time-last)/1000,.05):0;last=time;phase=(phase+dt*(.9/(1+current.v/9000)+.08))%1;drawScene();frame=requestAnimationFrame(tick);}
+function tick(time){frame=0;if(paused||document.hidden){last=0;return;}const dt=last?Math.min((time-last)/1000,.05):0;last=time;const next=(phase+dt*(.9/(1+current.v/9000)+.08))%1;if(next<phase&&!geometry().hanging)spawnImpact();phase=next;stepImpact(dt);drawScene();frame=requestAnimationFrame(tick);}
 function start(){if(!paused&&!document.hidden&&!frame)frame=requestAnimationFrame(tick);}
 function motionLabel(){$('lab-status').textContent=paused?'Ⅱ PAUSED':'● ANALYZING';$('motion').textContent=paused?'시연 재생':'시연 일시정지';$('motion').setAttribute('aria-pressed',String(paused));}
 $('motion').addEventListener('click',()=>{paused=!paused;motionLabel();if(paused){cancelAnimationFrame(frame);frame=0;last=0;}else start();});
