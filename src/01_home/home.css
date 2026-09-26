@@ -75,13 +75,22 @@
 .home-rated__section { display: flex; flex-direction: column; gap: var(--space-2); }
 .home-rated__section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
 .home-rated__section-head small { font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
-.home-rated .home-chart { height: 124px; }
+.home-rated .home-chart { height: 150px; }
 
 /* 공통 꺾은선 차트 (lineChart): 세로축 눈금값 + 격자 + 마지막 값 + 점 툴팁 */
-.home-chart { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; column-gap: 6px; row-gap: 3px; min-height: 0; min-width: 0; }
-.home-chart__y { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; padding: 0; font-size: 0.625rem; line-height: 1; color: var(--color-text-placeholder); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.home-chart__y span:first-child { transform: translateY(-1px); }
-.home-chart__y span:last-child { transform: translateY(1px); }
+.home-chart { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto; column-gap: 6px; row-gap: 3px; min-height: 0; min-width: 0; }
+.home-chart__head { grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); min-width: 0; }
+.home-chart__title { font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-chart__unit { flex: none; font-size: 0.6875rem; color: var(--color-text-placeholder); white-space: nowrap; }
+.home-chart__legend { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 2px var(--space-3); min-height: 12px; }
+.home-chart__key { display: inline-flex; align-items: center; gap: 5px; font-size: 0.6875rem; color: var(--color-text-secondary); white-space: nowrap; }
+.home-chart__key i { width: 14px; height: 0; border-top: 2px solid var(--color-primary-bright); border-radius: 2px; }
+.home-chart__key.is-dashed i { border-top: 2px dashed var(--color-text-placeholder); }
+.home-chart__y { position: relative; width: 44px; min-height: 0; font-size: 0.625rem; line-height: 1; color: var(--color-text-placeholder); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.home-chart__y span { position: absolute; right: 0; transform: translateY(-50%); }
+.home-chart__line2 { fill: none; stroke: var(--color-text-placeholder); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.home-chart__line2.is-dashed { stroke-dasharray: 4 3; }
+.home-chart__xtitle { position: absolute; right: 0; top: 12px; font-size: 0.625rem; font-style: normal; color: var(--color-text-placeholder); }
 .home-chart__plot { position: relative; min-height: 0; min-width: 0; }
 .home-chart__plot svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .home-chart__grid { stroke: var(--color-border-strong); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
@@ -90,6 +99,7 @@
 .home-chart__hit:hover { fill: rgba(49, 130, 246, 0.08); }
 .home-chart__last { position: absolute; transform: translate(-100%, calc(-100% - 6px)); padding: 2px 6px; border-radius: var(--radius-pill); background: var(--color-surface); box-shadow: var(--shadow-card-hover, 0 2px 6px rgba(25, 31, 40, 0.12)); font-size: 0.6875rem; font-weight: var(--font-weight-bold); color: var(--color-primary); white-space: nowrap; pointer-events: none; }
 .home-chart__x { grid-column: 2; position: relative; height: 12px; }
+.home-chart__x:has(.home-chart__xtitle) { height: 24px; }
 .home-chart__x small { position: absolute; top: 0; transform: translateX(-50%); font-size: 0.625rem; line-height: 1; color: var(--color-text-placeholder); white-space: nowrap; }
 .home-chart__x small:first-child { transform: translateX(0); }
 .home-chart__x small:last-child { transform: translateX(-100%); }
@@ -150,7 +160,7 @@
 
 /* 추이 그래프: 회색 패널 안 */
 .home-traded__chart { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px 6px; border-radius: var(--radius-lg); background: var(--color-surface-muted); }
-.home-traded__chart .home-chart { height: 112px; }
+.home-traded__chart .home-chart { height: 150px; }
 .home-traded__zero { stroke: var(--color-border-strong); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
 
 /* 순위: 공통 Table을 촘촘하게 */
@@ -287,7 +297,7 @@
 .home-tsum__trend { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; min-height: 0; padding: 10px 12px 8px; border-radius: var(--radius-lg); background: var(--color-surface-muted); }
 .home-tsum__trend-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); white-space: nowrap; }
 .home-tsum__trend-head small { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 0.6875rem; font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
-.home-tsum__trend .home-chart { flex: none; height: 96px; padding-top: 4px; }   /* 그래프 높이 고정 */
+.home-tsum__trend .home-chart { flex: none; height: 126px; padding-top: 2px; }   /* 그래프 높이 고정 (제목·범례 포함) */
 .home-tsum__trend .home-chart__last { box-shadow: var(--shadow-card); }
 @media (max-width: 1400px) {   /* 좁은 화면: 값 글자를 줄여 한 줄에 유지 */
   .home-tsum__row { grid-template-columns: 46px minmax(0, 1fr) auto; }

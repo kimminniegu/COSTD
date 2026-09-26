@@ -271,11 +271,18 @@ def build_detail(rows: list[dict], hs: str = "3304", months: int = MONTHS, count
 
     # 월별 추이 (선택 지표) — 0 기준선 포함해 0~100 으로 정규화 (무역수지는 음수 가능)
     monthly = sub.groupby("yymm")[col].sum().reindex(recent).fillna(0.0)
+    prior_monthly = sub.groupby("yymm")[col].sum().reindex(prior).fillna(0.0) if has_prior else None
     vals = monthly.to_numpy(dtype=float)
     lo, hi = min(0.0, float(vals.min())), max(float(vals.max()), 0.0)
     span = (hi - lo) or 1.0
-    trend = [{"yymm": m, "label": f"{int(m[:4]) % 100}.{int(m[4:])}", "musd": _musd(float(v)),
-              "pct": round((float(v) - lo) / span * 100, 1)} for m, v in zip(recent, vals)]
+    trend = []
+    for i, (m, v) in enumerate(zip(recent, vals)):
+        item = {"yymm": m, "label": f"{int(m[:4]) % 100}.{int(m[4:])}", "musd": _musd(float(v)),
+                "pct": round((float(v) - lo) / span * 100, 1)}
+        if prior_monthly is not None:   # 전년 같은 달 (차트 비교 선)
+            item["prior_yymm"] = prior[i]
+            item["prior_musd"] = _musd(float(prior_monthly.iloc[i]))
+        trend.append(item)
     zero_pct = round((0.0 - lo) / span * 100, 1)
 
     # 상위국 (품목 조건만, 국가 조건은 강조용) / 상위 품목 (품목·국가 조건 모두)
