@@ -157,7 +157,7 @@
           </div>
           <div class="margin-fxbox">
             <span class="margin-fxbox__label"><b>기준 환율</b><button type="button" class="margin-fxlive__apply" id="margin-fxlive-apply" disabled>TTB 확인 중</button></span>
-            <div class="margin-fxbox__field">{{ field('fx', 1400, '원', '기준환율 (USD/KRW)', 10) }}</div>
+            <div class="margin-fxbox__field">{{ field('fx', 1320, '원', '기준환율 (USD/KRW)', 10) }}</div>
           </div>
         </div>
       </div>
@@ -254,7 +254,7 @@
                 <div class="margin-rtop__inputs">
                   <div class="margin-rtop__field">
                     <label class="form-label" for="margin-target">바이어 목표가</label>
-                    {{ field('target', 1.95, '$', '바이어 목표가 (USD)', 0.01) }}
+                    {{ field('target', 2.07, '$', '바이어 목표가 (USD)', 0.01) }}
                   </div>
                   <div class="margin-rtop__field" title="원재료, 임가공, 부자재, 물류비 각각의 1차 마진에서 최대 어디까지 양보(인하)할 수 있는지 지정하는 기준선입니다.">
                     <label class="form-label" for="margin-item-floor">1차 마진 양보 <br class="margin-rtop__br">한계치 (항목별)</label>
@@ -416,12 +416,12 @@
                 <div class="form-group">
                   <label class="form-label" for="margin-fx-settle-input">결제 시점 환율</label>
                   <div class="margin-settle__row">
-                    <div class="margin-settle__input">{{ field('fx-settle-input', 1400, '원', '결제 시점 환율', 1) }}</div>
+                    <div class="margin-settle__input">{{ field('fx-settle-input', 1320, '원', '결제 시점 환율', 1) }}</div>
                     <span class="margin-settle__chg" id="margin-fx-chg"></span>
                     <button type="button" class="btn btn-secondary btn-sm" id="margin-fx-reset">견적 환율로</button>
                   </div>
                   <div class="margin-settle__slider">
-                    <input type="range" class="margin-fxrange" id="margin-fx-settle" min="1200" max="1600" step="5" value="1400" aria-label="결제 시점 환율 조절">
+                    <input type="range" class="margin-fxrange" id="margin-fx-settle" min="1190" max="1450" step="5" value="1320" aria-label="결제 시점 환율 조절">
                     <div class="margin-settle__ends"><span id="margin-fx-min-l"></span><span id="margin-fx-max-l"></span></div>
                   </div>
                 </div>

@@ -295,6 +295,13 @@
      누르면 기준 환율 칸에 넣습니다. 이미 같은 값이면 ✓ 표시 후 잠금. */
   let liveFx = null;
   const FX_REFRESH_MS = 10 * 60 * 1000;
+  /* 기준 환율(견적 환율)은 실시간 TTB 보다 낮게 — 환율이 내려가도(원화 강세) 마진이 버티도록 보수적으로 잡는 수출 견적 관행.
+     처음 TTB 를 받았을 때 사용자가 기준 환율을 건드리지 않았으면 TTB × (1 − 2%)를 10원 단위 내림으로 넣습니다. (이후 10분 갱신 때는 바꾸지 않음)
+     'TTB' 알약 버튼은 실시간 TTB 그대로(소수 1자리)를 넣습니다. (보수적 기본값 대신 실제 환율로 보고 싶을 때) */
+  const FX_BUFFER = 0.02;
+  const safeFx = (rate) => Math.floor((rate * (1 - FX_BUFFER)) / 10) * 10;
+  let fxAuto = true;   // 기준 환율을 직접 입력하거나 TTB 버튼을 누르면 false
+  $("fx").addEventListener("input", () => { fxAuto = false; });
 
   async function loadLiveFx() {
     try {
@@ -302,9 +309,14 @@
       if (!res.ok || !(res.headers.get("Content-Type") || "").includes("json")) throw new Error();
       liveFx = await res.json();
       if (!(liveFx.rate > 0)) throw new Error();
+      if (fxAuto) {
+        $("fx").value = safeFx(liveFx.rate);
+        render();
+      }
     } catch (e) {
       liveFx = null;
     }
+    fxAuto = false;   // 처음 조회 한 번만 (실패하면 화면 기본값 유지 — 10분 뒤 성공해도 작업 중 값을 바꾸지 않음)
     syncLiveFx();
   }
 
@@ -318,14 +330,17 @@
     }
     const r1 = Math.round(liveFx.rate * 10) / 10;
     const same = Math.abs(num("fx") - r1) < 0.05;
-    btn.disabled = same;
+    btn.disabled = false;   // 항상 활성 (✓ 는 기준 환율이 실시간 TTB 와 같다는 표시만)
     btn.textContent = `TTB ${r1.toLocaleString("ko-KR")}${same ? " ✓" : ""}`;
-    btn.title = `${same ? "기준 환율에 적용됨" : "누르면 기준 환율에 적용"} · USD TTB ${liveFx.rate.toLocaleString("ko-KR")}원 · ${liveFx.source} · ${liveFx.as_of} 기준`;
+    const below = liveFx.rate - num("fx");
+    $("fx").title = below > 0.05 ? `실시간 TTB보다 ${below.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}원 (${pct(below / liveFx.rate)}) 낮게 잡은 보수적 견적 환율` : "";
+    btn.title = `${same ? "기준 환율에 적용됨" : "누르면 실시간 TTB를 기준 환율에 적용"} · USD TTB ${liveFx.rate.toLocaleString("ko-KR")}원 · ${liveFx.source} · ${liveFx.as_of} 기준`;
   }
 
   $("fxlive-apply").addEventListener("click", () => {
     if (!liveFx) return;
-    $("fx").value = Math.round(liveFx.rate * 10) / 10;   // 소수 1자리
+    fxAuto = false;
+    $("fx").value = Math.round(liveFx.rate * 10) / 10;   // 실시간 TTB, 소수 1자리
     render();
   });
 
