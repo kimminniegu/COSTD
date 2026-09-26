@@ -167,9 +167,8 @@
     $("loading").hidden = state !== "loading";
     $("document").hidden = !["manual", "edit", "result"].includes(state);
     $("new").hidden = state !== "result";
-    const headings = { upload: ["STEP 1 · 시작", "개발요청서 분석"], loading: ["STEP 1 · 자동변환", "개발요청서 분석"], result: ["STEP 2 · 결과 확인", "개발요청서"], edit: ["STEP 3 · 수정", "개발요청서 수정"], manual: ["STEP 4 · 직접 작성", "개발요청서 직접 작성"] };
-    $("step").textContent = headings[state][0];
-    $("title").textContent = headings[state][1];
+    const headings = { upload: "개발요청서 분석", loading: "개발요청서 분석", result: "개발요청서", edit: "개발요청서 수정", manual: "개발요청서 직접 작성" };
+    $("title").textContent = headings[state];
     $("description").textContent = state === "upload" || state === "loading" ? "바이어 요청서를 변환하거나 직접 작성하여 개발팀에 전달해요." :
       editing() ? "필수 항목을 입력하고 개발팀에 전달할 요청서를 완성해요." : "내용을 확인하고 필요하면 수정한 뒤 PDF로 저장해요.";
     if (state === "upload" || state === "loading") return;

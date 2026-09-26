@@ -1,5 +1,6 @@
 /* 공통 컴포넌트는 그대로 사용하고 개발요청서 배치만 정의합니다. */
 #requisition-app [hidden] { display: none !important; }
+#requisition-app > .page-header { margin-bottom: var(--space-6); }
 .requisition-mode-card { margin-bottom: var(--space-6); border-radius: var(--radius-xl); }
 .requisition-mode-card > .card-body { padding: var(--space-2); }
 .requisition-mode-card .tabs { display: flex; }
