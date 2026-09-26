@@ -251,23 +251,30 @@
             <div class="card-body margin-rtop">
               <div class="margin-rtop__row">
                 <div class="margin-rtop__inputs">
-                  <label class="form-label" for="margin-target">바이어 목표가</label>
-                  {{ field('target', 1.95, '$', '바이어 목표가 (USD)', 0.01) }}
-                  <label class="form-label" for="margin-item-floor" title="원재료, 임가공, 부자재, 물류비 각각의 1차 마진에서 최대 어디까지 양보(인하)할 수 있는지 지정하는 기준선입니다.">1차 마진 양보 한계치 (항목별)</label>
-                  <div title="원재료, 임가공, 부자재, 물류비 각각의 1차 마진에서 최대 어디까지 양보(인하)할 수 있는지 지정하는 기준선입니다.">{{ field('item-floor', 5, '%', '1차 마진 양보 한계치 (항목별)', 0.5) }}</div>
+                  <div class="margin-rtop__field">
+                    <label class="form-label" for="margin-target">바이어 목표가</label>
+                    {{ field('target', 1.95, '$', '바이어 목표가 (USD)', 0.01) }}
+                  </div>
+                  <div class="margin-rtop__field" title="원재료, 임가공, 부자재, 물류비 각각의 1차 마진에서 최대 어디까지 양보(인하)할 수 있는지 지정하는 기준선입니다.">
+                    <label class="form-label" for="margin-item-floor">1차 마진 양보 <br class="margin-rtop__br">한계치 (항목별)</label>
+                    {{ field('item-floor', 5, '%', '1차 마진 양보 한계치 (항목별)', 0.5) }}
+                  </div>
                 </div>
                 <div class="margin-verdict" id="margin-verdict"></div>
               </div>
               <p class="form-error" id="margin-r-err" role="alert"></p>
-              <div class="margin-gauge" id="margin-gauge"></div>
-              <div class="margin-rtop__foot">
-                <div class="margin-legend">
-                  <span><i class="margin-swatch is-bad"></i>마진만으로 불가</span>
-                  <span><i class="margin-swatch is-warn"></i>1차·물류 마진 조정</span>
-                  <span><i class="margin-swatch is-caution"></i>영업마진 양보</span>
-                  <span><i class="margin-swatch is-good"></i>수락</span>
+              <div class="margin-rtop__gauge">
+                <div class="margin-rtop__gauge-head">
+                  <span class="margin-rtop__gauge-title">가격 위치</span>
+                  <div class="margin-legend">
+                    <span><i class="margin-swatch is-bad"></i>마진만으로 불가</span>
+                    <span><i class="margin-swatch is-warn"></i>1차·물류 마진 조정</span>
+                    <span><i class="margin-swatch is-caution"></i>영업마진 양보</span>
+                    <span><i class="margin-swatch is-good"></i>수락</span>
+                  </div>
                 </div>
-                <span class="text-caption" id="margin-gauge-note"></span>
+                <div class="margin-gauge" id="margin-gauge"></div>
+                <p class="text-caption margin-rtop__note" id="margin-gauge-note"></p>
               </div>
             </div>
           </div>

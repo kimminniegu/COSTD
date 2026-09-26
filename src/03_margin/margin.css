@@ -176,6 +176,7 @@
 .margin-page .is-caution { background: var(--margin-gauge-caution); }
 .margin-page .is-warn { background: var(--margin-gauge-warn); }
 .margin-page .is-bad { background: var(--margin-gauge-bad); }
+.margin-gauge .is-loss { background: var(--color-text-inverse-secondary); }   /* 손익분기 아래(목표가가 더 낮을 때만) */
 .margin-page .is-cur { background: var(--color-primary-bright); }
 .margin-page .is-other { background: var(--color-primary-light); }
 .margin-page .is-hatch { background: repeating-linear-gradient(45deg, var(--color-text-inverse-secondary) 0 3px, var(--color-background) 3px 6px); }
@@ -241,11 +242,37 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 .margin-arrow { font-size: var(--font-size-label); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
 
 /* 역제안 ① 상단 — 목표가 입력 | 종합 판정, 아래 게이지 */
-.margin-rtop__row { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: var(--space-4); align-items: center; }
-.margin-rtop__inputs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(112px, 1fr); align-items: center; gap: var(--space-2) var(--space-3); }   /* 라벨이 길면 줄바꿈, 입력칸은 최소 112px */
-.margin-rtop .margin-verdict { padding: var(--space-3) var(--space-4); }
-.margin-rtop__foot { margin-top: var(--space-4); padding-top: var(--space-3); border-top: var(--border-default); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-1) var(--space-3); }
-.margin-rtop__foot .margin-legend { margin-top: 0; }
+/* 역제안 상단: [입력 | 판정] 두 칸 높이를 맞추고, 아래 게이지는 제목·범례 한 줄 → 막대 → 안내 순서 */
+/* [입력 (라벨 | 입력칸) 2행] [판정 박스] — 입력 묶음은 남은 폭을 채우고, 판정 박스는 내용 폭 그대로(Badge·설명 한 줄).
+   둘이 한 줄에 안 들어가면 판정 박스가 입력 아래 줄로 */
+.margin-rtop__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-4); }
+.margin-rtop__inputs { flex: 1 1 300px; display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: var(--space-2) var(--space-3); }
+.margin-rtop__field { display: contents; }
+.margin-rtop__field .form-label { margin: 0; white-space: nowrap; }
+.margin-rtop .margin-verdict { flex: none; max-width: 100%; justify-content: flex-start; gap: var(--space-1); padding: var(--space-3) var(--space-4); }
+.margin-rtop .margin-badges { gap: var(--space-1); }
+/* 중간 폭 카드(안쪽 620~759px, 화면 약 1440px): 같은 구조를 한 줄에 두려고 긴 라벨을 두 줄로, 입력칸을 좁게.
+   더 좁으면(620px 미만) 판정 박스가 입력 아래 줄로 */
+.margin-rtop { container: rtop / inline-size; }
+.margin-rtop__br { display: none; }
+@container rtop (min-width: 620px) and (max-width: 759.98px) {
+  .margin-rtop__row { flex-wrap: nowrap; }
+  .margin-rtop__inputs { flex: 1 1 0; min-width: 0; gap: var(--space-2); }
+  .margin-rtop__br { display: inline; }
+  .margin-rtop__field .form-control { padding: 0 24px 0 var(--space-2); }   /* 좁은 입력칸에서 숫자가 잘리지 않게 */
+  .margin-rtop__field .margin-field__unit { right: 10px; }
+}
+.margin-rtop .margin-rsum__nums { column-gap: var(--space-2); }
+.margin-rtop .margin-verdict__title, .margin-rtop .margin-rsum__gap { font-size: var(--font-size-sub); }
+.margin-rtop .margin-verdict__desc { font-size: var(--font-size-caption); line-height: 1.45; }
+.margin-rtop__gauge { margin-top: var(--space-5); padding-top: var(--space-4); border-top: var(--border-default); }
+.margin-rtop__gauge-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); }
+.margin-rtop__gauge-title { font-size: var(--font-size-label); font-weight: var(--font-weight-bold); color: var(--color-text-primary); }
+.margin-rtop__gauge-head .margin-legend { margin-top: 0; }
+.margin-rtop .margin-gauge { padding: var(--space-10) 0 var(--space-12); }
+.margin-rtop .margin-gauge.has-row2 { padding-bottom: calc(var(--space-12) + var(--space-8)); }
+.margin-rtop__note { margin: 0; }
+.margin-rtop__note:empty { display: none; }
 .margin-rsum__nums { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-4); }
 .margin-rsum__gap { font-size: var(--font-size-card-title); font-weight: var(--font-weight-extrabold); font-variant-numeric: tabular-nums; }
 .margin-rsum__gap.is-short { color: var(--color-danger); }
@@ -361,13 +388,23 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 .margin-gauge.has-row2 { padding-bottom: calc(var(--space-12) + var(--space-8)); }
 .margin-gauge:empty { display: none; }
 .margin-gauge__track { display: flex; height: var(--space-2); overflow: hidden; border-radius: var(--radius-pill); }
-.margin-gauge__pin { position: absolute; top: 0; display: flex; flex-direction: column; align-items: center; transform: translateX(-50%); transition: left var(--transition-base); }
-.margin-gauge__pin b { padding: var(--space-1) var(--space-2); border-radius: var(--radius-xs); background: var(--color-surface-inverse); color: var(--color-text-inverse); font-size: var(--font-size-caption); white-space: nowrap; }
-.margin-gauge__pin i { border-left: var(--space-1) solid transparent; border-right: var(--space-1) solid transparent; border-top: var(--space-2) solid var(--color-surface-inverse); }
-.margin-gauge__tick { position: absolute; top: calc(var(--space-8) + var(--space-2)); transform: translateX(-50%); font-size: var(--font-size-caption); text-align: center; color: var(--color-text-secondary); white-space: nowrap; }
-.margin-gauge__tick::before { content: ""; display: block; width: 0; height: var(--space-2); margin: 0 auto var(--space-1); border-left: thin solid var(--color-text-inverse-secondary); }
-.margin-gauge__tick.is-row2 { top: calc(var(--space-8) + var(--space-2) + var(--space-8)); }
-.margin-gauge__tick.is-row2::before { height: calc(var(--space-8) + var(--space-2)); margin-top: calc(var(--space-8) * -1); }
+.margin-gauge__bar { position: relative; }   /* 트랙·눈금·핀이 같은 폭 기준으로 % 위치 → 색 경계와 눈금이 정확히 겹침 */
+/* 바이어 핀: 말풍선 + 꼬리(막대 바로 위) + 막대 위 흰 테두리 점 */
+.margin-gauge__pin { position: absolute; bottom: calc(100% + 6px); display: flex; flex-direction: column; align-items: center; transform: translateX(-50%); transition: left var(--transition-base); }
+.margin-gauge__pin b { padding: 3px var(--space-2); border-radius: var(--radius-xs); background: var(--color-surface-inverse); color: var(--color-text-inverse); font-size: var(--font-size-caption); line-height: 1.4; white-space: nowrap; }
+.margin-gauge__pin i { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 5px solid var(--color-surface-inverse); }
+.margin-gauge__pin.is-start { transform: translateX(-12px); align-items: flex-start; }
+.margin-gauge__pin.is-start i { margin-left: 7px; }
+.margin-gauge__pin.is-end { transform: translateX(calc(-100% + 12px)); align-items: flex-end; }
+.margin-gauge__pin.is-end i { margin-right: 7px; }
+.margin-gauge__dot { position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%; background: var(--color-surface-inverse); border: 3px solid var(--color-surface); box-sizing: border-box; box-shadow: 0 0 0 1px var(--color-surface-inverse); transform: translate(-50%, -50%); transition: left var(--transition-base); }
+.margin-gauge__tick { position: absolute; top: 100%; transform: translateX(-50%); font-size: var(--font-size-caption); text-align: center; color: var(--color-text-secondary); white-space: nowrap; }
+.margin-gauge__tick::before { content: ""; display: block; width: 0; height: var(--space-2); margin: var(--space-1) auto; border-left: thin solid var(--color-text-inverse-secondary); }
+.margin-gauge__tick.is-start { transform: none; text-align: left; }
+.margin-gauge__tick.is-start::before { margin-left: 0; }
+.margin-gauge__tick.is-end { transform: translateX(-100%); text-align: right; }
+.margin-gauge__tick.is-end::before { margin-right: 0; margin-left: auto; }
+.margin-gauge__tick.is-row2::before { height: calc(var(--space-8) + var(--space-2)); }
 .margin-gauge__tick b { display: block; color: var(--color-text-primary); }
 
 /* 역제안 ② 중단 — 대응 방안 (한 줄 균등, 본문 880px 이하 2열) */
@@ -423,7 +460,7 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
   .margin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @container page (max-width: 560px) {
-  .margin-rtop__row, .margin-head--tier, .margin-fxdash__inputs, .margin-fxdash__kpis, .margin-modal-grid { grid-template-columns: 1fr; }
+  .margin-head--tier, .margin-fxdash__inputs, .margin-fxdash__kpis, .margin-modal-grid { grid-template-columns: 1fr; }
   .margin-term, .margin-term:has(#margin-q-place[hidden]) { grid-template-columns: 96px minmax(0, 1fr); }
   #margin-q-place { grid-column: 1 / -1; }
   .margin-sec-title .btn { margin-left: 0; }

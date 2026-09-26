@@ -655,20 +655,27 @@
     return '<span class="badge badge-danger">본부장/임원 특별 승인 필요 (마진 방어 필수)</span>';
   }
 
+  /* 가격 위치 막대 — 색 구간 경계 = 기준가 눈금. 막대는 손익분기에서 시작(목표가가 더 낮으면 그만큼 왼쪽으로 늘림)
+     눈금·핀은 막대와 같은 상자(.margin-gauge__bar) 기준 % 로 놓아 경계와 정확히 겹칩니다. */
   function drawGauge(el, P, t) {
-    const pts = [P.breakeven, P.floor, P.min, P.goal, t];
-    const lo = Math.min(...pts) * 0.97, hi = Math.max(...pts) * 1.03;
+    const span = Math.max(P.goal - P.breakeven, 1);
+    const lo = Math.min(P.breakeven, t - span * 0.06);
+    const hi = Math.max(P.goal + span * 0.12, t + span * 0.06);
     const pos = (v) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100));
-    const zones = [[lo, P.floor, "is-bad"], [P.floor, P.min, "is-warn"], [P.min, P.goal, "is-caution"], [P.goal, hi, "is-good"]]
+    const zones = [[lo, P.breakeven, "is-loss"], [P.breakeven, P.floor, "is-bad"], [P.floor, P.min, "is-warn"], [P.min, P.goal, "is-caution"], [P.goal, hi, "is-good"]]
       .filter((q) => q[1] > q[0]);
     const ticks = [["손익분기", P.breakeven], ["최대 양보가", P.floor], ["최소 마진가", P.min], ["목표 마진가", P.goal]]
       .map((q) => ({ l: q[0], v: q[1], x: pos(q[1]) })).sort((a, b) => a.x - b.x);
+    const minGap = el.clientWidth > 0 ? (84 / el.clientWidth) * 100 : 13;   // 라벨(약 76px)이 실제로 겹칠 때만 두 번째 줄로
     let lastX = -99, row = 0;
-    ticks.forEach((q) => { row = q.x - lastX < 13 && row === 0 ? 1 : 0; q.r = row; lastX = q.x; });
+    ticks.forEach((q) => { row = q.x - lastX < minGap && row === 0 ? 1 : 0; q.r = row; lastX = q.x; });
+    const edge = (x) => (x < 4 ? " is-start" : x > 96 ? " is-end" : "");   // 막대 양 끝 라벨은 안쪽으로 정렬
+    const tx = pos(t);
     el.classList.toggle("has-row2", ticks.some((q) => q.r));   // 기준가 라벨이 두 줄일 때만 아래 여백 추가
-    el.innerHTML = `<div class="margin-gauge__track">${zones.map((q) => `<div class="${q[2]}" style="width:${((q[1] - q[0]) / (hi - lo)) * 100}%"></div>`).join("")}</div>`
-      + ticks.map((q) => `<div class="margin-gauge__tick${q.r ? " is-row2" : ""}" style="left:${q.x}%"><b>${usd(q.v)}</b>${q.l}</div>`).join("")
-      + `<div class="margin-gauge__pin" style="left:${pos(t)}%"><b>바이어 ${usd(t)}</b><i></i></div>`;
+    el.innerHTML = `<div class="margin-gauge__bar"><div class="margin-gauge__track">${zones.map((q) => `<div class="${q[2]}" style="width:${pos(q[1]) - pos(q[0])}%"></div>`).join("")}</div>`
+      + ticks.map((q) => `<div class="margin-gauge__tick${q.r ? " is-row2" : ""}${edge(q.x)}" style="left:${q.x}%"><b>${usd(q.v)}</b>${q.l}</div>`).join("")
+      + `<div class="margin-gauge__pin${edge(tx)}" style="left:${tx}%"><b>바이어 ${usd(t)}</b><i></i></div>`
+      + `<div class="margin-gauge__dot" style="left:${tx}%"></div></div>`;
   }
 
   /* 사양 변경(VE) 약식 절감 — 대상 항목 원가(개당)에서 차감 */
