@@ -625,6 +625,7 @@
       var inGroup = blocks.filter(function (b) { return b.group === key; });
       if (!inGroup.length) return;
       var grp = el("section", "regulatory-cond-group");
+      grp.setAttribute("data-group", key);          // 스타일 구분용 (최대 농도 강조 등). 내용·순서는 바꾸지 않는다
       grp.appendChild(el("h4", "regulatory-cond-group__title", (CIRCLED[n] ? CIRCLED[n] + " " : "") + CONDITION_GROUP_TITLE[key]));
       n++;
       var hasLettered = false;
@@ -643,6 +644,7 @@
   /* 구조를 확실히 나누기 어려운 원문은 ‘제한사항’ 항목에 그대로 */
   function renderRawGroup(raw, note) {
     var grp = el("section", "regulatory-cond-group");
+    grp.setAttribute("data-group", "other");
     grp.appendChild(el("h4", "regulatory-cond-group__title", CONDITION_GROUP_TITLE.other));
     grp.appendChild(renderRawText(raw, note));
     return grp;
@@ -675,6 +677,7 @@
     }
     if (entry.proviso) {
       var pv = el("section", "regulatory-cond-group");
+      pv.setAttribute("data-group", "proviso");
       pv.appendChild(el("h4", "regulatory-cond-group__title", "단서 조항 (원문)"));
       pv.appendChild(renderRawText(entry.proviso));
       wrap.appendChild(pv);
