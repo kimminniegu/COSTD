@@ -28,6 +28,7 @@
 | 2.21 | 2026-09-26 | 단가 구성 막대를 COSTD 브랜드 팔레트(`--margin-brand-*`: 네이비 `#14233B` · 메인 블루 `#5FA8F7` · Sky Blue `#9DD6F7` · Periwinkle `#A9B8FA` · Mint `#9DE9D2` · Lime Yellow `#DDF38B`) 기준으로 재정리: 브랜드 색상(h)은 그대로 두고 밝기·채도만 조정(`oklch(from …)`), 영업마진은 메인 블루 그대로, 칸 안 글자는 모두 브랜드 네이비. dataviz 검증 통과(일반 시각 ΔE ≥ 16.3, 색각 이상 ΔE ≥ 14.9) | C |
 | 2.22 | 2026-09-26 | 단가 구성 막대를 맑은 톤으로: 채도를 올리고 밝기를 진·연 번갈아(원가 `#7587f6` · 1차 마진 `#7fd3ff` · 물류비 `#20bb9a` · 물류 마진 `#d0ea5f` · 영업마진 `#5FA8F7`). 인접 구분 검증 통과(일반 시각 ΔE ≥ 16.8, 색각 이상 ΔE ≥ 14.8), 연한 칸(Sky·Lime)은 맑은 톤을 위해 밝기 기준을 넘기고 숫자·범례·틈으로 보조 | C |
 | 2.23 | 2026-09-26 | 단가 구성 막대를 브랜드 파스텔로(첫 화면이라 편안함 우선): 원가 연한 Periwinkle `#cfd6fb` · 1차 마진 Sky `#74c2f4` · 물류비 Mint `#86e0c3` · 물류 마진 Lime `#d8f17a` · 영업마진 메인 블루 `#5FA8F7`, 글자 브랜드 네이비. dataviz 기준보다 연해 구분은 막대 안 숫자 + 범례 + 2px 흰 틈으로 보조 | C |
+| 2.24 | 2026-09-26 | 단가 구성 막대 전체를 원가의 연한 Periwinkle 무드로 통일: 1차 마진 Sky `#76c3e5` · 물류비 Mint `#8de6ca` · 물류 마진 Lime `#e8f596` · 영업마진 메인 블루 `#79b1f9`(파스텔). 밝기 연·진 번갈아 인접 구분(일반 시각 ΔE ≥ 11.9, 색각 이상 ΔE ≥ 7.8) | C |
 
 ## 1. 페이지 목적
 
@@ -513,7 +514,7 @@ Best regards,
 - 접이식(제조원가·물류비)은 별도 JS 없이 네이티브 `<details>`/`<summary>`를 쓰고 모양만 `.margin-drawer*`로 지정합니다. 표시·숨김이 필요한 영역(흡수 옵션, 완료 안내)은 `hidden` 속성으로 토글하고, class의 `display`에 덮이지 않도록 `.margin-page [hidden]`, `#margin-quote-modal [hidden]`을 지정합니다.
 - Panel 없이 값만 고르는 버튼 묶음(항목별/일괄, 마진율/마크업 등)은 `.tabs.margin-seg`로 모양만 쓰고 `.is-active`는 margin.js가 토글합니다.
 - 색·간격·글꼴은 CSS Variable만 사용합니다. 판정 4단계 색은 `--color-success / warning / danger`에서 파생한 `--margin-zone-*` 변수(`.margin-page` 범위)입니다.
-- 단가 구성 막대 색: `.margin-page`의 COSTD 브랜드 팔레트 변수 `--margin-brand-*`(네이비 `#14233B` · 메인 블루 `#5FA8F7` · Sky Blue `#9DD6F7` · Periwinkle `#A9B8FA` · Mint `#9DE9D2` · Lime Yellow `#DDF38B`) 기준 파스텔 `--margin-seg-*` — 원가 연한 Periwinkle(`#cfd6fb`, 가장 큰 구간이라 차분하게) → 1차 마진 Sky(`#74c2f4`, 원가와 구분되도록 한 단계 진하게) → 물류비 Mint(`#86e0c3`) → 물류 마진 Lime(`#d8f17a`) → 영업마진 메인 블루(`#5FA8F7`, 포인트) → 수량 할인 빗금 / 소량 할증 `--color-warning`. 칸 안 글자는 모두 브랜드 네이비. 견적 계산 탭 첫 화면이라 편안한 파스텔을 우선했고 dataviz 검증 기준(밝기·인접 ΔE 15)보다 연하므로, 막대 안 숫자 + 범례 + 구간 사이 2px 흰 틈으로 구분을 보조합니다.
+- 단가 구성 막대 색: `.margin-page`의 COSTD 브랜드 팔레트 변수 `--margin-brand-*`(네이비 `#14233B` · 메인 블루 `#5FA8F7` · Sky Blue `#9DD6F7` · Periwinkle `#A9B8FA` · Mint `#9DE9D2` · Lime Yellow `#DDF38B`) 계열을 원가의 연한 Periwinkle 무드(밝고 채도 낮은 파스텔)로 맞춘 `--margin-seg-*` — 원가 Periwinkle(`#cfd6fb`) → 1차 마진 Sky(`#76c3e5`) → 물류비 Mint(`#8de6ca`) → 물류 마진 Lime(`#e8f596`) → 영업마진 메인 블루(`#79b1f9`) → 수량 할인 빗금 / 소량 할증 `--color-warning`. 칸 안 글자는 모두 브랜드 네이비. 밝기를 연·진 번갈아 인접 칸을 구분하고(일반 시각 ΔE ≥ 11.9, 색각 이상 ΔE ≥ 7.8 — 파스텔이라 dataviz 기준 15 미만), 막대 안 숫자 + 범례 + 구간 사이 2px 흰 틈으로 보조합니다.
 - 이 페이지에는 SVG 차트가 없습니다. 수량별 단가 막대는 표 칸 안의 `.margin-qbar`(CSS 막대)로 그립니다.
 - 페이지 머리 ↔ 본문 간격만 이 페이지에서 32px로 줄였습니다. (`.margin-page .page-header`, 공통 CSS 미수정)
 - 팝업은 `.container`가 Container Query 기준이라 fixed 배치가 본문 기준이 되므로, margin.js가 로드 시 `document.body`로 옮깁니다.

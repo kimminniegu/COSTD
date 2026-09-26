@@ -29,12 +29,13 @@
   --margin-brand-periwinkle: #a9b8fa;
   --margin-brand-mint: #9de9d2;
   --margin-brand-lime: #ddf38b;
-  /* 견적 계산 단가 구성 막대 5색 — 브랜드 파스텔 톤. 가장 큰 원가는 연한 Periwinkle 로 차분하게, 영업마진은 메인 블루로 포인트 */
-  --margin-seg-cost: #cfd6fb;    /* Periwinkle 연하게 */
-  --margin-seg-m1: #74c2f4;      /* Sky Blue ~ 메인 블루 사이 (원가와 구분되도록 한 단계 진하게) */
-  --margin-seg-logi: #86e0c3;    /* Mint */
-  --margin-seg-logi-m: #d8f17a;  /* Lime Yellow */
-  --margin-seg-m2: var(--margin-brand-blue);   /* 메인 블루 그대로 */
+  /* 견적 계산 단가 구성 막대 5색 — 원가의 연한 Periwinkle 무드(밝고 채도 낮은 파스텔)로 통일.
+     색상은 브랜드 계열(Periwinkle · Sky · Mint · Lime · 메인 블루), 밝기를 연·진 번갈아 인접 칸 구분 */
+  --margin-seg-cost: #cfd6fb;    /* 연한 Periwinkle */
+  --margin-seg-m1: #76c3e5;      /* 파스텔 Sky */
+  --margin-seg-logi: #8de6ca;    /* 파스텔 Mint */
+  --margin-seg-logi-m: #e8f596;  /* 파스텔 Lime */
+  --margin-seg-m2: #79b1f9;      /* 파스텔 메인 블루 */
 }
 
 /* 페이지 머리 ↔ 본문 간격 (공통 72px은 입력형 화면에 넓어서 이 페이지만 줄임) */
@@ -180,8 +181,8 @@
 }
 
 /* 막대·범례 공통 색 */
-/* 단가 구성 막대 팔레트 — COSTD 브랜드 파스텔: 원가 연한 Periwinkle · 1차 마진 Sky Blue · 물류비 Mint · 물류 마진 Lime · 영업마진 메인 블루, 글자는 모두 브랜드 네이비.
-   첫 화면이라 편안한 파스텔을 우선 — dataviz 검증 기준(밝기·인접 ΔE 15)보다 연해 구분은 막대 안 숫자 + 범례 + 2px 흰 틈으로 보조 */
+/* 단가 구성 막대 팔레트 — 원가 연한 Periwinkle 과 같은 파스텔 무드: 1차 마진 Sky · 물류비 Mint · 물류 마진 Lime · 영업마진 메인 블루, 글자는 모두 브랜드 네이비.
+   dataviz 검증: 인접 칸 일반 시각 ΔE ≥ 11.9, 색각 이상 ΔE ≥ 7.8 (파스텔이라 기준 15 미만) — 막대 안 숫자 + 범례 + 2px 흰 틈으로 보조 */
 .margin-page .is-cost { background: var(--margin-seg-cost); color: var(--margin-brand-navy); }
 .margin-page .is-m1 { background: var(--margin-seg-m1); color: var(--margin-brand-navy); }
 .margin-page .is-logi { background: var(--margin-seg-logi); color: var(--margin-brand-navy); }
