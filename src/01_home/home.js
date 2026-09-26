@@ -39,7 +39,7 @@
     });
   }
   function arrow(direction) { return direction === "up" ? "▲" : direction === "down" ? "▼" : "–"; }
-  var NEWS_LIMIT = 4, REG_LIMIT = 3;   // 홈의 뉴스 · 규제 표시 건수 (최신순 고정)
+  var NEWS_LIMIT = 3, REG_LIMIT = 3;   // 홈의 뉴스 · 규제 표시 건수 (최신순 고정)
   function isNarrow() { return window.matchMedia("(max-width: 1024px)").matches; }
 
   /* 1. 환율 띠 -------------------------------------------------------------- */
