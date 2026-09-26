@@ -40,7 +40,9 @@ if str(BASE_DIR) not in sys.path:
 from dotenv import load_dotenv  # noqa: E402
 from flask import Flask, jsonify, request  # noqa: E402
 
-load_dotenv(BASE_DIR / ".env", override=False)   # Render 에서는 대시보드 환경변수가 우선
+# .env 는 시작할 때 한 번 읽습니다 (셸 환경변수가 있으면 그것이 우선. Render 는 대시보드 환경변수만).
+# 키를 나중에 .env 에 추가했으면 서버를 다시 띄워야 합니다. debug 실행 중에는 .env 저장 시 자동 재시작됩니다 (app.run extra_files).
+load_dotenv(BASE_DIR / ".env", override=False)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("cosmoa.chatbot")
 
@@ -74,11 +76,42 @@ SYSTEM_PROMPT = """당신은 COSMOA 의 AI 비서예요. COSMOA 는 화장품 OE
 - 메일 초안은 제목 1줄 + 본문으로 주고, 사용자 이름·소속을 서명에 넣어요."""
 
 
+def data_sources_status() -> dict:
+    """도구가 쓰는 데이터 출처의 설정 여부. 값(키)은 담지 않고 사용 가능 여부만 돌려줍니다. (/health, system prompt 공용)"""
+    mfds = tools.regulatory_mfds.db_status()
+    return {
+        "mfds_db": mfds["available"],
+        "mfds_db_note": None if mfds["available"] else mfds.get("message"),
+        "rapidapi": bool(os.getenv("RAPIDAPI_KEY", "").strip()) and bool(os.getenv("RAPIDAPI_HOST", "").strip()),
+        "exim_rates": bool(os.getenv("EXIM_API_KEY", "").strip()),
+        "trade_stats": bool(os.getenv("DATA_GO_KR_KEY", "").strip()),
+    }
+
+
+def _availability_note(status: dict) -> str:
+    """모델이 불가능한 출처를 먼저 시도하지 않도록 현재 상태를 알려줍니다."""
+    lines = ["데이터 출처 현재 상태:"]
+    if status["mfds_db"] and status["rapidapi"]:
+        lines.append("- 성분 규제: 식약처 수집 DB(source=mfds, 기본)와 K-Beauty API(source=api) 모두 사용 가능")
+    elif status["rapidapi"]:
+        lines.append("- 성분 규제: 식약처 수집 DB 는 이 서버에 없음 → lookup_ingredient_regulation 은 source='api' 로 바로 호출. 답변에 '식약처 DB 미연결, K-Beauty API 기준' 을 한 줄 밝힘")
+    elif status["mfds_db"]:
+        lines.append("- 성분 규제: K-Beauty API 미설정 → source='mfds' 만 사용. search_ingredient 는 사용 불가")
+    else:
+        lines.append("- 성분 규제: 식약처 DB 와 K-Beauty API 모두 미설정 → 규제 조회 도구를 호출하지 말고, 관리자에게 서버 설정(RAPIDAPI_KEY 또는 식약처 수집 DB)을 요청하라고 안내")
+    if not status["exim_rates"]:
+        lines.append("- 환율: EXIM_API_KEY 미설정 → 캐시된 값만 있을 수 있음. 비어 있으면 미설정을 안내")
+    if not status["trade_stats"]:
+        lines.append("- 수출입 실적: DATA_GO_KR_KEY 미설정 → 캐시된 값만 있을 수 있음")
+    return "\n".join(lines)
+
+
 def _system_prompt(user: dict | None) -> str:
     now = datetime.now(KST)
     lines = [SYSTEM_PROMPT, "", "현재 시각(KST): %s" % now.strftime("%Y-%m-%d %H:%M %a")]
     if user:
         lines.append("대화 상대: %s (%s)" % (user.get("name") or "사용자", user.get("team") or "소속 미상"))
+    lines.extend(["", _availability_note(data_sources_status())])
     return "\n".join(lines)
 
 
@@ -205,7 +238,8 @@ def create_app() -> Flask:
     @app.get("/health")
     def health():
         return jsonify({"ok": True, "service": "cosmoa-chatbot", "model": os.getenv("CHATBOT_OPENAI_MODEL", "gpt-4.1"),
-                        "configured": bool(os.getenv("OPENAI_API_KEY")) and bool(os.getenv("CHATBOT_SECRET"))})
+                        "configured": bool(os.getenv("OPENAI_API_KEY")) and bool(os.getenv("CHATBOT_SECRET")),
+                        "sources": data_sources_status()})   # 키 값은 없고 사용 가능 여부만
 
     @app.post("/chat")
     def chat():
@@ -230,4 +264,5 @@ def create_app() -> Flask:
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=int(os.getenv("CHATBOT_PORT", "5100")), debug=os.getenv("FLASK_DEBUG", "1") == "1")
+    app.run(host="127.0.0.1", port=int(os.getenv("CHATBOT_PORT") or "5100"), debug=os.getenv("FLASK_DEBUG", "1") == "1",
+            extra_files=[str(BASE_DIR / ".env")])   # .env 수정 시 자동 재시작 (app.py 와 동일)

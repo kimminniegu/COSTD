@@ -39,7 +39,7 @@ src/06_chatbot/
 |---|---|---|
 | COSMOA 본 서버 (app.py) | `POST /api/chatbot/message` | 위젯 → 중계. 로그인 세션 확인 후 챗봇 서버 `/chat` 으로 전달 (endpoint `chatbot_message`) |
 | COSMOA 본 서버 | `GET /assets/06_chatbot/chatbot.css`, `chatbot.js` | 위젯 정적 파일 |
-| 챗봇 서버 (server.py) | `GET /health` | 상태 확인 (Render Health Check 경로) |
+| 챗봇 서버 (server.py) | `GET /health` | 상태 확인 (Render Health Check 경로). `sources` 에 식약처 DB·RapidAPI·환율·수출입 키의 **설정 여부**(값 없음)를 돌려줘 연결 문제를 바로 확인 |
 | 챗봇 서버 | `POST /chat` | 헤더 `X-Chatbot-Secret` 일치 시에만 응답 |
 
 브라우저는 챗봇 서버를 직접 호출하지 않는다. (CORS 없음, 시크릿은 서버끼리만 공유)
@@ -108,7 +108,8 @@ src/06_chatbot/
 
 - 도구 결과는 화면용 응답을 그대로 넘기지 않고 **모델에 필요한 필드만 축약**한다. (뉴스: 출처·제목·URL·시각, 규제: 국가·유형·고시명·제한조건·단서)
 - 규제 원문(`limit_condition`, `proviso`, `result_note`, `disclaimer`)은 가공하지 않는다. `lookup_status` 가 not_listed 여도 "허용" 으로 바꾸지 않는다.
-- 식약처 DB 가 없거나(`db_missing`) API 설정이 없으면(`config`) 오류를 그대로 모델에 전달하고, 다른 출처로 **자동 전환하지 않는다**. 모델이 사용자에게 알린 뒤 `source=api` 로 다시 시도할 수 있다.
+- 식약처 DB 가 없거나(`db_missing`) API 설정이 없으면(`config`) 오류를 그대로 모델에 전달하고, 도구 안에서 다른 출처로 **자동 전환하지 않는다**. 대신 system prompt 에 매 요청마다 출처 상태(`data_sources_status()`)를 넣어, 없는 출처를 먼저 시도하지 않고 사용 가능한 출처로 바로 조회하며 답변에 어느 출처 기준인지 밝힌다.
+- 로컬 챗봇 서버는 시작할 때 `.env` 를 읽는다. 키를 나중에 추가했으면 서버를 다시 띄워야 한다 (debug 모드에서는 `.env` 저장 시 자동 재시작).
 - 홈 캐시가 비어 있으면 환율은 즉시 1회 조회하고, 뉴스·규제·수출입은 백그라운드 수집을 시작한 뒤 "수집 중" 안내를 돌려준다.
 - 챗봇 서버는 Render 에서 **본 서버와 디스크를 공유하지 않는다.** 캐시 DB(`CHATBOT_DB_PATH`)를 따로 두고 같은 수집 코드로 채운다. 로컬에서는 기본값이 `instance/cosmoa.db` 라 본 서버와 공유된다. 식약처 수집 DB 는 챗봇 서버에도 복사하거나 `MFDS_DB_PATH` 로 지정해야 조회된다.
 

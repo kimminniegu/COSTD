@@ -135,6 +135,7 @@ class ToolsTest(unittest.TestCase):
 # ---------------------------------------------------------------------------
 class ServerTest(unittest.TestCase):
     def setUp(self):
+        os.environ["CHATBOT_SECRET"] = "test-secret"   # RelayTest 의 app.py import(load_dotenv override) 가 .env 값으로 바꿔 놓을 수 있음
         self.client = server_mod.app.test_client()
 
     def test_health(self):
@@ -158,6 +159,23 @@ class ServerTest(unittest.TestCase):
             res = self.client.post("/chat", json={"messages": [{"role": "user", "content": "hi"}]}, headers=SECRET)
         self.assertEqual(res.status_code, 503)
         self.assertIn("OPENAI_API_KEY", res.get_json()["error"])
+
+    def test_health_reports_sources_without_values(self):
+        fake_key = "FAKE-RAPID-KEY-98765"
+        with mock.patch.dict(os.environ, {"RAPIDAPI_KEY": fake_key, "RAPIDAPI_HOST": "h.example", "MFDS_DB_PATH": str(Path(tempfile.mkdtemp()) / "none.sqlite")}):
+            data = self.client.get("/health").get_json()
+        self.assertTrue(data["sources"]["rapidapi"])
+        self.assertFalse(data["sources"]["mfds_db"])
+        self.assertNotIn(fake_key, json.dumps(data))      # 키 값은 절대 노출하지 않음
+        self.assertNotIn("h.example", json.dumps(data))
+
+    def test_system_prompt_tells_model_which_source_to_use(self):
+        with mock.patch.dict(os.environ, {"RAPIDAPI_KEY": "k", "RAPIDAPI_HOST": "h", "MFDS_DB_PATH": str(Path(tempfile.mkdtemp()) / "none.sqlite")}):
+            prompt = server_mod._system_prompt(None)
+        self.assertIn("source='api'", prompt)
+        with mock.patch.dict(os.environ, {"RAPIDAPI_KEY": "", "RAPIDAPI_HOST": "", "MFDS_DB_PATH": str(Path(tempfile.mkdtemp()) / "none.sqlite")}):
+            prompt = server_mod._system_prompt(None)
+        self.assertIn("규제 조회 도구를 호출하지 말고", prompt)
 
     def test_tool_round_trip(self):
         FakeOpenAI.requests.clear()
