@@ -19,8 +19,9 @@
   position: relative;
   overflow: hidden;
   isolation: isolate;
-  /* 로고 배경과 같은 톤: 흰 바탕 위 파랑·연두·연노랑 그라데이션 */
+  /* 배경 이미지(img/login_bg.webp)를 왼쪽 기준으로 채우고, 로딩 전·실패 시에는 아래 CSS 그라데이션이 보입니다 */
   background:
+    url(img/login_bg.webp) left center / cover no-repeat,
     radial-gradient(52% 46% at 8% 6%, rgba(160, 205, 255, 0.55) 0%, rgba(160, 205, 255, 0) 100%),
     radial-gradient(38% 34% at 96% 30%, rgba(197, 224, 255, 0.55) 0%, rgba(197, 224, 255, 0) 100%),
     radial-gradient(48% 42% at 92% 96%, rgba(250, 244, 180, 0.7) 0%, rgba(214, 240, 190, 0.45) 55%, rgba(214, 240, 190, 0) 100%),
@@ -110,6 +111,7 @@
   .login-features { display: none; }
   .login-intro__copy { display: none; }
   .login-intro::before, .login-intro::after { display: none; }   /* 좁은 화면에서는 장식 점이 제목과 겹쳐 숨김 */
+  .login-intro { background-position: left top; }   /* 가로로 넓어진 소개 영역은 이미지 상단(파랑) 기준 */
   .login-panel { padding: var(--space-10) var(--space-8); }
 }
 @media (max-width: 640px) {
