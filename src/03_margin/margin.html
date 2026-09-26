@@ -1,7 +1,7 @@
 {% extends "common/base.html" %}
-{# 담당자 C — 원가 경쟁력 및 마진 시뮬레이션 / 기능 명세: src/03_margin/margin.md #}
+{# 담당자 C — 원가·마진 시뮬레이션 / 기능 명세: src/03_margin/margin.md #}
 
-{% block title %}원가 경쟁력 및 마진 시뮬레이션{% endblock %}
+{% block title %}원가·마진 시뮬레이션{% endblock %}
 
 {% block page_css %}
 <link rel="stylesheet" href="{{ url_for('asset', filename='03_margin/margin.css') }}">
@@ -21,7 +21,7 @@
      data-erp-url="{{ url_for('margin_erp_cost') }}">
   <div class="page-header">
     <div>
-      <h1 class="page-title">원가 경쟁력 및 마진 시뮬레이션</h1>
+      <h1 class="page-title">원가·마진 시뮬레이션</h1>
       <p class="page-description">원가와 마진을 넣으면 수출 단가, 역제안 대응, 수량별 단가, 환율 영향을 한 번에 계산해요.</p>
     </div>
     <div class="page-actions">
