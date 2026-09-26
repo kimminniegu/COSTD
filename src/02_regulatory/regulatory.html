@@ -570,79 +570,122 @@
 </section>
 
 {# ------------------------------------------------------------------
-   상세 Modal
+   상세 Modal (직접 검색 · 파일 일괄 조회 공유) — regulatory.js fillModal 이 data-detail 키로 채운다.
+   배치: ① 성분과 조회 결과(펼침) → ② 주요 규제 조건(펼침, 항목별 · 영문 원문 위 · 한국어 제공 내용 아래) → ③ 관련 항목(건수는 항상, 목록은 접힘)
+         → ④ 접힌 상세 3종(입력·매칭 근거 / 전체 원문·고시 정보 / 출처·날짜 상세) → ⑤ 간결한 출처 한 줄 → ⑥ 사전검토 안내 → 하단 버튼(식약처 공식 조회 · 닫기)
+   접기·펼치기는 접근 가능한 details/summary(공통 아코디언 없음). ‘규제 정보 조회됨’은 허용·적합 판정처럼 꾸미지 않는다.
    ------------------------------------------------------------------ #}
+{% macro regulatory_fold_summary(title, id=None) -%}
+<summary class="regulatory-fold__summary">
+  <span class="regulatory-fold__title"{% if id %} id="{{ id }}"{% endif %}>{{ title }}</span>
+  <span class="regulatory-fold__state"><span class="regulatory-fold__state-open">펼치기</span><span class="regulatory-fold__state-close">접기</span><svg class="regulatory-fold__chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+</summary>
+{%- endmacro %}
 <div class="modal-backdrop" id="regulatory-detail-modal">
-  <div class="modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="regulatory-detail-title">
+  <div class="modal modal-lg regulatory-detail-modal" role="dialog" aria-modal="true" aria-labelledby="regulatory-detail-title">
     <div class="modal-header">
       <h2 class="modal-title" id="regulatory-detail-title">성분 상세</h2>
       <button type="button" class="modal-close" data-modal-close aria-label="닫기">×</button>
     </div>
     <div class="modal-body">
-      {# 각 dd 는 regulatory.js 가 data-detail 키로 채웁니다 #}
-      <div class="stack">
-        <section>
-          <p class="form-label">입력 정보</p>
-          <dl class="regulatory-detail">
-            <dt>검색어</dt><dd data-detail="input-raw">—</dd>
-            <dt>조회 시장</dt><dd data-detail="input-market">—</dd>
-            <dt>문서 함량 (참고)</dt><dd data-detail="input-amount">해당 없음</dd>
-            <dt>원문 위치</dt><dd data-detail="input-location">해당 없음</dd>
-          </dl>
-        </section>
-        <section id="regulatory-detail-conditions-section" hidden>
-          <p class="form-label">규제 조건 (영문 위 · 한국어 아래)</p>
-          <p class="text-caption text-secondary" id="regulatory-detail-conditions-note"></p>
-          <div class="regulatory-conditions mt-2" id="regulatory-detail-conditions"></div>
-        </section>
-        <section>
-          <p class="form-label">매칭 정보</p>
-          <dl class="regulatory-detail">
-            <dt>매칭 성분</dt><dd data-detail="match-name">—</dd>
-            <dt>매칭 방식</dt><dd data-detail="match-method">—</dd>
-            <dt>성분 레코드 갱신일</dt><dd data-detail="match-updated">미제공</dd>
-          </dl>
-        </section>
-        <section>
-          <p class="form-label">조회된 규제</p>
-          <dl class="regulatory-detail">
-            <dt>조회 상태</dt><dd data-detail="lookup-status"><span class="badge">미조회</span></dd>
-            <dt>응답 상태값</dt><dd data-detail="lookup-result-status">—</dd>
-            <dt>규제 구분</dt><dd data-detail="lookup-type">—</dd>
-            <dt>고시 성분명</dt><dd class="regulatory-detail__raw" data-detail="lookup-notice-name">—</dd>
-            <dt>규제 조건 원문</dt><dd class="regulatory-detail__raw" data-detail="lookup-raw">—</dd>
-            <dt>단서 조항</dt><dd class="regulatory-detail__raw" data-detail="lookup-proviso">—</dd>
-            <dt>실제 조회 범위</dt><dd data-detail="lookup-scope">—</dd>
-            <dt>API 안내 문구</dt><dd data-detail="lookup-note">—</dd>
-            <dt>성분 연결 근거</dt><dd data-detail="link-basis">해당 없음</dd>
-            <dt>관련 항목 (확인 필요)</dt><dd class="regulatory-detail__raw" data-detail="related">없음</dd>
-          </dl>
-        </section>
-        <section>
-          <p class="form-label">출처 · 날짜</p>
-          <dl class="regulatory-detail">
-            <dt>조회 출처</dt><dd data-detail="lookup-source">—</dd>
-            <dt>수집 시각 (DB 기록)</dt><dd data-detail="collected-at">해당 없음</dd>
-            <dt>출처</dt><dd class="regulatory-detail__raw" data-detail="source">미제공</dd>
-            <dt>제공원 고지</dt><dd class="regulatory-detail__raw" data-detail="disclaimer">미제공</dd>
-            <dt>데이터 확보 시각</dt><dd data-detail="acquired-at">—</dd>
-            <dt>갱신 안내</dt><dd data-detail="refresh-policy">—</dd>
-            <dt>원천 자료 갱신일</dt><dd data-detail="source-updated">미제공</dd>
-            <dt>법령 개정·적용일</dt><dd data-detail="law-dates">미제공</dd>
-            <dt>서비스 조회 시각</dt><dd data-detail="queried-at">—</dd>
-            <dt>자체 검증일</dt><dd data-detail="verified-at">미실시</dd>
-          </dl>
-          <p class="text-caption text-secondary mt-2">데이터 확보·수집 시각은 법령 개정일이나 최신성 보장을 의미하지 않습니다. 시간은 한국시간(KST)입니다.</p>
-        </section>
-        {# 제한사항·출처를 확인한 뒤 이동하는 공식 조회 버튼 — 공통 안내는 결과 아래에 이미 있으므로 버튼과 작은 도움말만(패널 없음).
-           위 ‘출처’ 항목의 공공데이터 안내 페이지 링크(data.go.kr)는 다른 주소라 그대로 둔다 #}
-        <section id="regulatory-detail-mfds">
-          <div class="regulatory-actions">{{ regulatory_mfds_button() }}</div>
-          <p class="regulatory-actions__help">식약처 페이지에서 성분명·영문명·CAS 번호로 직접 검색할 수 있어요.</p>
-        </section>
+      {# ① 성분과 조회 결과 #}
+      <div class="regulatory-detail-head">
+        <p class="regulatory-detail-head__kr" data-detail="head-kr">—</p>
+        <p class="regulatory-detail-head__inci" data-detail="head-inci">—</p>
+        <div class="regulatory-detail-head__meta" data-detail="head-meta">—</div>
+        <p class="regulatory-detail-head__amount" data-detail="head-amount" hidden></p>
+        <p class="regulatory-detail-head__reason" data-detail="head-reason" hidden></p>
+      </div>
+
+      {# 성분 연결 확인 필요(식약처 DB) — 사용자 판단에 필요한 후보는 접지 않는다. 자동 확정하지 않으며 현재 성분의 확정 규제가 아니다 #}
+      <div class="alert alert-warning" id="regulatory-detail-candidates" hidden>
+        <div>
+          <p class="alert-title">성분 연결 후보 — 확정 규제가 아니에요</p>
+          <ul class="regulatory-notes" id="regulatory-detail-candidates-list"></ul>
+        </div>
+      </div>
+
+      {# ② 주요 규제 조건 #}
+      <section class="regulatory-detail-section" id="regulatory-detail-conditions-section" hidden>
+        <h3 class="regulatory-detail-section__title">주요 규제 조건</h3>
+        <p class="regulatory-detail-section__note" id="regulatory-detail-conditions-note"></p>
+        <div class="regulatory-detail-conditions" id="regulatory-detail-conditions"></div>
+      </section>
+
+      {# ③ 관련 항목 — 건수·확인 필요 표시는 항상, 목록은 접힘 #}
+      <section class="regulatory-detail-section" id="regulatory-detail-related-section" hidden>
+        <details class="regulatory-fold">
+          {{ regulatory_fold_summary("관련 항목", "regulatory-detail-related-summary") }}
+          <div class="regulatory-fold__body">
+            <p class="text-caption text-secondary mb-2">이름을 포함하는 항목(염류·유도체·성분군·이명 등)이에요. 현재 성분의 확정 규제가 아니며 적용 여부는 직접 확인해 주세요.</p>
+            <ul class="regulatory-notes" id="regulatory-detail-related-list"></ul>
+          </div>
+        </details>
+      </section>
+
+      {# ④ 접힌 상세 #}
+      <div class="regulatory-detail-folds">
+        <details class="regulatory-fold">
+          {{ regulatory_fold_summary("입력·매칭 근거") }}
+          <div class="regulatory-fold__body">
+            <dl class="regulatory-detail-list regulatory-detail-list--2col">
+              <div><dt>입력 검색어</dt><dd data-detail="input-raw">—</dd></div>
+              <div><dt>조회 시장</dt><dd data-detail="input-market">—</dd></div>
+              <div><dt>매칭 성분 · code</dt><dd data-detail="match-name">—</dd></div>
+              <div><dt>매칭 방식</dt><dd data-detail="match-method">—</dd></div>
+              <div class="regulatory-detail-list__full"><dt>성분 연결 근거 (식약처 DB)</dt><dd data-detail="link-basis">해당 없음</dd></div>
+              <div class="regulatory-detail-list__full"><dt>성분 레코드 갱신일</dt><dd data-detail="match-updated">미제공</dd></div>
+              <div><dt>원문 위치</dt><dd data-detail="input-location">해당 없음</dd></div>
+            </dl>
+          </div>
+        </details>
+        <details class="regulatory-fold">
+          {{ regulatory_fold_summary("전체 원문·고시 정보") }}
+          <div class="regulatory-fold__body">
+            <dl class="regulatory-detail-list">
+              <div><dt>고시 성분명</dt><dd class="regulatory-detail__raw" data-detail="lookup-notice-name">—</dd></div>
+              <div><dt>규제 조건 전체 원문</dt><dd class="regulatory-detail__raw" data-detail="lookup-raw">—</dd></div>
+              <div><dt>단서 조항</dt><dd class="regulatory-detail__raw" data-detail="lookup-proviso">—</dd></div>
+              <div><dt>API 안내 문구</dt><dd class="regulatory-detail__raw" data-detail="lookup-note">—</dd></div>
+              <div><dt>응답 상태값</dt><dd data-detail="lookup-result-status">—</dd></div>
+              <div><dt>실제 조회 범위</dt><dd data-detail="lookup-scope">—</dd></div>
+            </dl>
+          </div>
+        </details>
+        <details class="regulatory-fold">
+          {{ regulatory_fold_summary("출처·날짜 상세") }}
+          <div class="regulatory-fold__body">
+            <dl class="regulatory-detail-list">
+              <div><dt>출처 설명</dt><dd class="regulatory-detail__raw" data-detail="source">미제공</dd></div>
+              <div><dt>제공원 고지</dt><dd class="regulatory-detail__raw" data-detail="disclaimer">미제공</dd></div>
+              <div><dt>갱신 방식</dt><dd data-detail="refresh-policy">—</dd></div>
+              <div data-detail-item="collected-at" hidden><dt>수집 시각 (DB 기록)</dt><dd data-detail="collected-at">해당 없음</dd></div>
+              <div data-detail-item="collection-run" hidden><dt>수집 실행 (DB 기록)</dt><dd data-detail="collection-run">해당 없음</dd></div>
+              <div><dt>원천 자료 갱신일</dt><dd data-detail="source-updated">미제공</dd></div>
+              <div><dt>법령 개정·적용일</dt><dd data-detail="law-dates">미제공</dd></div>
+              <div><dt>서비스 조회 시각</dt><dd data-detail="queried-at">—</dd></div>
+              <div><dt>자체 검증일</dt><dd data-detail="verified-at">미실시</dd></div>
+            </dl>
+            <p class="text-caption text-secondary mt-2">의미가 다른 날짜는 합치지 않았고, 제공되지 않는 값은 ‘미제공’·‘미실시’ 그대로 둬요. 시간은 한국시간(KST)이에요.</p>
+          </div>
+        </details>
+      </div>
+
+      {# ⑤ 간결한 출처 — 접힌 상세와 별개로 항상 표시 #}
+      <div class="regulatory-detail-foot">
+        <p class="regulatory-detail-foot__line"><span class="regulatory-detail-foot__label">규제 조회 출처</span><span data-detail="foot-source">—</span></p>
+        <p class="regulatory-detail-foot__line"><span class="regulatory-detail-foot__label">데이터 확보 시각</span><span data-detail="foot-acquired">—</span></p>
+        <p class="text-caption text-secondary">확보 시각은 법령 개정일이나 최신성 보장을 뜻하지 않아요.</p>
+      </div>
+
+      {# ⑥ 사전검토 안내 · 공식 페이지 도움말 (짧게 한 번) #}
+      <div class="regulatory-detail-notes">
+        <p class="regulatory-actions__note">해외영업 사전검토용 참고 정보예요. 최종 처방·수출 대상국 적합성은 연구·규제 담당자에게 확인해 주세요.</p>
+        <p class="regulatory-actions__help">식약처 페이지에서 성분명·영문명·CAS 번호로 직접 검색할 수 있어요.</p>
       </div>
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer regulatory-detail-footer">
+      {{ regulatory_mfds_button() }}
       <button type="button" class="btn btn-secondary" data-modal-close>닫기</button>
     </div>
   </div>

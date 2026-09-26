@@ -135,6 +135,43 @@
   var detailModal = $("regulatory-detail-modal");
   if (detailModal && detailModal.parentNode !== document.body) document.body.appendChild(detailModal);
 
+  /* 상세 Modal 접근성 보완 — 공통 common.js 는 열기·닫기·ESC·배경 클릭만 담당하므로, 이 Modal 에 한해
+     열 때 닫기 버튼으로 포커스 이동·스크롤 맨 위, Tab 순환, 닫은 뒤 연 버튼으로 포커스 복귀를 페이지 JS 에서 처리한다 (공통 파일 수정 없음).
+     공통 리스너가 먼저 등록되어 같은 클릭에서 Modal 이 열린 뒤 아래 리스너가 실행되지만, 안전하게 다음 틱에 포커스를 옮긴다 */
+  var detailOpener = null;
+  if (detailModal) {
+    document.addEventListener("click", function (e) {
+      var opener = e.target.closest('[data-modal-open="regulatory-detail-modal"]');
+      if (!opener) return;
+      detailOpener = opener;
+      setTimeout(function () {
+        if (!detailModal.classList.contains("is-open")) return;
+        var body = detailModal.querySelector(".modal-body");
+        if (body) body.scrollTop = 0;
+        var close = detailModal.querySelector(".modal-close");
+        if (close) close.focus();
+      }, 0);
+    });
+    detailModal.addEventListener("keydown", function (e) {
+      if (e.key !== "Tab") return;
+      var focusable = Array.prototype.filter.call(
+        detailModal.querySelectorAll('a[href], button:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'),
+        function (n) { return n.offsetParent !== null; });
+      if (!focusable.length) return;
+      var first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+    if (window.MutationObserver) {
+      new MutationObserver(function () {
+        if (detailModal.classList.contains("is-open") || !detailOpener) return;
+        var target = detailOpener;
+        detailOpener = null;
+        if (document.body.contains(target) && typeof target.focus === "function") target.focus();
+      }).observe(detailModal, { attributes: true, attributeFilter: ["class"] });
+    }
+  }
+
   /* ==========================================================================
      직접 검색: 상태
      ========================================================================== */
@@ -525,7 +562,8 @@
   function parseConditionText(raw) {
     var text = String(raw || "").replace(/\r\n/g, "\n").trim();
     if (!text || !/^\*\s/.test(text)) return null;
-    var chunks = text.split(/\n(?=\*\s)/);
+    // 블록 경계: 줄 첫머리의 "* " 와, 식약처 원문처럼 줄바꿈 없이 이어지는 " * 【태그】" (머리글이 앞 블록 값에 섞이지 않게)
+    var chunks = text.split(/\n(?=\*\s)|\s+(?=\*\s*【)/);
     var blocks = [];
     for (var i = 0; i < chunks.length; i++) {
       var body = chunks[i].replace(/^\*\s*/, "").trim();
@@ -556,43 +594,58 @@
     return wrap;
   }
 
-  function renderConditionBlock(block) {
+  var CONDITION_LANG_LABEL = { en: "영문 원문", ko: "한국어 제공 내용" };
+  var CONDITION_GROUP_TITLE = { product: "적용 제품·부위", concentration: "최대 농도", conditions: "사용 조건·주의 문구", other: "제한사항" };
+  var CIRCLED = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨"];
+
+  /* 블록 하나 = 한 언어의 원문 값. 표시용 머리글(【Restrictions】/【제한】)과 항목 제목과 겹치는 라벨은 반복하지 않고,
+     값(수치·단위·RE 같은 기준·예외 조건·경고 문구·(a)(b) 대응)은 그대로 둔다. ‘제한사항’(분류 불확실)은 원문 라벨을 값 앞에 남겨 내용을 잃지 않는다 */
+  function renderConditionBlock(block, keepLabel) {
     var node = el("div", "regulatory-cond-block");
-    var head = el("p", "regulatory-cond-block__label");
-    if (block.tag) head.appendChild(el("span", "badge regulatory-cond-block__tag", block.tag));
-    head.appendChild(document.createTextNode(block.label));
-    node.appendChild(head);
+    node.setAttribute("data-lang", block.lang);
+    // ‘제한사항’(분류 불확실)은 언어를 단정하지 않고 ‘원문’으로 표시
+    node.appendChild(el("p", "regulatory-cond-block__label", keepLabel ? "원문" : (CONDITION_LANG_LABEL[block.lang] || block.lang)));
+    var prefix = keepLabel && block.label ? block.label + " : " : "";
     if (block.items.length > 1) {
       var ul = el("ul", "regulatory-cond-items");
-      block.items.forEach(function (it) { ul.appendChild(el("li", null, it)); });
+      block.items.forEach(function (it, i) { ul.appendChild(el("li", null, (i === 0 ? prefix : "") + it)); });
       node.appendChild(ul);
     } else {
-      node.appendChild(el("p", "regulatory-cond-block__value", block.value));
+      node.appendChild(el("p", "regulatory-cond-block__value", prefix + block.value));
     }
     return node;
   }
 
-  var CONDITION_LANGS = [
-    { key: "en", title: "English", sub: "API 제공 영문" },
-    { key: "ko", title: "한국어", sub: "API 제공 한국어" },
-  ];
-
+  /* 항목(적용 제품·부위 → 최대 농도 → 사용 조건·주의 문구 → 제한사항)별로 묶고, 항목 안에서 영문 원문 위 · 한국어 제공 내용 아래.
+     분류가 불확실한 블록은 ‘제한사항’에 원문 라벨과 함께 누락 없이 둔다. 반환값: (a)(b) 대응 표기가 있는 항목 수 */
   function renderConditionGroups(blocks, container) {
-    // 적용 제품·부위 → 최대 농도 → 사용 조건·주의 문구 → 기타 원문 순. 분류 불확실 블록도 '기타 원문'으로 누락 없이 표시.
     var order = CONDITION_GROUPS.map(function (g) { return g.key; }).concat(["other"]);
-    var lettered = 0;
+    var lettered = 0, n = 0;
     order.forEach(function (key) {
       var inGroup = blocks.filter(function (b) { return b.group === key; });
       if (!inGroup.length) return;
-      var grp = el("div", "regulatory-cond-group");
-      var title = key === "other" ? "기타 원문" : CONDITION_GROUPS.filter(function (g) { return g.key === key; })[0].title;
-      grp.appendChild(el("p", "regulatory-cond-group__title", title));
+      var grp = el("section", "regulatory-cond-group");
+      grp.appendChild(el("h4", "regulatory-cond-group__title", (CIRCLED[n] ? CIRCLED[n] + " " : "") + CONDITION_GROUP_TITLE[key]));
+      n++;
       var hasLettered = false;
-      inGroup.forEach(function (b) { grp.appendChild(renderConditionBlock(b)); if (b.lettered) hasLettered = true; });
+      ["en", "ko"].forEach(function (lang) {
+        inGroup.filter(function (b) { return b.lang === lang; }).forEach(function (b) {
+          grp.appendChild(renderConditionBlock(b, key === "other"));
+          if (b.lettered) hasLettered = true;
+        });
+      });
       if (hasLettered) lettered++;
       container.appendChild(grp);
     });
     return lettered;
+  }
+
+  /* 구조를 확실히 나누기 어려운 원문은 ‘제한사항’ 항목에 그대로 */
+  function renderRawGroup(raw, note) {
+    var grp = el("section", "regulatory-cond-group");
+    grp.appendChild(el("h4", "regulatory-cond-group__title", CONDITION_GROUP_TITLE.other));
+    grp.appendChild(renderRawText(raw, note));
+    return grp;
   }
 
   function renderConditionEntry(entry, index, total) {
@@ -611,29 +664,18 @@
     } else {
       var blocks = parseConditionText(raw);
       if (!blocks) {
-        wrap.appendChild(renderRawText(raw, "원문 구분이 확실하지 않아 그대로 표시했어요."));
+        wrap.appendChild(renderRawGroup(raw, "원문 구분이 확실하지 않아 그대로 표시했어요."));
       } else {
-        // 영문 전체가 위, 한국어 전체가 아래. 한 언어만 있으면 그 언어만 표시. 문장은 재배치만 하고 번역·요약하지 않는다.
-        var letteredMax = 0;
-        CONDITION_LANGS.forEach(function (lang) {
-          var inLang = blocks.filter(function (b) { return b.lang === lang.key; });
-          if (!inLang.length) return;
-          var section = el("section", "regulatory-cond-lang");
-          section.setAttribute("data-lang", lang.key);
-          var h = el("h4", "regulatory-cond-lang__title", lang.title);
-          h.appendChild(el("span", "regulatory-cond-lang__sub", lang.sub));
-          section.appendChild(h);
-          letteredMax = Math.max(letteredMax, renderConditionGroups(inLang, section));
-          wrap.appendChild(section);
-        });
-        if (letteredMax > 1) {
-          wrap.appendChild(el("p", "text-caption text-secondary regulatory-cond-note", "(a)·(b) 같은 표기는 원문 그대로이며, 적용 제품과 최대 농도 등 항목 사이의 대응 관계를 나타내요."));
+        // 항목별로 묶되 문장은 재배치만 하고 번역·요약하지 않는다. 최대 농도는 짝이 되는 적용 제품 조건과 함께 읽도록 (a)(b) 표기를 유지한다.
+        var lettered = renderConditionGroups(blocks, wrap);
+        if (lettered > 1) {
+          wrap.appendChild(el("p", "text-caption text-secondary regulatory-cond-note", "(a)·(b) 같은 표기는 원문 그대로이며 적용 제품과 최대 농도 등 항목 사이의 대응 관계예요. 최대 농도는 짝이 되는 제품 조건과 함께 읽어 주세요."));
         }
       }
     }
     if (entry.proviso) {
-      var pv = el("div", "regulatory-cond-group");
-      pv.appendChild(el("p", "regulatory-cond-group__title", "단서 조항 (원문)"));
+      var pv = el("section", "regulatory-cond-group");
+      pv.appendChild(el("h4", "regulatory-cond-group__title", "단서 조항 (원문)"));
       pv.appendChild(renderRawText(entry.proviso));
       wrap.appendChild(pv);
     }
@@ -641,21 +683,21 @@
   }
 
   /* 규제 조건을 지정한 컨테이너에 렌더링 (직접 검색 카드와 상세 Modal 이 공유) */
-  function renderConditionsInto(res, section, body, note) {
+  function renderConditionsInto(res, section, body, note, rawHint) {
     if (!section || !body) return;
     body.innerHTML = "";
     var entries = (res && res.entries) || [];
     if (!entries.length) { show(section, false); return; }
     entries.forEach(function (e, i) { body.appendChild(renderConditionEntry(e, i, entries.length)); });
     var structured = entries.some(function (e) { return !!parseConditionText(e.limit_condition); });
-    setText(note, structured
-      ? "API 원문을 언어별·항목별로 나눠 표시했어요. 번역·요약 없이 수치·단위·조건은 원문 그대로예요."
-      : "API 원문 그대로예요.");
+    setText(note, (structured
+      ? "원문을 항목별로 묶어 영문 원문 위·한국어 제공 내용 아래로 표시했어요. 번역·요약 없이 수치·단위·조건은 원문 그대로이며 ‘Restrictions/제한’ 머리글만 생략했어요."
+      : "원문 그대로예요.") + (rawHint ? " " + rawHint : ""));
     show(section, true);
   }
 
   function renderConditions(res) {
-    renderConditionsInto(res, $("regulatory-single-conditions"), $("regulatory-single-conditions-body"), $("regulatory-single-conditions-note"));
+    renderConditionsInto(res, $("regulatory-single-conditions"), $("regulatory-single-conditions-body"), $("regulatory-single-conditions-note"), "전체 원문은 ‘규제 원문·출처 보기’에서 볼 수 있어요.");
   }
 
   /* ==========================================================================
@@ -777,8 +819,10 @@
     if (!res) return "—";
     var code = (res.country && res.country.code) || ctx.marketCode;
     var resolved = res.country && res.country.resolved;
+    var listed = res.markets_listed && res.markets_listed.length ? res.markets_listed.join(", ") : "";
+    // 등재 시장 목록은 응답을 준 출처의 성분 기준 정보다. K뷰티 API 목록을 식약처 DB 의 제공 범위처럼 보이지 않게 출처를 함께 적는다
     return "시장 코드 " + code + (resolved ? " (" + resolved + ")" : "") +
-      (res.markets_listed && res.markets_listed.length ? " · API에 등재된 시장: " + res.markets_listed.join(", ") : "");
+      (listed ? (res.source === "mfds" ? " · 식약처 DB 에 이 성분 레코드가 있는 국가: " : " · K뷰티 API 에 이 성분이 등재된 시장: ") + listed : "");
   }
 
   function joinEntries(res, key) {
@@ -786,61 +830,132 @@
     return res.entries.map(function (e) { return e[key] || ""; }).filter(Boolean).join("\n\n");
   }
 
+  function detailNode(key) { return document.querySelector('#regulatory-detail-modal [data-detail="' + key + '"]'); }
+  function detailItem(key, on) { show(document.querySelector('#regulatory-detail-modal [data-detail-item="' + key + '"]'), on); }
+
+  /* 출처 설명 — 같은 공공데이터 안내 주소가 원시 URL 과 링크로 두 번 보이지 않게 링크 하나로 정리한다. 안내 페이지이며 개별 법령 원문 링크가 아님을 유지 */
+  function sourceDescriptionNode(res) {
+    var node = el("span");
+    if (!res || !res.data_source) { node.textContent = "미제공"; return node; }
+    var text = String(res.data_source);
+    if (res.source === "mfds" && res.source_page) {
+      var cut = text.indexOf("안내 페이지:");
+      if (cut >= 0 && text.indexOf(res.source_page) >= 0) text = text.slice(0, cut).trim();
+      node.appendChild(document.createTextNode(text + " "));
+      var link = el("a", null, "공공데이터포털 안내 페이지"); link.href = res.source_page; link.target = "_blank"; link.rel = "noopener noreferrer";
+      node.appendChild(link);
+      node.appendChild(document.createTextNode(" (공공데이터 안내 페이지이며 개별 법령 원문 링크가 아니에요)"));
+    } else {
+      node.textContent = text;
+    }
+    return node;
+  }
+
+  function collectionRunText(res) {
+    var run = res && res.collection_run;
+    if (!run) return "";
+    return "실행 #" + run.run_id + " · 상태 " + (run.status || "—") + " · " + (run.records != null ? run.records + "건" : "건수 미기록") +
+      " · 시작 " + formatKst(run.started_at) + " · 완료 " + formatKst(run.finished_at);
+  }
+
+  /* 다른 성분을 열 때 이전 성분의 펼침·스크롤 상태가 남지 않게 초기화 */
+  function resetDetailModalView() {
+    if (!detailModal) return;
+    Array.prototype.forEach.call(detailModal.querySelectorAll("details"), function (d) { d.open = false; });
+    var body = detailModal.querySelector(".modal-body");
+    if (body) body.scrollTop = 0;
+  }
+
+  /* 상세 Modal 채우기 — 위: 성분·시장·조회 상태·규제 구분·문서 함량(참고) / 본문: 주요 규제 조건 / 관련 항목(건수) / 접힌 상세 3종 / 간결한 출처.
+     API 호출·매칭·판정 로직 없이 응답 값을 배치만 한다. ‘규제 정보 조회됨’은 허용·적합 판정이 아님을 함께 적는다 */
   function fillModal(res, ctx, err) {
     var set = function (key, value) {
-      var node = document.querySelector('#regulatory-detail-modal [data-detail="' + key + '"]');
+      var node = detailNode(key);
       if (!node) return;
       if (value && value.nodeType) replaceChildren(node, value);
       else setText(node, value);
     };
-    setText($("regulatory-detail-title"), "성분 상세 · " + ingredientFull(res, ctx));
+    var sel = ctx.selected || {};
+    var entries = (res && res.entries) || [];
+    var types = [];
+    entries.forEach(function (e) { var t = e.regulate_type || "구분 미제공"; if (types.indexOf(t) < 0) types.push(t); });
+
+    /* ① 성분과 조회 결과 */
+    setText($("regulatory-detail-title"), "성분 상세");
+    set("head-kr", ingredientKr(res, ctx));
+    set("head-inci", ingredientInci(res, ctx) || "영문명 미제공");
+    var meta = el("span", "regulatory-detail-head__meta-inner");
+    meta.appendChild(el("span", "regulatory-detail-head__market", ctx.marketLabel || "—"));
+    meta.appendChild(el("span", "regulatory-detail-head__sep", "/"));
+    meta.appendChild(res ? lookupBadge(res.lookup_status, res) : errorBadge(err));
+    if (types.length) {
+      meta.appendChild(el("span", "regulatory-detail-head__sep", "/"));
+      meta.appendChild(el("span", "regulatory-detail-head__type", types.join(", ")));
+    }
+    set("head-meta", meta);
+    var amountNode = detailNode("head-amount");
+    if (ctx.amountRef) setText(amountNode, "문서 함량: " + ctx.amountRef + " · 적합 여부는 판정하지 않아요.");
+    show(amountNode, !!ctx.amountRef);
+    var reason = "";
+    if (err) reason = (err.message || "요청에 실패했어요.") + (err.kind ? " (오류 종류: " + err.kind + (err.http_status ? ", 외부 API HTTP " + err.http_status : "") + ")" : "");
+    else if (res && res.lookup_status === "found") reason = "규제 항목 " + entries.length + "건" + (res.source === "mfds" ? " (조건별 레코드 모두 표시)" : "") + " · 조회됨은 사용 허용·적합 판정이 아니에요.";
+    else if (res && res.lookup_status === "hold") reason = "응답 상태값 ‘" + (res.result_status || "—") + "’은 확인된 값이 아니에요. 임의로 해석하지 않았어요.";
+    else if (res) reason = noDataReason(res);
+    var reasonNode = detailNode("head-reason");
+    setText(reasonNode, reason);
+    show(reasonNode, !!reason);
+
+    /* 성분 연결 후보 (식약처 DB 매칭 미확정) — 접지 않고 표시 */
+    var candCount = candidateList(res, $("regulatory-detail-candidates-list"));
+    show($("regulatory-detail-candidates"), !!(res && res.lookup_status === "link_required" && candCount));
+
+    /* ② 주요 규제 조건 */
+    renderConditionsInto(res, $("regulatory-detail-conditions-section"), $("regulatory-detail-conditions"), $("regulatory-detail-conditions-note"), "전체 원문은 아래 ‘전체 원문·고시 정보’에서 볼 수 있어요.");
+
+    /* ③ 관련 항목 — 건수·확인 필요는 항상 보이고 목록만 접힘 */
+    var relCount = relatedList(res, $("regulatory-detail-related-list"));
+    setText($("regulatory-detail-related-summary"), "관련 항목 " + relCount + "건 · 적용 여부 확인 필요");
+    show($("regulatory-detail-related-section"), relCount > 0);
+
+    /* ④-1 입력·매칭 근거 */
     set("input-raw", ctx.inputRaw);
     set("input-market", ctx.marketLabel);
-    set("input-amount", ctx.amountRef ? ctx.amountRef + " — 문서에서 읽은 참고값이에요. 적합 여부는 판정하지 않아요." : "해당 없음");
-    set("input-location", ctx.location || "해당 없음");
-    renderConditionsInto(res, $("regulatory-detail-conditions-section"), $("regulatory-detail-conditions"), $("regulatory-detail-conditions-note"));
-    var sel = ctx.selected || {};
-    set("match-name", ingredientFull(res, ctx) + " · code " + sel.code);
+    set("match-name", sel.code != null ? ingredientFull(res, ctx) + " · code " + sel.code : "매칭 전");
     set("match-method", ctx.matchMethod || "—");
-    set("match-updated", sel.record_updated_at ? formatKst(sel.record_updated_at) + " (API 레코드 updated_at — 규제 자료 갱신일 아님)" : "미제공");
+    set("link-basis", res && res.source === "mfds"
+      ? ((res.link_basis && res.link_basis.length ? res.link_basis.join("·") : "—") + (res.matched_identity ? " → " + res.matched_identity.std_name + (res.matched_identity.eng_name ? " (" + res.matched_identity.eng_name + ")" : "") : "") + (res.link_conflict ? " · " + res.link_conflict : ""))
+      : (res ? "해당 없음 (K뷰티 API 는 성분 code 로 조회)" : "해당 없음"));
+    set("match-updated", sel.record_updated_at ? formatKst(sel.record_updated_at) + " — API 성분 레코드의 updated_at 이며 규제 자료 갱신일이 아니에요." : "미제공");
+    set("input-location", ctx.location || "해당 없음");
 
-    set("lookup-source", sourceText(res) + (err && err.source === "mfds" ? "식약처 수집 DB" : ""));
-    set("collected-at", res && res.source === "mfds" ? (res.collected_at ? formatKst(res.collected_at) + " (원천 갱신일 아님)" : "수집 시각 미기록") : "해당 없음");
-    set("acquired-at", acquiredText(res));
-    set("refresh-policy", refreshText(res) + (res && res.refresh_basis ? " — " + res.refresh_basis : ""));
-    set("law-dates", res && res.law_dates ? res.law_dates : "미제공");
-    set("link-basis", res && res.source === "mfds" ? ((res.link_basis && res.link_basis.length ? res.link_basis.join("·") : "—") + (res.matched_identity ? " → " + res.matched_identity.std_name + (res.matched_identity.eng_name ? " (" + res.matched_identity.eng_name + ")" : "") : "") + (res.link_conflict ? " · " + res.link_conflict : "")) : "해당 없음");
-    var relNode = el("span");
-    var relUl = el("ul", "regulatory-notes");
-    var relCount = relatedList(res, relUl);
-    if (relCount) relNode.appendChild(relUl); else relNode.appendChild(document.createTextNode("없음"));
-    set("related", relNode);
-    var statusNode = el("span");
-    statusNode.appendChild(res ? lookupBadge(res.lookup_status, res) : errorBadge(err));
-    if (err && err.message) statusNode.appendChild(document.createTextNode(" " + err.message));
-    if (res && noDataReason(res)) statusNode.appendChild(el("p", "text-caption text-secondary", noDataReason(res)));
-    set("lookup-status", statusNode);
-    set("lookup-result-status", res ? res.result_status : (err && err.kind ? "오류 종류: " + err.kind : "—"));
-    set("lookup-type", joinEntries(res, "regulate_type") || (res ? "미제공" : "—"));
+    /* ④-2 전체 원문·고시 정보 */
     set("lookup-notice-name", joinEntries(res, "notice_ingr_name") || (res ? "미제공" : "—"));
     set("lookup-raw", joinEntries(res, "limit_condition") || (res && res.lookup_status === "found" ? "미제공" : (res ? "규제 데이터 없음 (응답 상태값: " + (res.result_status || "—") + ")" : "—")));
     set("lookup-proviso", joinEntries(res, "proviso") || (res ? "미제공" : "—"));
-    set("lookup-scope", scopeText(res, ctx));
     set("lookup-note", res && res.result_note ? res.result_note : "없음");
+    set("lookup-result-status", res ? res.result_status : (err && err.kind ? "오류 종류: " + err.kind : "—"));
+    set("lookup-scope", scopeText(res, ctx));
 
-    var srcNode = el("span");
-    srcNode.appendChild(document.createTextNode(res && res.data_source ? res.data_source : "미제공"));
-    if (res && res.source === "mfds" && res.source_page) {
-      srcNode.appendChild(document.createTextNode(" "));
-      var link = el("a", null, "식약처 공공데이터 안내 페이지"); link.href = res.source_page; link.target = "_blank"; link.rel = "noopener noreferrer";
-      srcNode.appendChild(link);
-      srcNode.appendChild(document.createTextNode(" (개별 법령 원문 링크 아님)"));
-    }
-    set("source", srcNode);
+    /* ④-3 출처·날짜 상세 — 의미가 다른 날짜는 합치지 않고, 같은 수집 완료 기록을 가리키는 수집 시각은 아래 확보 시각 한 번만 */
+    set("source", sourceDescriptionNode(res));
     set("disclaimer", res && res.disclaimer ? res.disclaimer : "미제공");
+    set("refresh-policy", res ? refreshText(res) + (res.refresh_basis ? " — " + res.refresh_basis : "") : "—");
+    var collectedDiffers = !!(res && res.source === "mfds" && res.collected_at && res.collected_at !== res.acquired_at);
+    detailItem("collected-at", collectedDiffers);
+    set("collected-at", collectedDiffers ? formatKst(res.collected_at) + " (수집 완료 시각, DB 기록 — 확보 시각과 다른 값)" : "해당 없음");
+    var runText = collectionRunText(res);
+    detailItem("collection-run", !!runText);
+    set("collection-run", runText || "해당 없음");
     set("source-updated", res && res.source_updated_at ? res.source_updated_at : "미제공");
-    set("queried-at", (res && res.queried_at ? formatKst(res.queried_at) : "—") + (res && res.source === "mfds" ? " (DB 를 읽은 시각)" : ""));
+    set("law-dates", res && res.law_dates ? res.law_dates : "미제공");
+    set("queried-at", (res && res.queried_at ? formatKst(res.queried_at) : "—") + (res && res.source === "mfds" ? " (DB 를 읽은 시각)" : (res ? " (외부 API 응답을 받은 시각)" : "")));
     set("verified-at", "미실시");
+
+    /* ⑤ 간결한 출처 */
+    set("foot-source", res ? sourceText(res) : (SOURCE_LABEL[ctx.source] || (err && err.source === "mfds" ? SOURCE_LABEL.mfds : "—")));
+    set("foot-acquired", acquiredText(res));
+
+    resetDetailModalView();
   }
 
   function renderSingle(res, ctx) {
