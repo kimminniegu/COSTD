@@ -247,28 +247,18 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 
 /* 역제안 ① 상단 — 목표가 입력 | 종합 판정, 아래 게이지 */
 /* 역제안 상단: [입력 | 판정] 두 칸 높이를 맞추고, 아래 게이지는 제목·범례 한 줄 → 막대 → 안내 순서 */
-/* [입력 (라벨 | 입력칸) 2행] [판정 박스] — 입력 묶음은 남은 폭을 채우고, 판정 박스는 내용 폭 그대로(Badge·설명 한 줄).
-   둘이 한 줄에 안 들어가면 판정 박스가 입력 아래 줄로 */
-.margin-rtop__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-4); }
-.margin-rtop__inputs { flex: 1 1 300px; display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: var(--space-2) var(--space-3); }
+/* [입력 (라벨 | 입력칸) 2행] [판정 박스] — 넓은 화면에서 입력 : 판정 = 4 : 6, 판정 박스 내용은 가운데 정렬·길면 줄바꿈.
+   판정 박스가 260px 보다 좁아지면 입력 아래 줄로 (입력칸은 최대 200px) */
+.margin-rtop__row { display: flex; flex-wrap: wrap; align-items: stretch; gap: var(--space-3) var(--space-5); }
+.margin-rtop__inputs { flex: 4 1 0; display: grid; grid-template-columns: max-content minmax(96px, 200px); align-content: center; align-items: center; gap: var(--space-3); }
 .margin-rtop__field { display: contents; }
-.margin-rtop__field .form-label { margin: 0; white-space: nowrap; }
-.margin-rtop .margin-verdict { flex: none; max-width: 100%; justify-content: flex-start; gap: var(--space-1); padding: var(--space-3) var(--space-4); }
+.margin-rtop__field .form-label { margin: 0; font-size: var(--font-size-sub); line-height: 1.35; white-space: nowrap; }
+.margin-rtop .margin-verdict { flex: 6 1 0; min-width: 260px; justify-content: center; align-items: center; text-align: center; gap: var(--space-1); padding: var(--space-3) var(--space-4); }
+.margin-rtop .margin-verdict .margin-badges, .margin-rtop .margin-verdict .margin-rsum__nums { justify-content: center; }
 .margin-rtop .margin-badges { gap: var(--space-1); }
-/* 중간 폭 카드(안쪽 620~759px, 화면 약 1440px): 같은 구조를 한 줄에 두려고 긴 라벨을 두 줄로, 입력칸을 좁게.
-   더 좁으면(620px 미만) 판정 박스가 입력 아래 줄로 */
-.margin-rtop { container: rtop / inline-size; }
-.margin-rtop__br { display: none; }
-@container rtop (min-width: 620px) and (max-width: 759.98px) {
-  .margin-rtop__row { flex-wrap: nowrap; }
-  .margin-rtop__inputs { flex: 1 1 0; min-width: 0; gap: var(--space-2); }
-  .margin-rtop__br { display: inline; }
-  .margin-rtop__field .form-control { padding: 0 24px 0 var(--space-2); }   /* 좁은 입력칸에서 숫자가 잘리지 않게 */
-  .margin-rtop__field .margin-field__unit { right: 10px; }
-}
 .margin-rtop .margin-rsum__nums { column-gap: var(--space-2); }
-.margin-rtop .margin-verdict__title, .margin-rtop .margin-rsum__gap { font-size: var(--font-size-sub); }
-.margin-rtop .margin-verdict__desc { font-size: var(--font-size-caption); line-height: 1.45; }
+.margin-rtop .margin-verdict__title, .margin-rtop .margin-rsum__gap { font-size: var(--font-size-body); }
+.margin-rtop .margin-verdict__desc { font-size: var(--font-size-label); line-height: 1.45; text-wrap: balance; }   /* 줄바꿈 시 한 단어만 남지 않게 */
 .margin-rtop__gauge { margin-top: var(--space-5); padding-top: var(--space-5); border-top: var(--border-default); }   /* 구분선 위아래 20px 같게 */
 .margin-rtop__gauge-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); }
 .margin-rtop__gauge-title { font-size: var(--font-size-label); font-weight: var(--font-weight-bold); color: var(--color-text-primary); }
