@@ -268,6 +268,7 @@
 .home-list__empty { padding: var(--space-8) 0; text-align: center; font-size: var(--font-size-label); color: var(--color-text-placeholder); }
 .home-news .home-list__title, .home-reg .home-list__title { font-size: var(--font-size-sub); }
 .home-news .home-list__link, .home-reg .home-list__link { padding: var(--space-2) 0; }
+.home-news .home-list__title { -webkit-line-clamp: 1; }   /* 뉴스 제목은 한 줄로 고정해 항목 높이를 일정하게 → 카드 아래 빈 공간 없이 4건 표시 */
 .home-list--modal { overflow: visible; }
 
 .home-live { height: 22px; padding: 0 var(--space-2); font-size: 0.6875rem; gap: 5px; }
