@@ -1,4 +1,4 @@
-/* 원가 경쟁력 및 마진 시뮬레이션 전용 JavaScript (담당자 C)
+/* 원가·마진 시뮬레이션 전용 JavaScript (담당자 C)
    이 페이지에서만 필요한 로직만 작성합니다.
    다른 페이지의 JS를 수정하거나 의존하지 않습니다. 공통 동작은 src/common/common.js 참고.
    - 화면 Tab(견적 계산 / 역제안 / 수량별 / 환율)과 상세 Tab 전환은 common.js 의 data-tab-target 이 처리합니다.
