@@ -77,7 +77,12 @@
           </div>
           <div class="login-form__row">
             <label class="form-check"><input type="checkbox" name="remember" value="1"> 로그인 상태 유지</label>
-            <span class="text-caption" title="준비 중인 기능이에요">비밀번호 찾기</span>
+            <button class="login-form__link" type="button" id="login-forgot" aria-controls="login-forgot-note" aria-expanded="false">비밀번호 찾기</button>
+          </div>
+          {# 비밀번호 찾기: 자동 재설정 기능이 없으므로 PM 문의 안내만 표시 #}
+          <div class="alert alert-info login-form__note" id="login-forgot-note" role="status" hidden>
+            <span class="alert-title">비밀번호 찾기</span>
+            <span>비밀번호 재설정은 PM에게 문의해 주세요. 확인 후 새 비밀번호를 안내해 드려요.</span>
           </div>
         </div>
 
@@ -91,5 +96,16 @@
       </form>
     </main>
   </div>
+  <script>
+    (function () {
+      var btn = document.getElementById("login-forgot"), note = document.getElementById("login-forgot-note");
+      if (!btn || !note) return;
+      btn.addEventListener("click", function () {
+        var open = note.hidden;
+        note.hidden = !open;
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+    })();
+  </script>
 </body>
 </html>

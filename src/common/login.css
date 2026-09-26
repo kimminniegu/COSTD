@@ -49,6 +49,10 @@
 .login-form__title { font-size: 1.875rem; font-weight: var(--font-weight-extrabold); letter-spacing: -0.8px; }
 .login-form__desc { font-size: var(--font-size-body); color: var(--color-text-secondary); }
 .login-form__row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.login-form__link { padding: 0; border: 0; background: none; font: inherit; font-size: var(--font-size-caption); color: var(--color-text-secondary); cursor: pointer; transition: color var(--transition-base); }
+.login-form__link:hover, .login-form__link[aria-expanded="true"] { color: var(--color-primary); }
+.login-form__note { margin-top: var(--space-2); }
+.login-form__note[hidden] { display: none; }   /* 공통 .alert 의 display:flex 보다 우선 */
 .login-form__foot { text-align: center; font-size: var(--font-size-sub); color: var(--color-text-secondary); }
 .login-form__foot strong { color: var(--color-text-body); }
 .login-form__hint {

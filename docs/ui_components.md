@@ -55,7 +55,7 @@
 - **상태 (≤1024px)**: 숨김 → `[data-sidebar-toggle]` 클릭 시 `.is-open` (Drawer, 항상 펼친 모양). 배경 클릭 / ESC로 닫힘. 접기 버튼은 표시되지 않습니다.
 - 사용자 영역(`.app-user`): 아바타 + 이름/소속 버튼(`.app-user__main`, `data-modal-open="app-user-modal"`) + 로그아웃 링크(`.app-user__logout`, `/logout`). 접힘 상태에서는 아바타와 로그아웃 아이콘만 세로로 표시됩니다.
 - 내 계정 모달(`#app-user-modal`, `base.html`): 아바타·이름 클릭 시 열림. ① 로그인 정보 — 이메일·소속·로그인 시각·로그인 유지 여부(세션 `current_user`의 `logged_in_at`, `remember`), ② 회사소개 — COSMOA 소개 문단과 기능 4가지(`.app-about__features`). Footer에 로그아웃·닫기. Class 접두사 `app-about-`.
-- 로그인 화면은 공통 Layout 을 쓰지 않는 독립 화면입니다: `src/common/login.html` + `login.css` (Class 접두사 `login-`). 좌측 소개 패널(`--color-background`) + 우측 400px 폼, ≤1024px 에서 1열.
+- 로그인 화면은 공통 Layout 을 쓰지 않는 독립 화면입니다: `src/common/login.html` + `login.css` (Class 접두사 `login-`). 좌측 소개 패널(`--color-background`) + 우측 400px 폼, ≤1024px 에서 1열. "비밀번호 찾기"(`.login-form__link`)를 누르면 PM 문의 안내(`alert-info`, `#login-forgot-note`)가 폼 안에 펼쳐집니다(재설정 기능 없음).
 
 ## 4. Button
 
