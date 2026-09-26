@@ -484,3 +484,18 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
   #margin-q-place { grid-column: 1 / -1; }
   .margin-sec-title .btn { margin-left: 0; }
 }
+
+/* ── 한 화면 맞춤 (2026-09-26): 기본 상태(1440×900)에서 페이지 스크롤 없이 입력 Card·견적 결과가 모두 보이도록 ── */
+.is-margin .container { padding-top: var(--space-6); padding-bottom: var(--space-4); }
+.is-margin .app-footer { display: none; }                                   /* 홈과 동일하게 Footer 숨김 */
+.is-margin .page-header { margin-bottom: var(--space-3); }
+.is-margin .margin-layout { margin-bottom: 0; }
+.is-margin .margin-results > .tab-panel { padding-top: var(--space-3); }
+.is-margin .margin-stack { gap: var(--space-3); }
+.is-margin .margin-stack .card-body { padding: var(--space-5) var(--space-6); }
+.is-margin .margin-hero { margin-bottom: var(--space-4); }
+.is-margin .margin-stats { margin-top: var(--space-4); }
+.is-margin .margin-stats .stat-tile { padding: var(--space-3) var(--space-4); }
+.is-margin #margin-sub-items .table td { padding-top: var(--space-2); padding-bottom: var(--space-2); }
+.is-margin #margin-sub-items .table th { padding-top: var(--space-2); padding-bottom: var(--space-2); }
+.is-margin .margin-inputs { top: var(--space-6); max-height: calc(100vh - var(--space-10)); }
