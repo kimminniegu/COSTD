@@ -10,12 +10,13 @@
 .chatbot__launcher {
   display: inline-flex; align-items: center; justify-content: center;
   width: 56px; height: 56px; border: 0; border-radius: var(--radius-pill);
-  background: var(--color-primary); color: var(--color-text-inverse);
+  background: var(--color-surface); color: var(--color-text-body);   /* 로고 이미지가 잘 보이도록 흰 배경 (.btn-surface 톤) */
   box-shadow: var(--shadow-overlay); cursor: pointer;
   transition: background var(--transition-base), transform 0.1s ease, box-shadow var(--transition-base);
 }
-.chatbot__launcher:hover { background: var(--color-primary-hover); box-shadow: 0 6px 16px rgba(27, 100, 218, 0.28); }
+.chatbot__launcher:hover { color: var(--color-text-primary); box-shadow: 0 6px 16px rgba(27, 100, 218, 0.24), var(--shadow-overlay); }
 .chatbot__launcher:active { transform: scale(0.95); }
+.chatbot__launcher-open { display: block; width: 36px; height: 36px; object-fit: contain; }
 .chatbot__launcher-close { display: none; }
 .chatbot.is-open .chatbot__launcher-open { display: none; }
 .chatbot.is-open .chatbot__launcher-close { display: block; }
@@ -33,7 +34,8 @@
 @keyframes chatbot-enter { from { opacity: 0; transform: translateY(12px) scale(0.98); } }
 
 .chatbot__head { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-5) var(--space-5) var(--space-4); border-bottom: var(--border-default); }
-.chatbot__avatar { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: var(--radius-sm); background: var(--color-primary-soft); color: var(--color-primary); flex: 0 0 auto; }
+.chatbot__avatar { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: var(--radius-sm); background: var(--color-surface-muted); flex: 0 0 auto; }
+.chatbot__avatar img { width: 32px; height: 32px; object-fit: contain; }
 .chatbot__title-wrap { flex: 1; min-width: 0; }
 .chatbot__title { margin: 0; font-size: var(--font-size-body); font-weight: var(--font-weight-bold); color: var(--color-text-primary); line-height: 1.3; }
 .chatbot__sub { margin: 0; font-size: var(--font-size-caption); color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
