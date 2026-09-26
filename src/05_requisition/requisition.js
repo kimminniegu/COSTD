@@ -183,6 +183,7 @@
     $("secondary").textContent = state === "result" ? "수정" : state === "edit" ? "수정 취소" : "작성 취소";
     $("primary").textContent = state === "result" ? "인쇄 / PDF 저장" : state === "edit" ? "수정 완료" : "작성 완료";
     $("primary").hidden = false;
+    $("erp").hidden = state !== "result";
     $("pdf-help").hidden = editing();
     updateSummary();
   }
@@ -409,6 +410,9 @@
     $("file").value = "";
     transition("upload");
   });
+  $("erp").addEventListener("click", () => {
+    alert("ERP 연동 기능은 현재 개발 중입니다.");
+  });
   $("document").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (state === "result") { await printPDF(); return; }
@@ -515,19 +519,25 @@
       const prohibitedIngredients = [
           data.buyer_prohibited_ingredients.length ? "바이어 지정: " + data.buyer_prohibited_ingredients.join(", ") : "",
           data.regulatory_restricted_ingredients.length ? "규제 검토 대상: " + data.regulatory_restricted_ingredients.join(", ") : ""
-        ].filter(Boolean).join("\n") || pdfValue("buyer_prohibited_ingredients");
+        ].filter(Boolean).join("\n");
       const issuedDate = [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join(".");
       const row = (label, value) => '<tr><th scope="row">' + escape(label) + '</th><td>' + escape(value) + '</td></tr>';
+      const printableSection = ([title, fields]) => {
+        const rows = fields.map(([key, label]) => [label, key === "buyer_prohibited_ingredients" ? prohibitedIngredients : fieldValue(data, key)])
+          .filter(([, value]) => filled(value));
+        return rows.length ? '<section><h2>' + escape(title) + '</h2><table class="requirements"><colgroup><col class="label-column"><col></colgroup><thead><tr><th scope="col">항목</th><th scope="col">요청 내용</th></tr></thead><tbody>' +
+          rows.map(([label, value]) => row(label, value)).join('') + '</tbody></table></section>' : '';
+      };
+      const printableReferences = referenceMarkup(data, true);
+      const printableReferenceNotes = filled(data.reference_notes) ? '<table class="requirements"><tbody>' + row("기타사항", data.reference_notes) + '</tbody></table>' : '';
+      const referenceSection = printableReferences || printableReferenceNotes ? '<section class="references"><h2>05 참고자료</h2>' + printableReferences + printableReferenceNotes + '</section>' : '';
       const printHtml = '<main><header class="document-header"><div class="brand">COSTD <span>COSMOA</span></div>' +
         '<p class="document-type">연구소 전달용</p><h1>제품 개발 요청서</h1><p class="subtitle">PRODUCT DEVELOPMENT REQUEST</p></header>' +
         '<table class="document-meta"><caption>문서 정보</caption><tbody>' +
         '<tr><th scope="row">문서 ID</th><td colspan="3">' + escape(data.document_id || "미지정") + '</td></tr>' +
         '<tr><th scope="row">출력일</th><td colspan="3">' + issuedDate + '</td></tr>' +
         '<tr><th scope="row">수신</th><td>연구소</td><th scope="row">작성 방식</th><td>' + escape(methods[data.creation_method] || "미지정") + '</td></tr></tbody></table>' +
-        sections.map(([title, fields], index) => '<section><h2>' + escape(title) + '</h2><table class="requirements"><colgroup><col class="label-column"><col></colgroup><thead><tr><th scope="col">항목</th><th scope="col">요청 내용</th></tr></thead><tbody>' +
-          fields.map(([key, label]) => row(label, key === "buyer_prohibited_ingredients" ? prohibitedIngredients : pdfValue(key))).join('') +
-          '</tbody></table></section>').join('') +
-        '<section class="references"><h2>05 참고자료</h2>' + (referenceMarkup(data, true) || '<p class="empty-reference">등록된 참고자료 없음</p>') + '<table class="requirements"><tbody>' + row("기타사항", pdfValue("reference_notes")) + '</tbody></table></section>' +
+        sections.map(printableSection).join('') + referenceSection +
         '<footer><strong>COSTD · COSMOA</strong><span>수출 대상국별 규제 적합성은 별도 확인이 필요합니다.</span></footer></main>';
       const printStyles = `
         @page { size: A4; margin: 14mm 14mm 16mm; }
