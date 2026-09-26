@@ -9,6 +9,9 @@
   const definitions = sections.flatMap(([, fields]) => fields);
   const labels = Object.fromEntries(definitions.map(([key, label]) => [key, label]));
   const kinds = Object.fromEntries(definitions.map(([key, , kind]) => [key, kind]));
+  labels.reference_notes = "기타사항";
+  kinds.reference_notes = "textarea";
+  const wideNoteFields = new Set(["company_description", "basic_notes", "ingredients.other_notes"]);
   const chipFields = definitions.filter(([, , kind]) => kind === "list").map(([key]) => key);
   const get = (data, key) => key.split(".").reduce((value, part) => value?.[part], data);
   function set(data, key, value) {
@@ -33,9 +36,9 @@
     product_name: "", sample_request_type: "", product_type: "", product_type_custom: "", target_price_tier: "",
     export_countries: [], buyer_prohibited_ingredients: [], regulatory_restricted_ingredients: [],
     benchmark_product_name: "", review_status: "needs_review",
-    source_file: "", version: 1, field_provenance: [], raw_extracted_data: {}, reference_files: [],
+    source_file: "", version: 1, field_provenance: [], raw_extracted_data: {}, reference_files: [], reference_notes: "",
     product_development: Object.fromEntries(definitions.filter(([key]) => key.startsWith("product_development.")).map(([key]) => [key.split(".")[1], ""])),
-    ingredients: { necessary: [], ideal: [] },
+    ingredients: { necessary: [], ideal: [], other_notes: "" },
     quality: { tests: [], additional_notes: "" }
   });
   function notice(message = "") {
@@ -113,7 +116,7 @@
       if (provenance.review_status === "not_applicable") control = '<p class="requisition-field-value">해당 없음</p>';
       control += '<small class="text-caption">' + ({ confirmed: "✓ 확인 완료", needs_review: "⚠ 확인 필요", missing: "미입력", not_applicable: "해당 없음", user_edited: "✓ 사용자 수정" }[provenance.review_status] || "") + '</small>';
     }
-    return '<div class="form-group" id="requisition-field-' + key + '">' +
+    return '<div class="form-group' + (wideNoteFields.has(key) ? ' requisition-field-wide requisition-field-note' : '') + '" id="requisition-field-' + key + '">' +
       (editing() && key !== "target_price_tier" ? '<label class="form-label" for="requisition-input-' + key + '">' : '<p class="form-label">') +
       labels[key] + (editing() && required ? ' <span class="is-required">*</span>' : "") +
       (editing() && key !== "target_price_tier" ? "</label>" : "</p>") + '<div class="requisition-field-content">' + control +
@@ -167,9 +170,8 @@
     $("loading").hidden = state !== "loading";
     $("document").hidden = !["manual", "edit", "result"].includes(state);
     $("new").hidden = state !== "result";
-    const headings = { upload: ["STEP 1 · 시작", "개발요청서 분석"], loading: ["STEP 1 · 자동변환", "개발요청서 분석"], result: ["STEP 2 · 결과 확인", "개발요청서"], edit: ["STEP 3 · 수정", "개발요청서 수정"], manual: ["STEP 4 · 직접 작성", "개발요청서 직접 작성"] };
-    $("step").textContent = headings[state][0];
-    $("title").textContent = headings[state][1];
+    const headings = { upload: "개발요청서 분석", loading: "개발요청서 분석", result: "개발요청서", edit: "개발요청서 수정", manual: "개발요청서 직접 작성" };
+    $("title").textContent = headings[state];
     $("description").textContent = state === "upload" || state === "loading" ? "바이어 요청서를 변환하거나 직접 작성하여 개발팀에 전달해요." :
       editing() ? "필수 항목을 입력하고 개발팀에 전달할 요청서를 완성해요." : "내용을 확인하고 필요하면 수정한 뒤 PDF로 저장해요.";
     if (state === "upload" || state === "loading") return;
@@ -182,6 +184,7 @@
     $("secondary").textContent = state === "result" ? "수정" : state === "edit" ? "수정 취소" : "작성 취소";
     $("primary").textContent = state === "result" ? "인쇄 / PDF 저장" : state === "edit" ? "수정 완료" : "작성 완료";
     $("primary").hidden = false;
+    $("erp").hidden = state !== "result";
     $("pdf-help").hidden = editing();
     updateSummary();
   }
@@ -238,7 +241,9 @@
   function renderReferences() {
     $("references").innerHTML = '<div class="requisition-reference-grid">' + referenceMarkup(current()) + '</div>' +
       (originalFile ? '<button type="button" class="btn btn-secondary" data-original-file>원본 RFP 다운로드</button>' : '') +
-      (editing() ? '<div class="requisition-reference-upload"><div><p class="form-label">참고자료 추가</p><p class="form-help">PNG, JPG, WEBP, PDF, DOCX, XLSX · 파일당 5MB · 전체 20MB</p></div><input class="requisition-file-input" type="file" id="requisition-reference-input" multiple accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.xlsx"><label class="btn btn-soft" for="requisition-reference-input"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/></svg>파일 선택</label></div><p class="form-help requisition-reference-help">선택한 이미지는 PDF에 함께 표시되고, 문서는 파일명으로 표시돼요.</p>' : !(current().reference_files || []).length ? '<div class="requisition-reference-empty"><p>등록된 참고자료가 없어요.</p></div>' : '');
+      (editing() ? '<div class="requisition-reference-upload"><div><p class="form-label">참고자료 추가</p><p class="form-help">PNG, JPG, WEBP, PDF, DOCX, XLSX · 파일당 5MB · 전체 20MB</p></div><input class="requisition-file-input" type="file" id="requisition-reference-input" multiple accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.xlsx"><label class="btn btn-soft" for="requisition-reference-input"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/></svg>파일 선택</label></div><p class="form-help requisition-reference-help">선택한 이미지는 PDF에 함께 표시되고, 문서는 파일명으로 표시돼요.</p>' : !(current().reference_files || []).length ? '<div class="requisition-reference-empty"><p>등록된 참고자료가 없어요.</p></div>' : '') +
+      '<div class="form-group requisition-reference-notes requisition-field-note"><label class="form-label" for="requisition-input-reference_notes">기타사항</label><div class="requisition-field-content">' +
+      (editing() ? '<textarea class="form-control" rows="4" maxlength="10000" id="requisition-input-reference_notes" data-field="reference_notes">' + escape(current().reference_notes || "") + '</textarea>' : '<p class="requisition-field-value">' + escape(current().reference_notes || "미입력") + '</p>') + '</div></div>';
   }
   $("document").addEventListener("change", async (event) => {
     if (!editing()) return;
@@ -406,6 +411,9 @@
     $("file").value = "";
     transition("upload");
   });
+  $("erp").addEventListener("click", () => {
+    alert("ERP 연동 기능은 현재 개발 중입니다.");
+  });
   $("document").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (state === "result") { await printPDF(); return; }
@@ -512,19 +520,25 @@
       const prohibitedIngredients = [
           data.buyer_prohibited_ingredients.length ? "바이어 지정: " + data.buyer_prohibited_ingredients.join(", ") : "",
           data.regulatory_restricted_ingredients.length ? "규제 검토 대상: " + data.regulatory_restricted_ingredients.join(", ") : ""
-        ].filter(Boolean).join("\n") || pdfValue("buyer_prohibited_ingredients");
+        ].filter(Boolean).join("\n");
       const issuedDate = [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join(".");
       const row = (label, value) => '<tr><th scope="row">' + escape(label) + '</th><td>' + escape(value) + '</td></tr>';
+      const printableSection = ([title, fields]) => {
+        const rows = fields.map(([key, label]) => [label, key === "buyer_prohibited_ingredients" ? prohibitedIngredients : fieldValue(data, key)])
+          .filter(([, value]) => filled(value));
+        return rows.length ? '<section><h2>' + escape(title) + '</h2><table class="requirements"><colgroup><col class="label-column"><col></colgroup><thead><tr><th scope="col">항목</th><th scope="col">요청 내용</th></tr></thead><tbody>' +
+          rows.map(([label, value]) => row(label, value)).join('') + '</tbody></table></section>' : '';
+      };
+      const printableReferences = referenceMarkup(data, true);
+      const printableReferenceNotes = filled(data.reference_notes) ? '<table class="requirements"><tbody>' + row("기타사항", data.reference_notes) + '</tbody></table>' : '';
+      const referenceSection = printableReferences || printableReferenceNotes ? '<section class="references"><h2>05 참고자료</h2>' + printableReferences + printableReferenceNotes + '</section>' : '';
       const printHtml = '<main><header class="document-header"><div class="brand">COSTD <span>COSMOA</span></div>' +
         '<p class="document-type">연구소 전달용</p><h1>제품 개발 요청서</h1><p class="subtitle">PRODUCT DEVELOPMENT REQUEST</p></header>' +
         '<table class="document-meta"><caption>문서 정보</caption><tbody>' +
         '<tr><th scope="row">문서 ID</th><td colspan="3">' + escape(data.document_id || "미지정") + '</td></tr>' +
         '<tr><th scope="row">출력일</th><td colspan="3">' + issuedDate + '</td></tr>' +
         '<tr><th scope="row">수신</th><td>연구소</td><th scope="row">작성 방식</th><td>' + escape(methods[data.creation_method] || "미지정") + '</td></tr></tbody></table>' +
-        sections.map(([title, fields], index) => '<section><h2>' + escape(title) + '</h2><table class="requirements"><colgroup><col class="label-column"><col></colgroup><thead><tr><th scope="col">항목</th><th scope="col">요청 내용</th></tr></thead><tbody>' +
-          fields.map(([key, label]) => row(label, key === "buyer_prohibited_ingredients" ? prohibitedIngredients : pdfValue(key))).join('') +
-          '</tbody></table></section>').join('') +
-        '<section class="references"><h2>05 참고자료</h2>' + (referenceMarkup(data, true) || '<p class="empty-reference">등록된 참고자료 없음</p>') + '</section>' +
+        sections.map(printableSection).join('') + referenceSection +
         '<footer><strong>COSTD · COSMOA</strong><span>수출 대상국별 규제 적합성은 별도 확인이 필요합니다.</span></footer></main>';
       const printStyles = `
         @page { size: A4; margin: 14mm 14mm 16mm; }

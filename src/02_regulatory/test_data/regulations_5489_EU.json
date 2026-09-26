@@ -1,0 +1,70 @@
+{
+  "_note": "인증 정보 제거. 실제 호출 기록 (K-Beauty Cosmetic Ingredients / RapidAPI)",
+  "_request": {
+    "method": "GET",
+    "path": "/v1/ingredient/5489/regulations",
+    "params": {
+      "country": "EU"
+    }
+  },
+  "_called_at_utc": "2026-09-23T01:21:56+00:00",
+  "_http_status": 200,
+  "_response_headers": {
+    "Date": "Wed, 23 Sep 2026 01:21:56 GMT",
+    "Content-Type": "application/json",
+    "X-RateLimit-Requests-Limit": "25000",
+    "X-RateLimit-Requests-Remaining": "24938",
+    "X-RateLimit-Requests-Reset": "2431834",
+    "Server": "RapidAPI-0.0.46"
+  },
+  "body": {
+    "success": true,
+    "ingredient": {
+      "code": 5489,
+      "kr_name": "레티놀",
+      "inci_name": "Retinol",
+      "regulation_status": "Restricted"
+    },
+    "count": 1,
+    "available_countries": [
+      "한국",
+      "EU",
+      "중국",
+      "미국",
+      "일본",
+      "아세안"
+    ],
+    "data": [
+      {
+        "country": "EU",
+        "regulate_type": "제한",
+        "notice_ingr_name": "(2E,4E,6E,8E)-3,7-dimethyl-9-(2,6,6-trimethylcyclohexen-1-yl)nona-2,4,6,8-tetraen-1-ol^[(2E,4E,6E,8E)-3,7-dimethyl-9-(2,6,6-trimethylcyclohexen-1-yl)nona-2,4,6,8-tetraenyl] acetate^[(2E,4E,6E,8E)-3,7-dimethyl-9-(2,6,6-trimethylcyclohexen-1-yl)nona-2,4,6,8-tetraenyl] hexadecanoate\n",
+        "proviso": null,
+        "limit_condition": "* 【Restrictions】\nProduct Type, body parts : (a) Body lotion\n(b) other leave-on and rinse-off products \n* 【제한】\n제품 유형, 사용 부위 : (a) 바디 로션\n(b) 기타 씻어내지 않는 및 씻어내는 제품\n* 【Restrictions】\nMaximum concentration in ready for use preparation : (a) 0,05 % Retinol Equivalent (RE)\n(b) 0,3 % RE \n* 【제한】\n최대 농도 : (a) 0,05 % 레티놀당량 (RE)\n(b) 0,3 % 레티놀당량 RE \n* Wording of conditions of use and warnings  : For any cosmetic product containing Retinol, Retinyl Acetate or Retinyl Palmitate the following, labelling is obligatory: ‘Contains Vitamin A. Consider your daily intake before use’. \n* 사용 조건 및 주의사항 문구 : 레티놀, 레티닐아세테이트 또는 레티닐팔미테이트가 포함된 화장품에는 '비타민 A 함유. 사용 전 일일 섭취량을 고려하세요'라는 라벨이 의무적으로 부착되어야 한다.",
+        "source_type": "limit",
+        "country_code": "EU"
+      }
+    ],
+    "data_source": "Ministry of Food and Drug Safety (MFDS, nedrug.mfds.go.kr), European Commission CosIng Database (ec.europa.eu/growth/tools-databases/cosing/reference/annexes)",
+    "disclaimer": "Regulatory reference data only. Does not constitute legal, compliance, or safety advice. Data has been processed and normalized from original source datasets.",
+    "result_status": "listed",
+    "result_note": null,
+    "markets_listed": [
+      "EU"
+    ],
+    "markets_outside_plan": 1,
+    "country": {
+      "requested": "EU",
+      "resolved": "EU",
+      "code": "EU"
+    },
+    "available_country_codes": [
+      "KR",
+      "EU",
+      "CN",
+      "US",
+      "JP",
+      "ASEAN"
+    ]
+  }
+}

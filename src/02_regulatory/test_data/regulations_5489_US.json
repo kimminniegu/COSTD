@@ -1,0 +1,60 @@
+{
+  "_note": "인증 정보 제거. 실제 호출 기록 (K-Beauty Cosmetic Ingredients / RapidAPI)",
+  "_request": {
+    "method": "GET",
+    "path": "/v1/ingredient/5489/regulations",
+    "params": {
+      "country": "US"
+    }
+  },
+  "_called_at_utc": "2026-09-23T01:21:56+00:00",
+  "_http_status": 200,
+  "_response_headers": {
+    "Date": "Wed, 23 Sep 2026 01:21:56 GMT",
+    "Content-Type": "application/json",
+    "X-RateLimit-Requests-Limit": "25000",
+    "X-RateLimit-Requests-Remaining": "24937",
+    "X-RateLimit-Requests-Reset": "2431834",
+    "Server": "RapidAPI-0.0.46"
+  },
+  "body": {
+    "success": true,
+    "ingredient": {
+      "code": 5489,
+      "kr_name": "레티놀",
+      "inci_name": "Retinol",
+      "regulation_status": "Restricted"
+    },
+    "count": 0,
+    "available_countries": [
+      "한국",
+      "EU",
+      "중국",
+      "미국",
+      "일본",
+      "아세안"
+    ],
+    "data": [],
+    "data_source": "Ministry of Food and Drug Safety (MFDS, nedrug.mfds.go.kr), European Commission CosIng Database (ec.europa.eu/growth/tools-databases/cosing/reference/annexes)",
+    "disclaimer": "Regulatory reference data only. Does not constitute legal, compliance, or safety advice. Data has been processed and normalized from original source datasets.",
+    "result_status": "not_listed_in_country",
+    "result_note": "No entry for US in our source data. There are entries for other markets.",
+    "markets_listed": [
+      "EU"
+    ],
+    "markets_outside_plan": 1,
+    "country": {
+      "requested": "US",
+      "resolved": "미국",
+      "code": "US"
+    },
+    "available_country_codes": [
+      "KR",
+      "EU",
+      "CN",
+      "US",
+      "JP",
+      "ASEAN"
+    ]
+  }
+}

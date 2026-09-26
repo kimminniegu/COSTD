@@ -1,0 +1,58 @@
+{
+  "_note": "인증 정보 제거. 실제 호출 기록 (K-Beauty Cosmetic Ingredients / RapidAPI). result_status=not_listed (제한·금지 미등재 안내) 확인용",
+  "_request": {
+    "method": "GET",
+    "path": "/v1/ingredient/1941/regulations",
+    "params": {
+      "country": "EU"
+    }
+  },
+  "_called_at_utc": "2026-09-23T07:42:27+00:00",
+  "_http_status": 200,
+  "_response_headers": {
+    "Date": "Wed, 23 Sep 2026 07:42:27 GMT",
+    "Content-Type": "application/json",
+    "X-RateLimit-Requests-Limit": "25000",
+    "X-RateLimit-Requests-Remaining": "24785",
+    "X-RateLimit-Requests-Reset": "2409003",
+    "Server": "RapidAPI-0.0.46"
+  },
+  "body": {
+    "success": true,
+    "ingredient": {
+      "code": 1941,
+      "kr_name": "나이아신아마이드",
+      "inci_name": "Niacinamide",
+      "regulation_status": "Not Listed"
+    },
+    "count": 0,
+    "available_countries": [
+      "한국",
+      "EU",
+      "중국",
+      "미국",
+      "일본",
+      "아세안"
+    ],
+    "data": [],
+    "data_source": "Ministry of Food and Drug Safety (MFDS, nedrug.mfds.go.kr), European Commission CosIng Database (ec.europa.eu/growth/tools-databases/cosing/reference/annexes)",
+    "disclaimer": "Regulatory reference data only. Does not constitute legal, compliance, or safety advice. Data has been processed and normalized from original source datasets.",
+    "result_status": "not_listed",
+    "result_note": "No restriction or prohibition is listed for this ingredient in our source data.",
+    "markets_listed": [],
+    "markets_outside_plan": 0,
+    "country": {
+      "requested": "EU",
+      "resolved": "EU",
+      "code": "EU"
+    },
+    "available_country_codes": [
+      "KR",
+      "EU",
+      "CN",
+      "US",
+      "JP",
+      "ASEAN"
+    ]
+  }
+}
