@@ -1,4 +1,4 @@
-"""원가 경쟁력 및 마진 시뮬레이션 — 견적서 PDF (담당자 C)
+"""원가 경쟁력 및 마진 시뮬레이션 — 견적서 PDF · 현재 환율 (담당자 C)
 
 화면(margin.js)이 계산한 견적 값과 팝업에서 입력한 고객사 정보를 받아 검증하고,
 회사 양식 견적서 PDF 를 만듭니다.
@@ -6,15 +6,24 @@
 - 공급사(우리 회사) 정보는 아래 COMPANY 에서 관리하고, 화면이 보낸 값으로 바꾸지 않습니다.
 - 원가·마진율 등 내부 값은 받지 않습니다. (오픈북형일 때 바이어에게 공개하는 원가 구성만 받음)
 - 금액 합계는 서버에서 다시 더해 문서 안의 숫자가 서로 어긋나지 않게 합니다.
+- 현재 USD/KRW 환율: 수출 대금을 원화로 받는 기준인 TTB(전신환 받으실 때)를 씁니다.
+  한국수출입은행 ttb(EXIM_API_KEY 있을 때) → 없거나 실패하면 ExchangeRate-API 중간값 × 0.99 추정 TTB(키 없음).
+  둘 다 하루 1회 고시·갱신 값이라 10분 동안 메모리에 캐시합니다.
+- ERP 원가 연동: 품목의 제조원가·1차 마진율을 돌려줍니다. (시연 단계 — 예시 품목 1개, 실제 ERP 연결 시 erp_cost() 만 교체)
 """
 
 from __future__ import annotations
 
 import io
+import logging
 import math
+import os
 import re
-from datetime import date, timedelta
+import time
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+
+import requests
 
 from xhtml2pdf import pisa
 
@@ -34,6 +43,8 @@ COMPANY = {
 MAX_TEXT = 200
 MAX_LINES = 20
 INCOTERMS = {"EXW", "FOB", "CFR", "CIF"}
+# 지정 장소가 비어 있을 때 기본값 — FOB 는 선적항 부산 (화면 margin.js 의 PLACE_DEFAULT 와 같게 유지)
+NAMED_PLACE_DEFAULT = {"EXW": "Korea", "FOB": "Busan, Korea"}
 MODES = {"one", "split", "open"}
 
 # 한글 회사명·주소도 깨지지 않도록 시스템의 한글 TTF 를 찾아 씁니다. (없으면 Helvetica — 영문만 표시)
@@ -183,7 +194,7 @@ def build_quote_context(payload, user=None):
         },
         "incoterm": incoterm,
         "named_place": _text(payload, "named_place", "지정 장소")
-        or ("Korea" if incoterm in ("EXW", "FOB") else "Port of destination"),
+        or NAMED_PLACE_DEFAULT.get(incoterm, "Port of destination"),
         "payment": _text(payload, "payment", "결제 조건") or "T/T",
         "lead_time": _text(payload, "lead_time", "납기"),
         "moq": _text(payload, "moq", "MOQ"),
@@ -214,3 +225,110 @@ def html_to_pdf(html):
     if result.err:
         raise RuntimeError("PDF 를 만들지 못했어요.")
     return buffer.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# 현재 USD/KRW 환율 — 화면 상단 '기준 환율' 옆 표시 · [적용] 버튼용
+# ---------------------------------------------------------------------------
+log = logging.getLogger(__name__)
+EXIM_URL = os.getenv("EXIM_API_URL", "https://oapi.koreaexim.go.kr/site/program/financial/exchangeJSON")
+OPEN_FX_URL = "https://open.er-api.com/v6/latest/USD"
+TTB_FROM_MID = 0.99   # 수출입은행 USD 전신환 스프레드 1% (TTB = 매매기준율 × 0.99) — 중간값에서 TTB 추정용
+FX_TIMEOUT = 5
+FX_CACHE_SEC = 600
+KST = timezone(timedelta(hours=9))
+_fx_cache = {"at": 0.0, "data": None}
+
+
+def _fx_exim():
+    """한국수출입은행 USD ttb(전신환 받으실 때). 휴일·11시 이전에는 빈 응답이라 최근 영업일까지 최대 7일 거슬러 올라갑니다."""
+    key = os.getenv("EXIM_API_KEY")
+    if not key:
+        return None
+    today = datetime.now(KST).date()
+    for back in range(8):
+        day = today - timedelta(days=back)
+        res = requests.get(EXIM_URL, params={"authkey": key, "searchdate": day.strftime("%Y%m%d"), "data": "AP01"},
+                           timeout=FX_TIMEOUT)
+        res.raise_for_status()
+        rows = res.json()
+        usd = next((r for r in rows or [] if r.get("cur_unit") == "USD"), None)
+        ttb = str((usd or {}).get("ttb") or "").replace(",", "").strip()   # 예: "1,372.63" → 1372.63
+        if ttb:
+            return {"rate": round(float(ttb), 2), "source": "한국수출입은행 TTB(전신환 받으실 때)", "as_of": day.isoformat()}
+    return None
+
+
+def _fx_open():
+    """ExchangeRate-API 공개 엔드포인트 (키 없음, 하루 1회 갱신). 시장 중간값만 주므로 × 0.99 로 TTB 를 추정합니다."""
+    res = requests.get(OPEN_FX_URL, timeout=FX_TIMEOUT)
+    res.raise_for_status()
+    data = res.json()
+    rate = (data.get("rates") or {}).get("KRW")
+    if data.get("result") != "success" or not rate:
+        return None
+    updated = datetime.fromtimestamp(data.get("time_last_update_unix", time.time()), KST)
+    return {"rate": round(float(rate) * TTB_FROM_MID, 2), "source": "ExchangeRate-API 중간값 × 0.99 (추정 TTB)",
+            "as_of": updated.strftime("%Y-%m-%d %H:%M")}
+
+
+def usd_krw_rate():
+    """현재 USD/KRW TTB {"rate": 1351.12, "source": "...", "as_of": "..."} — 두 소스 모두 실패하면 RuntimeError.
+    (홈 DB exchange_rates 에는 매매기준율만 있어 TTB 조회에 쓰지 않습니다.)"""
+    now = time.time()
+    if _fx_cache["data"] and now - _fx_cache["at"] < FX_CACHE_SEC:
+        return _fx_cache["data"]
+    for fetch in (_fx_exim, _fx_open):
+        try:
+            data = fetch()
+        except (requests.RequestException, ValueError, TypeError) as err:
+            log.warning("환율 조회 실패 (%s): %s", fetch.__name__, err)
+            data = None
+        if data:
+            _fx_cache.update(at=now, data=data)
+            return data
+    raise RuntimeError("현재 환율을 불러오지 못했어요.")
+
+
+# ---------------------------------------------------------------------------
+# ERP 원가 연동 — 좌측 '제조원가 · 1차 마진'의 [ERP 연동] 버튼용
+# ---------------------------------------------------------------------------
+# 시연 단계라 예시 품목 1개만 돌려줍니다. 실제 ERP(원가 모듈)와 연결할 때는 erp_cost() 안만 바꾸고 응답 key 는 유지합니다.
+ERP_SAMPLE = {
+    "item_code": "EU-SER-041",
+    "item_name": "세럼 30ml",
+    "product_en": "Serum 30ml",
+    # 제조원가 · 1차 마진 (개당, 브리프 기준환율 1,350원/USD)
+    "raw": 1150,         # 원재료 원가 (원/개) — 포뮬러+충진 타깃 $1.25(1,688원)을 원재료/임가공으로 분할
+    "proc": 538,         # 임가공 원가
+    "pack": 1485,        # 부자재 원가 — 부자재 타깃 $1.10
+    "rate_raw": 20,      # 1차 마진율 (%)
+    "rate_proc": 10,
+    "rate_pack": 15,
+    "loss": 3,           # 로스율 (%) — 벌크 잔여 + 충진 파손 양산 로스
+    "sagup": False,      # 부자재 사급 여부 (제조사 일괄 소싱)
+    # 견적 조건 (개발 브리프)
+    "quote": {
+        "qty": 10000,        # 주문수량 (Initial order forecast)
+        "incoterm": "FOB",   # FOB Busan, Korea
+        "m2": 20,            # 목표 영업마진 (%)
+        "m2min": 15,         # 최소 영업마진 (방어선, %)
+        "counter_pct": 5,    # 바이어 목표가 = 연동 후 견적 단가 −5% (역제안 분석 시연값, 흔한 첫 역제안 폭)
+    },
+    # 포장 · 물류 (30ml 유리 드롭퍼 48입 카톤 기준)
+    "logistics": {
+        "preset": "serum",   # 단품 용량/형태 — 세럼/앰플 30ml
+        "cbm_ea": 48,        # 카톤당 입수 (Tertiary 포장)
+        "cbm_box": 0.015,    # 카톤 부피 (CBM, 실측치)
+        "cbm_inland": 150000,  # 내륙·통관 단가 (원/CBM)
+        "cbm_lcl": 50,       # LCL 해상운임 ($/CBM, 바이어 참고용)
+        "logi": 550000,      # FOB 물류비 총액 (내륙운송 + 수출통관 + 항만 부대비용)
+        "rate_logi": 10,     # 물류 마진율 (%)
+        "freight": 157,      # 해상운임 총액 ($) = ⌈3.14 CBM × $50⌉ (CFR·CIF 에서만 단가에 반영)
+    },
+}
+
+
+def erp_cost():
+    """ERP 개발 브리프 {"item_code", "item_name", "product_en", "raw", "proc", "pack", "rate_*", "loss", "sagup", "quote", "logistics", "synced_at"}."""
+    return {**ERP_SAMPLE, "synced_at": datetime.now(KST).strftime("%Y-%m-%d %H:%M")}
