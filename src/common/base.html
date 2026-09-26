@@ -17,6 +17,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}{% endblock %} | COSMOA</title>
+  <link rel="icon" type="image/png" sizes="64x64" href="{{ url_for('asset', filename='common/img/favicon.png') }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('asset', filename='common/img/apple-touch-icon.png') }}">
   {# 저장된 Sidebar 접힘 상태를 CSS 로드 전에 적용해 화면 깜빡임을 막습니다 #}
   <script>try{if(localStorage.getItem("cosmoa.sidebar")==="collapsed")document.documentElement.classList.add("is-sidebar-collapsed")}catch(e){}</script>
   <link rel="preload" as="font" type="font/otf" crossorigin href="{{ url_for('asset', filename='common/fonts/nanum_square_neo_rg.otf') }}">
