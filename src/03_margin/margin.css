@@ -265,13 +265,13 @@ textarea.margin-modal-remarks { min-height: 64px; padding: var(--space-2) 14px; 
 .margin-rtop .margin-rsum__nums { column-gap: var(--space-2); }
 .margin-rtop .margin-verdict__title, .margin-rtop .margin-rsum__gap { font-size: var(--font-size-sub); }
 .margin-rtop .margin-verdict__desc { font-size: var(--font-size-caption); line-height: 1.45; }
-.margin-rtop__gauge { margin-top: var(--space-5); padding-top: var(--space-4); border-top: var(--border-default); }
+.margin-rtop__gauge { margin-top: var(--space-5); padding-top: var(--space-5); border-top: var(--border-default); }   /* 구분선 위아래 20px 같게 */
 .margin-rtop__gauge-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); }
 .margin-rtop__gauge-title { font-size: var(--font-size-label); font-weight: var(--font-weight-bold); color: var(--color-text-primary); }
 .margin-rtop__gauge-head .margin-legend { margin-top: 0; }
-.margin-rtop .margin-gauge { padding: var(--space-10) 0 var(--space-12); }
-.margin-rtop .margin-gauge.has-row2 { padding-bottom: calc(var(--space-12) + var(--space-8)); }
-.margin-rtop__note { margin: 0; }
+.margin-rtop .margin-gauge { padding: var(--space-12) 0 56px; }   /* 위: 범례와 말풍선 사이 12px / 아래: 기준가 라벨(막대 아래 55px)이 여백 안에 들어가게 */
+.margin-rtop .margin-gauge.has-row2 { padding-bottom: 90px; }   /* 두 번째 줄 라벨은 눈금선이 34px 길어짐 */
+.margin-rtop__note { margin: var(--space-2) 0 0; }
 .margin-rtop__note:empty { display: none; }
 .margin-rsum__nums { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-4); }
 .margin-rsum__gap { font-size: var(--font-size-card-title); font-weight: var(--font-weight-extrabold); font-variant-numeric: tabular-nums; }
