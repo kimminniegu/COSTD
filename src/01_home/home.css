@@ -9,7 +9,7 @@
   flex-direction: column;
   height: 100%;
   padding: var(--space-5) var(--space-10) var(--space-8);   /* 상단 여백 축소: 날짜·인사말이 너무 아래로 내려오지 않게 */
-  overflow: hidden;
+  overflow: auto;   /* 내용이 화면보다 길면 스크롤 (잘림 방지) */
 }
 .is-home .app-footer { display: none; }
 
@@ -227,11 +227,10 @@
 .home-error { color: var(--color-text-secondary); }
 
 /* 4. 아래 영역: 왼쪽 수출입 카드 3개 (약 52%) / 오른쪽 뉴스 + 규제 (약 48%) */
-/* 행을 minmax(0,1fr) 로 명시해 목록 내용량과 무관하게 Card 높이가 남은 공간에 고정되게 합니다 (auto 행이면 내용만큼 늘어남) */
-.home-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 10fr); grid-template-rows: minmax(0, 1fr); gap: var(--space-5); }
-/* 요약 카드는 내용 높이만큼(auto), 남는 높이는 상위국·품목 카드가 나눠 가짐 → 그래프가 화면 높이에 따라 늘어나지 않음 */
-.home-trade-col { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-5); }
-.home-side { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1.07fr) minmax(0, 1fr); gap: var(--space-5); }   /* 뉴스 4건(63px×4)에 맞춘 비율 */
+/* Card 는 내용 높이만큼만 차지합니다 (화면을 억지로 채워 Card 안에 흰 여백이 남지 않게). 내용이 화면보다 길면 .container 가 스크롤됩니다 */
+.home-body { flex: none; display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 10fr); grid-template-rows: auto; align-items: start; gap: var(--space-5); }
+.home-trade-col { min-width: 0; display: grid; grid-template-rows: auto auto auto; gap: var(--space-5); }
+.home-side { min-width: 0; display: grid; grid-template-rows: auto auto; gap: var(--space-5); }
 .home-side > .card { min-width: 0; }
 
 
@@ -309,7 +308,7 @@
 .home-tsum__row { display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; align-items: baseline; column-gap: var(--space-2); padding: 5px 0; border-bottom: 1px solid var(--color-border); }
 .home-tsum__row:last-of-type { border-bottom: 0; }
 .home-tsum__label { font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); color: var(--color-text-secondary); white-space: nowrap; }
-.home-tsum__value { min-width: 0; font-size: 1.1875rem; font-weight: var(--font-weight-bold); letter-spacing: -0.4px; font-variant-numeric: tabular-nums; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-tsum__value { min-width: 0; font-size: 1.0625rem; font-weight: var(--font-weight-bold); letter-spacing: -0.4px; font-variant-numeric: tabular-nums; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-tsum__value small { margin-left: 1px; font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); letter-spacing: 0; color: var(--color-text-secondary); }
 .home-tsum__delta { font-size: var(--font-size-caption); text-align: right; white-space: nowrap; }
 .home-tsum__foot { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-2); padding: 6px 10px; border-radius: var(--radius-xs); background: var(--color-surface-muted); font-size: var(--font-size-caption); color: var(--color-text-secondary); white-space: nowrap; }
@@ -374,7 +373,6 @@
   .is-home .app-footer { display: flex; }
   .home-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; }
   .home-trade-col { grid-template-rows: auto auto auto; }
-  .home-tcard .home-rank { min-height: 150px; }
   .home-side { grid-template-rows: auto auto; }
   .home-list { overflow: visible; }
 }
@@ -389,10 +387,7 @@
   .is-home .app-main { height: auto; }
   .is-home .container { height: auto; overflow: visible; }
   .is-home .app-footer { display: flex; }
-  .home-body { grid-template-rows: auto; align-items: start; }
-  .home-trade-col { grid-template-rows: auto auto auto; }
-  .home-tcard .home-rank { min-height: 124px; }
-  .home-side { grid-template-rows: minmax(360px, auto) minmax(300px, auto); }
+  .home-side { grid-template-rows: auto auto; }
   .home-list { overflow: visible; }
 }
 @media (max-width: 640px) {
