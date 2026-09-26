@@ -9,6 +9,8 @@
   const definitions = sections.flatMap(([, fields]) => fields);
   const labels = Object.fromEntries(definitions.map(([key, label]) => [key, label]));
   const kinds = Object.fromEntries(definitions.map(([key, , kind]) => [key, kind]));
+  labels.reference_notes = "기타사항";
+  kinds.reference_notes = "textarea";
   const chipFields = definitions.filter(([, , kind]) => kind === "list").map(([key]) => key);
   const get = (data, key) => key.split(".").reduce((value, part) => value?.[part], data);
   function set(data, key, value) {
@@ -33,9 +35,9 @@
     product_name: "", sample_request_type: "", product_type: "", product_type_custom: "", target_price_tier: "",
     export_countries: [], buyer_prohibited_ingredients: [], regulatory_restricted_ingredients: [],
     benchmark_product_name: "", review_status: "needs_review",
-    source_file: "", version: 1, field_provenance: [], raw_extracted_data: {}, reference_files: [],
+    source_file: "", version: 1, field_provenance: [], raw_extracted_data: {}, reference_files: [], reference_notes: "",
     product_development: Object.fromEntries(definitions.filter(([key]) => key.startsWith("product_development.")).map(([key]) => [key.split(".")[1], ""])),
-    ingredients: { necessary: [], ideal: [] },
+    ingredients: { necessary: [], ideal: [], other_notes: "" },
     quality: { tests: [], additional_notes: "" }
   });
   function notice(message = "") {
@@ -237,7 +239,9 @@
   function renderReferences() {
     $("references").innerHTML = '<div class="requisition-reference-grid">' + referenceMarkup(current()) + '</div>' +
       (originalFile ? '<button type="button" class="btn btn-secondary" data-original-file>원본 RFP 다운로드</button>' : '') +
-      (editing() ? '<div class="requisition-reference-upload"><div><p class="form-label">참고자료 추가</p><p class="form-help">PNG, JPG, WEBP, PDF, DOCX, XLSX · 파일당 5MB · 전체 20MB</p></div><input class="requisition-file-input" type="file" id="requisition-reference-input" multiple accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.xlsx"><label class="btn btn-soft" for="requisition-reference-input"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/></svg>파일 선택</label></div><p class="form-help requisition-reference-help">선택한 이미지는 PDF에 함께 표시되고, 문서는 파일명으로 표시돼요.</p>' : !(current().reference_files || []).length ? '<div class="requisition-reference-empty"><p>등록된 참고자료가 없어요.</p></div>' : '');
+      (editing() ? '<div class="requisition-reference-upload"><div><p class="form-label">참고자료 추가</p><p class="form-help">PNG, JPG, WEBP, PDF, DOCX, XLSX · 파일당 5MB · 전체 20MB</p></div><input class="requisition-file-input" type="file" id="requisition-reference-input" multiple accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.xlsx"><label class="btn btn-soft" for="requisition-reference-input"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/></svg>파일 선택</label></div><p class="form-help requisition-reference-help">선택한 이미지는 PDF에 함께 표시되고, 문서는 파일명으로 표시돼요.</p>' : !(current().reference_files || []).length ? '<div class="requisition-reference-empty"><p>등록된 참고자료가 없어요.</p></div>' : '') +
+      '<div class="form-group requisition-reference-notes"><label class="form-label" for="requisition-input-reference_notes">기타사항</label><div class="requisition-field-content">' +
+      (editing() ? '<textarea class="form-control" rows="4" maxlength="10000" id="requisition-input-reference_notes" data-field="reference_notes">' + escape(current().reference_notes || "") + '</textarea>' : '<p class="requisition-field-value">' + escape(current().reference_notes || "미입력") + '</p>') + '</div></div>';
   }
   $("document").addEventListener("change", async (event) => {
     if (!editing()) return;
@@ -523,7 +527,7 @@
         sections.map(([title, fields], index) => '<section><h2>' + escape(title) + '</h2><table class="requirements"><colgroup><col class="label-column"><col></colgroup><thead><tr><th scope="col">항목</th><th scope="col">요청 내용</th></tr></thead><tbody>' +
           fields.map(([key, label]) => row(label, key === "buyer_prohibited_ingredients" ? prohibitedIngredients : pdfValue(key))).join('') +
           '</tbody></table></section>').join('') +
-        '<section class="references"><h2>05 참고자료</h2>' + (referenceMarkup(data, true) || '<p class="empty-reference">등록된 참고자료 없음</p>') + '</section>' +
+        '<section class="references"><h2>05 참고자료</h2>' + (referenceMarkup(data, true) || '<p class="empty-reference">등록된 참고자료 없음</p>') + '<table class="requirements"><tbody>' + row("기타사항", pdfValue("reference_notes")) + '</tbody></table></section>' +
         '<footer><strong>COSTD · COSMOA</strong><span>수출 대상국별 규제 적합성은 별도 확인이 필요합니다.</span></footer></main>';
       const printStyles = `
         @page { size: A4; margin: 14mm 14mm 16mm; }
