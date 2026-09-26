@@ -21,6 +21,7 @@
   isolation: isolate;
   /* 배경 이미지(img/login_bg.webp)를 왼쪽 기준으로 채우고, 로딩 전·실패 시에는 아래 CSS 그라데이션이 보입니다 */
   background:
+    radial-gradient(42% 38% at 86% 94%, rgba(252, 243, 168, 0.8) 0%, rgba(252, 243, 168, 0.35) 45%, rgba(252, 243, 168, 0) 100%),   /* 로고 톤의 연노랑 포인트 (오른쪽 아래) */
     url(img/login_bg.webp) left center / cover no-repeat,
     radial-gradient(52% 46% at 8% 6%, rgba(160, 205, 255, 0.55) 0%, rgba(160, 205, 255, 0) 100%),
     radial-gradient(38% 34% at 96% 30%, rgba(197, 224, 255, 0.55) 0%, rgba(197, 224, 255, 0) 100%),
