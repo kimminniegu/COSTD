@@ -15,7 +15,7 @@
   flex-direction: column;
   justify-content: flex-start;   /* 로고 바로 아래에 제목이 오도록 (균등 분배 X) */
   gap: 28px;
-  padding: 64px 80px;
+  padding: 40px 80px 56px;   /* 상단 여백은 로고가 너무 아래로 내려오지 않게 줄임 */
   position: relative;
   overflow: hidden;
   isolation: isolate;
