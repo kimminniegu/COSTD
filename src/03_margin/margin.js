@@ -322,8 +322,7 @@
     /* 입력 Card 아래 현재 견적 요약 */
     const low = r.m2after < toSale(p.m2min) - 1e-9;
     $("quick").innerHTML = `<div class="margin-quick__row"><span>현재 견적 · ${p.inco} ${p.qty.toLocaleString()}개</span><b class="margin-quick__price">${usd(r.usd)}</b></div>
-      <div class="margin-quick__row"><span>주문 총액</span><b>$${Math.round((Math.round(r.usd * 100) / 100) * p.qty).toLocaleString()}</b></div>
-      <div class="margin-quick__row"><span>할인 후 영업마진</span><b class="${low ? "is-low" : ""}">${pct(r.m2after)}</b></div>`;
+      <div class="margin-quick__row"><span>주문 총액 <b>$${Math.round((Math.round(r.usd * 100) / 100) * p.qty).toLocaleString()}</b></span><span>할인 후 영업마진 <b class="${low ? "is-low" : ""}">${pct(r.m2after)}</b></span></div>`;
   }
 
   function renderForward(p, r) {
@@ -994,7 +993,8 @@
     const layoutTop = aside.parentElement.getBoundingClientRect().top + window.scrollY;   // 스크롤과 무관한 Card 시작 위치
     const first = window.innerHeight - layoutTop - gap;                                    // 처음 화면 기준 높이
     const avail = window.innerHeight - Math.max(aside.getBoundingClientRect().top, gap) - gap;
-    aside.style.height = Math.max(320, first, Math.min(asideNatural(), avail)) + "px";
+    const folded = !$("cost").open && !$("logi-box").open;   // 기본(접힘) 상태는 내용이 모두 보이도록 Card 안 스크롤 없이
+    aside.style.height = Math.max(320, first, folded ? asideNatural() : Math.min(asideNatural(), avail)) + "px";
   }
   window.addEventListener("resize", fitAside);
   window.addEventListener("scroll", fitAside, { passive: true });
