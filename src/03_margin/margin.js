@@ -1044,14 +1044,22 @@
     });
     return bottom - top + $("quick").offsetHeight + (parseFloat(getComputedStyle(asideBody).paddingBottom) || 0);
   }
+  // Card 가 내용보다 길 때 남는 높이를 요약 박스 위에 몰지 않고 입력 간격에 고르게 나눔 (margin.css --margin-aside-flex)
+  const FLEX_UNITS = 6;    // margin.css 의 --margin-aside-flex 가중치 합
+  const FLEX_MAX = 40;     // 한 단위 최대(px) — 더 남는 높이는 요약 박스 위(margin-top: auto)로
   function fitAside() {
-    if (getComputedStyle(aside).position !== "sticky") { aside.style.height = ""; return; }
+    if (getComputedStyle(aside).position !== "sticky") { aside.style.height = ""; aside.style.removeProperty("--margin-aside-flex"); return; }
     const gap = parseFloat(getComputedStyle(aside).top) || 0;   // sticky top 과 같은 여백을 아래에도
     const layoutTop = aside.parentElement.getBoundingClientRect().top + window.scrollY;   // 스크롤과 무관한 Card 시작 위치
     const first = window.innerHeight - layoutTop - gap;                                    // 처음 화면 기준 높이
     const avail = window.innerHeight - Math.max(aside.getBoundingClientRect().top, gap) - gap;
     const folded = !$("cost").open && !$("logi-box").open;   // 기본(접힘) 상태는 내용이 모두 보이도록 Card 안 스크롤 없이
-    aside.style.height = Math.max(320, first, folded ? asideNatural() : Math.min(asideNatural(), avail)) + "px";
+    const flex = parseFloat(aside.style.getPropertyValue("--margin-aside-flex")) || 0;
+    const natural = asideNatural() - flex * FLEX_UNITS;       // 간격을 늘리기 전 내용 높이
+    const height = Math.max(320, first, folded ? natural : Math.min(natural, avail));
+    const unit = Math.floor(Math.min(FLEX_MAX, Math.max(0, height - natural) / FLEX_UNITS) * 100) / 100;
+    aside.style.setProperty("--margin-aside-flex", unit + "px");
+    aside.style.height = height + "px";
   }
   window.addEventListener("resize", fitAside);
   window.addEventListener("scroll", fitAside, { passive: true });
