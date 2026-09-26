@@ -7,18 +7,27 @@
 .chatbot { position: fixed; right: var(--space-6); bottom: var(--space-6); z-index: calc(var(--z-modal) - 10); font-family: var(--font-family-base); }
 
 /* 런처 버튼 ------------------------------------------------------------- */
+/* 닫힘: "AI 챗봇" 말풍선 라벨 + 누끼 로고(배경 없음) / 열림: 작은 흰색 원형 × 버튼 */
 .chatbot__launcher {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 56px; height: 56px; border: 0; border-radius: var(--radius-pill);
-  background: var(--color-surface); color: var(--color-text-body);   /* 로고 이미지가 잘 보이도록 흰 배경 (.btn-surface 톤) */
-  box-shadow: var(--shadow-overlay); cursor: pointer;
-  transition: background var(--transition-base), transform 0.1s ease, box-shadow var(--transition-base);
+  display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--space-2);
+  padding: 0; border: 0; background: none; color: var(--color-text-body); cursor: pointer;
+  transition: transform 0.1s ease;
 }
-.chatbot__launcher:hover { color: var(--color-text-primary); box-shadow: 0 6px 16px rgba(27, 100, 218, 0.24), var(--shadow-overlay); }
 .chatbot__launcher:active { transform: scale(0.95); }
-.chatbot__launcher-open { display: block; width: 36px; height: 36px; object-fit: contain; }
-.chatbot__launcher-close { display: none; }
-.chatbot.is-open .chatbot__launcher-open { display: none; }
+.chatbot__launcher-open { display: block; width: 56px; height: 56px; object-fit: contain; filter: drop-shadow(0 6px 14px rgba(25, 31, 40, 0.16)); transition: transform var(--transition-base); }
+.chatbot__launcher:hover .chatbot__launcher-open { transform: translateY(-2px); }
+.chatbot__launcher-label {
+  display: inline-flex; align-items: center; height: 32px; padding: 0 14px;
+  border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-primary);
+  font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); white-space: nowrap;
+  box-shadow: var(--shadow-card-hover);
+}
+.chatbot__launcher-close {
+  display: none; width: 44px; height: 44px; padding: 10px; box-sizing: border-box;
+  border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-text-body); box-shadow: var(--shadow-overlay);
+}
+.chatbot__launcher:hover .chatbot__launcher-close { color: var(--color-text-primary); }
+.chatbot.is-open .chatbot__launcher-open, .chatbot.is-open .chatbot__launcher-label { display: none; }
 .chatbot.is-open .chatbot__launcher-close { display: block; }
 
 /* 패널 ------------------------------------------------------------------- */
