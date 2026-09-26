@@ -156,11 +156,14 @@
     render();
   });
 
-  /* 가격표에 없는 수량이면 행 추가 — 물류비 총액은 가장 가까운 수량 행에서 (수량비)^0.75 로 약식 추정 (수량이 늘수록 개당 물류비가 줄어드는 관행) */
+  /* 물류비 총액 약식 추정 — 기준 수량의 물류비에서 (수량비)^0.75, 1만원 단위 (수량이 늘수록 개당 물류비가 줄어드는 관행) */
+  const estLogi = (baseQ, baseL, q) => Math.max(10000, Math.round((baseL * Math.pow(q / baseQ, 0.75)) / 10000) * 10000);
+
+  /* 가격표에 없는 수량이면 행 추가 — 물류비 총액은 가장 가까운 수량 행에서 추정 */
   function ensureQtyRow(q) {
     if (!(q > 0) || st.qtyRows.some((row) => row.q === q)) return false;
     const near = st.qtyRows.reduce((a, b) => (Math.abs(Math.log(b.q / q)) < Math.abs(Math.log(a.q / q)) ? b : a));
-    st.qtyRows.push({ q, l: Math.max(10000, Math.round((near.l * Math.pow(q / near.q, 0.75)) / 10000) * 10000) });
+    st.qtyRows.push({ q, l: estLogi(near.q, near.l, q) });
     return true;
   }
 
@@ -169,7 +172,7 @@
      받은 값은 입력 칸(단일 원천)에 채운 뒤 render() 한 번으로 4개 탭을 다시 계산합니다.
      '수정됨' 표시는 제조원가 세부 칸 기준입니다. (견적 조건·물류는 미팅 중 바꾸는 값이라 제외) */
   const ERP_FIELDS = { raw: "raw", proc: "proc", pack: "pack", "r-raw": "rate_raw", "r-proc": "rate_proc", "r-pack": "rate_pack", loss: "loss" };
-  const ERP_QUOTE = { qty: "qty", inco: "incoterm", m2: "m2", m2min: "m2min", target: "target_usd" };
+  const ERP_QUOTE = { qty: "qty", inco: "incoterm", m2: "m2", m2min: "m2min" };
   const ERP_LOGI = { "cbm-preset": "preset", "cbm-ea": "cbm_ea", "cbm-box": "cbm_box", "cbm-inland": "cbm_inland", "cbm-lcl": "cbm_lcl", logi: "logi", "r-logi": "rate_logi", freight: "freight" };
   const ERP_MIN_WAIT_MS = 300;   // 연동 중 로딩 표시가 깜빡이지 않도록 최소 대기
   const fill = (map, src) => { if (src) Object.keys(map).forEach((id) => { if (src[map[id]] != null) $(id).value = src[map[id]]; }); };
@@ -221,10 +224,18 @@
       $("sagup").checked = !!data.sagup;
       fill(ERP_QUOTE, data.quote);
       fill(ERP_LOGI, data.logistics);
+      /* 새 품목 기준으로 다시 맞춤: 가격표 행 물류비(이전 품목 값이면 수량이 적은 행이 더 비싸짐) · 역제안 시뮬레이션(VE 체크·마진 조정) */
+      const q0 = num("qty"), l0 = num("logi");
+      if (q0 > 0 && l0 >= 0) st.qtyRows.forEach((row) => { row.l = row.q === q0 ? l0 : estLogi(q0, l0, row.q); });
+      st.adj = {};
+      Object.keys(VE_CUT).forEach((k) => { $("ve-" + k).checked = false; });
       if (st.mInput !== "item") $("seg-minput").querySelector('[data-k="item"]').click();   // ERP 는 항목별 마진율
       if (data.product_en) $("q-product").value = data.product_en;
       erp = { item_code: data.item_code, item_name: data.item_name, synced_at: data.synced_at, vals: { ...data, sagup: !!data.sagup } };
       render();
+      /* 바이어 목표가 — 연동 후 견적 단가에서 counter_pct 만큼 낮춘 첫 역제안 (기준 환율이 바뀌어도 판정 구간이 같게 단가 기준으로) */
+      const cp = data.quote && data.quote.counter_pct;
+      if (cp > 0 && st.quote) { $("target").value = (Math.round(st.quote.unit * (1 - cp / 100) * 100) / 100).toFixed(2); render(); }
       toast(`ERP에서 [${data.item_code}] 제품의 원가/물류/로스율(${pctN(data.loss / 100)}) 데이터를 불러왔습니다.`);
       btn.textContent = "연동됨";
       setTimeout(() => { btn.textContent = label; }, 1500);
@@ -809,6 +820,8 @@
     const rev = (fx) => fobU * fx;
     const m2At = (fx) => 1 - P2 / rev(fx);
     const fxBE = base / fobU, fxMin = P2 / (1 - mn) / fobU, fxGoal = P2 / (1 - g) / fobU;
+    /* 계약 단가는 센트 단위라 반올림(최대 $0.005)만큼 마진이 흔들림 — 이 폭 안이면 기준 달성으로 봄 ('방어 단가 · 현재 단가로 달성'과 같은 기준) */
+    const fxTol = (0.005 / fobU) * p.fx;
 
     /* Slider 범위 — 실무 기준: 견적~결제(1~3개월) 원/달러 변동을 보수적으로 본 견적 환율 ±10%.
        최소·목표 마진 환율이 그 밖이면 보이도록 넓히되 ±20%까지만. 손익분기 환율은 현실적 변동폭 밖이라 칩으로만 표시 */
@@ -833,8 +846,8 @@
     /* 판정 */
     const m = m2At(f), diffUnit = rev(f) - rev(p.fx);
     let z;
-    if (m >= g - 1e-9) z = ["green", "목표 마진 유지"];
-    else if (m >= mn - 1e-9) z = ["yellow", "최소 마진 이상"];
+    if (m >= g - 1e-9 || f >= fxGoal - fxTol) z = ["green", "목표 마진 유지"];
+    else if (m >= mn - 1e-9 || f >= fxMin - fxTol) z = ["yellow", "최소 마진 이상"];
     else if (m >= 0) z = ["orange", "최소 마진 미달"];
     else z = ["red", "영업 손실"];
     const needU = (() => { let u = P2 / (1 - g) / f; if (sea) u += r.freightU; if (p.inco === "CIF") u += u * 1.1 * p.ins; return u; })();
@@ -859,7 +872,7 @@
     sl.style.setProperty("--margin-fxrange-bg", `linear-gradient(to right, ${stops.join(", ")})`);
 
     /* 마지노선 환율 칩 (구 '버틸 수 있는 환율') — 견적 환율에서 이미 미달이면 is-miss */
-    const chip = (k, v, sw) => `<span class="margin-chip${v >= p.fx ? " is-miss" : ""}"><i class="margin-swatch ${sw}"></i>${k} <b>${Math.round(v).toLocaleString()}원</b></span>`;
+    const chip = (k, v, sw) => `<span class="margin-chip${v > p.fx + fxTol ? " is-miss" : ""}"><i class="margin-swatch ${sw}"></i>${k} <b>${Math.round(v).toLocaleString()}원</b></span>`;
     $("fx-thr").innerHTML = '<span class="margin-chips__label">마지노선 환율</span>'
       + chip("손익분기", fxBE, "is-bad")
       + chip(`최소 마진(${pctS(mn)})`, fxMin, "is-warn")
