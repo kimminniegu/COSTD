@@ -35,13 +35,15 @@
 - **상태**: 기본 `#4E5968` / Hover → 배경 `surface-muted` / Active → `.is-active` 배경 `primary-soft` + 글자 `primary` + Bold (현재 URL 기준 자동 적용, `aria-current="page"`)
 - 링크는 반드시 `url_for()` 사용: `href="{{ url_for('regulatory') }}"`
 
-| endpoint | URL | 메뉴명 |
-|---|---|---|
-| `home` | `/` | 홈 |
-| `regulatory` | `/regulatory` | 국가별 인허가 규제 |
-| `margin` | `/margin-calculator` | 원가·마진 시뮬레이션 |
-| `simulation` | `/ai-formulation` | AI 제형/샘플 시뮬레이션 |
-| `dev_request` | `/dev-request` | 개발요청서 |
+| 순서 | endpoint | URL | 메뉴명 |
+|---|---|---|---|
+| 1 | `home` | `/` | 홈 |
+| 2 | `margin` | `/margin-calculator` | 원가·마진 시뮬레이션 |
+| 3 | `dev_request` | `/dev-request` | 개발요청서 생성·변환 |
+| 4 | `regulatory` | `/regulatory` | 국가별 인허가 규제 |
+| 5 | `simulation` | `/ai-formulation` | AI 제형샘플 |
+
+(2026-09-26 메뉴 순서·이름 변경: 단가 → 개발 → 규제 → AI 제형 순, URL·endpoint는 그대로)
 
 ## 3. Sidebar
 
