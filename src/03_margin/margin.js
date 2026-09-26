@@ -1045,7 +1045,7 @@
     return bottom - top + $("quick").offsetHeight + (parseFloat(getComputedStyle(asideBody).paddingBottom) || 0);
   }
   // Card 가 내용보다 길 때 남는 높이를 요약 박스 위에 몰지 않고 입력 간격에 고르게 나눔 (margin.css --margin-aside-flex)
-  const FLEX_UNITS = 6;    // margin.css 의 --margin-aside-flex 가중치 합
+  const FLEX_UNITS = 6.25; // margin.css 의 --margin-aside-flex 가중치 합
   const FLEX_MAX = 40;     // 한 단위 최대(px) — 더 남는 높이는 요약 박스 위(margin-top: auto)로
   function fitAside() {
     if (getComputedStyle(aside).position !== "sticky") { aside.style.height = ""; aside.style.removeProperty("--margin-aside-flex"); return; }

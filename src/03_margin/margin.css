@@ -51,7 +51,7 @@
   margin-bottom: var(--layout-section-gap);
 }
 .margin-inputs {
-  --margin-aside-flex: 0px;   /* 남는 Card 높이를 간격에 나눠 주는 한 단위 (margin.js fitAside, 가중치 합 6) */
+  --margin-aside-flex: 0px;   /* 남는 Card 높이를 간격에 나눠 주는 한 단위 (margin.js fitAside, 가중치 합 6.25) */
   position: sticky;
   top: var(--space-6);
   max-height: calc(100vh - var(--space-12));
@@ -103,12 +103,13 @@
   top: calc(var(--space-6) * -1);
   z-index: 1;
   margin: calc(var(--space-6) * -1) calc(var(--space-6) * -1) 0;
-  padding: calc(var(--space-5) + var(--margin-aside-flex) / 4) var(--space-6) calc(var(--space-3) + var(--margin-aside-flex));   /* 가중치 0.25 + 1 (구분선 위) */
-  gap: calc(var(--space-2) + var(--margin-aside-flex) / 2);   /* 제목 ↔ 1행 ↔ 2행: 0.5 × 2 */
+  padding: var(--space-5) var(--space-6) calc(var(--space-3) + var(--margin-aside-flex));   /* 구분선 위: 1 */
+  gap: calc(var(--space-2) + var(--margin-aside-flex) / 4);   /* 제목 ↔ 1행: 0.25 (아래 제목 ↔ 접이식과 같은 폭) */
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border-strong);
 }
-.margin-pin .form-group { gap: calc(var(--space-1) + var(--margin-aside-flex) / 8); }   /* 라벨 ↔ 입력칸: 0.125 × 2행 (기본은 촘촘하게) */
+.margin-pin .form-group { gap: calc(var(--space-1) + var(--margin-aside-flex) / 4); }   /* 라벨 ↔ 입력칸: 0.25 × 2행 (기본은 촘촘하게) */
+.margin-pin .margin-pair + .margin-pair { margin-top: calc(var(--margin-aside-flex) * 0.75); }   /* 1행 ↔ 2행: 0.25 + 0.75 = 1 (구분선 아래 그룹 간격과 같은 폭) */
 .margin-pin + .margin-group { margin-top: calc(var(--space-2) + var(--margin-aside-flex)); padding-top: 0; border-top: 0; }   /* 구분선 아래: 1 (위 padding-bottom 과 같은 폭으로 늘어남) */
 .margin-pin ~ .margin-group + .margin-group { margin-top: calc(var(--space-2) + var(--margin-aside-flex)); padding-top: 0; border-top: 0; }   /* 접이식 그룹끼리는 선 없이 간격만: 1 */
 .margin-pin ~ .margin-group { gap: calc(var(--space-1) + var(--margin-aside-flex) / 4); }   /* 제조원가·물류비: 제목 ↔ 접이식 박스 0.25 × 2 */
