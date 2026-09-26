@@ -230,7 +230,7 @@
 .home-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 10fr); grid-template-rows: minmax(0, 1fr); gap: var(--space-5); }
 /* 요약 카드는 내용 높이만큼(auto), 남는 높이는 상위국·품목 카드가 나눠 가짐 → 그래프가 화면 높이에 따라 늘어나지 않음 */
 .home-trade-col { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-5); }
-.home-side { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1.22fr) minmax(0, 1fr); gap: var(--space-5); }
+.home-side { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1.07fr) minmax(0, 1fr); gap: var(--space-5); }   /* 뉴스 4건(63px×4)에 맞춘 비율 */
 .home-side > .card { min-width: 0; }
 
 
