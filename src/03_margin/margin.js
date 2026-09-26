@@ -671,8 +671,8 @@
       + `<div class="margin-gauge__pin" style="left:${pos(t)}%"><b>바이어 ${usd(t)}</b><i></i></div>`;
   }
 
-  /* 사양 변경(VE) 약식 절감 — 부자재 원가(개당)에서 차감. 사급 전환은 부자재 1차 마진 0 */
-  const VE_CUT = { coat: 30, box: 20 };
+  /* 사양 변경(VE) 약식 절감 — 대상 항목 원가(개당)에서 차감 */
+  const VE_CUT = { coat: { item: "pack", cut: 30 }, box: { item: "pack", cut: 20 }, raw: { item: "raw", cut: 40 } };
 
   function renderReverse(p, r) {
     const t = num("target"), floor = num("item-floor") / 100;
@@ -687,19 +687,14 @@
     const z = zoneOf(t, P, p, r, m2now);
 
     /* ② 좌: 사양 변경(VE) 체크 */
-    const sagupSave = r.supply.pack - r.items.pack;
-    $("ve-sagup").disabled = p.sagup;
-    $("ve-sagup-note").textContent = p.sagup ? "입력에서 이미 사급으로 계산 중" : "부자재 1차 마진 제외";
-    $("ve-save-coat").textContent = "−" + won(VE_CUT.coat);
-    $("ve-save-box").textContent = "−" + won(VE_CUT.box);
-    $("ve-save-sagup").textContent = p.sagup ? "-" : "−" + won(sagupSave);
+    Object.keys(VE_CUT).forEach((k) => { $("ve-save-" + k).textContent = "−" + won(VE_CUT[k].cut); });
     $("ve-hint").textContent = z[0] === "orange" || z[0] === "red"
       ? "마진만으로는 부족해요 · 체크해 보세요"
       : "체크하면 위 판정에 반영돼요";
-    const cut = ["coat", "box"].reduce((a, k) => a + ($("ve-" + k).checked ? VE_CUT[k] : 0), 0);
-    const veSagup = $("ve-sagup").checked && !p.sagup;
-    const packCost = Math.max(0, p.pack - cut);
-    const veSaved = r.P2 - forward(p, { pack: packCost, rates: { ...p.rates, pack: veSagup ? 0 : p.rates.pack } }).P2;
+    const veCost = { raw: p.raw, pack: p.pack };
+    Object.keys(VE_CUT).forEach((k) => { if ($("ve-" + k).checked) veCost[VE_CUT[k].item] -= VE_CUT[k].cut; });
+    Object.keys(veCost).forEach((k) => { veCost[k] = Math.max(0, veCost[k]); });
+    const veSaved = r.P2 - forward(p, veCost).P2;
     $("ve-sum").innerHTML = veSaved < 0.5 ? "선택한 사양 변경 없음"
       : `선택 절감 개당 <b>−${won(veSaved)}</b> · 주문 전체 약 −${won(veSaved * p.qty)} (약식 추정, 공급사 확인 필요)`;
 
@@ -720,10 +715,9 @@
       $("adj-cut-" + k).innerHTML = Math.abs(d) < 0.5 ? "변경 없음"
         : `<b class="${d > 0 ? "text-up" : ""}">${d > 0 ? "−" : "+"}${won(Math.abs(d))}</b>`;
     });
-    if (veSagup) rates.pack = 0;
 
     /* ① 시뮬레이션(VE + 마진 조정) 적용 결과로 판정·게이지를 다시 계산 */
-    const pSim = { ...p, pack: packCost, rates };
+    const pSim = { ...p, ...veCost, rates };
     const rSim = forward(pSim);
     const simOn = Math.abs(r.P2 - rSim.P2) >= 0.5;
     const Psim = priceLines(pSim, rSim, floor);
@@ -970,7 +964,7 @@
 
   /* 입력 Card 전체 + 탭별 입력 (할인 구간 입력은 drawTiers 에서 따로 연결) */
   $("inputs").querySelectorAll("input, select").forEach((e) => e.addEventListener("input", render));
-  ["fx", "target", "item-floor", "abs-on", "abs-c", "abs-l", "fx-contract", "fx-use-quote", "ve-coat", "ve-box", "ve-sagup"].forEach((id) => $(id).addEventListener("input", render));
+  ["fx", "target", "item-floor", "abs-on", "abs-c", "abs-l", "fx-contract", "fx-use-quote", "ve-coat", "ve-box", "ve-raw"].forEach((id) => $(id).addEventListener("input", render));
 
   /* 입력 Card 높이 — 처음 화면(헤더 아래)에서 바닥이 화면 끝에 닿는 높이로 고정하고, 스크롤해도 늘리지 않습니다.
      (늘리면 남는 높이가 요약 박스 위로 몰려 간격이 벌어짐)
