@@ -79,26 +79,26 @@
 
 /* 공통 꺾은선 차트 (lineChart): 세로축 눈금값 + 격자 + 마지막 값 + 점 툴팁 */
 .home-chart { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto; column-gap: 6px; row-gap: 3px; min-height: 0; min-width: 0; }
-.home-chart__head { grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); min-width: 0; }
+.home-chart__head { grid-row: 1; grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); min-width: 0; }
 .home-chart__title { font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-chart__unit { flex: none; font-size: 0.6875rem; color: var(--color-text-placeholder); white-space: nowrap; }
-.home-chart__legend { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 2px var(--space-3); min-height: 12px; }
+.home-chart__legend { grid-row: 2; grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 2px var(--space-3); min-height: 12px; }
 .home-chart__key { display: inline-flex; align-items: center; gap: 5px; font-size: 0.6875rem; color: var(--color-text-secondary); white-space: nowrap; }
 .home-chart__key i { width: 14px; height: 0; border-top: 2px solid var(--color-primary-bright); border-radius: 2px; }
 .home-chart__key.is-dashed i { border-top: 2px dashed var(--color-text-placeholder); }
-.home-chart__y { position: relative; width: 44px; min-height: 0; font-size: 0.625rem; line-height: 1; color: var(--color-text-placeholder); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.home-chart__y { grid-row: 3; grid-column: 1; position: relative; width: 44px; min-height: 0; font-size: 0.625rem; line-height: 1; color: var(--color-text-placeholder); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .home-chart__y span { position: absolute; right: 0; transform: translateY(-50%); }
 .home-chart__line2 { fill: none; stroke: var(--color-text-placeholder); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .home-chart__line2.is-dashed { stroke-dasharray: 4 3; }
 .home-chart__xtitle { position: absolute; right: 0; top: 12px; font-size: 0.625rem; font-style: normal; color: var(--color-text-placeholder); }
-.home-chart__plot { position: relative; min-height: 0; min-width: 0; }
-.home-chart__plot svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.home-chart__plot { grid-row: 3; grid-column: 2; position: relative; min-height: 0; min-width: 0; }   /* 제목·범례가 없어도 항상 3행(1fr)에 놓이도록 행 고정 */
+.home-chart__plot svg { position: absolute; inset: 0; display: block; width: 100%; height: 100%; overflow: visible; }   /* 절대 배치: SVG 고유 크기(정사각형)가 레이아웃 높이에 끼어들지 않게 */
 .home-chart__grid { stroke: var(--color-border-strong); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
 .home-chart__zero { stroke: var(--color-text-placeholder); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .home-chart__hit { fill: transparent; }
 .home-chart__hit:hover { fill: rgba(49, 130, 246, 0.08); }
 .home-chart__last { position: absolute; transform: translate(-100%, calc(-100% - 6px)); padding: 2px 6px; border-radius: var(--radius-pill); background: var(--color-surface); box-shadow: var(--shadow-card-hover, 0 2px 6px rgba(25, 31, 40, 0.12)); font-size: 0.6875rem; font-weight: var(--font-weight-bold); color: var(--color-primary); white-space: nowrap; pointer-events: none; }
-.home-chart__x { grid-column: 2; position: relative; height: 12px; }
+.home-chart__x { grid-row: 4; grid-column: 2; position: relative; height: 12px; }
 .home-chart__x:has(.home-chart__xtitle) { height: 24px; }
 .home-chart__x small { position: absolute; top: 0; transform: translateX(-50%); font-size: 0.625rem; line-height: 1; color: var(--color-text-placeholder); white-space: nowrap; }
 .home-chart__x small:first-child { transform: translateX(0); }
@@ -146,7 +146,7 @@
 
 /* 본문 두 열: 테두리 대신 간격으로 구분 */
 .home-traded__cols { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: var(--space-6); }
-.home-traded__col { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.home-traded__col { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; min-height: 0; }
 .home-traded__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 32px; }
 .home-traded__head .tabs { flex: none; padding: 3px; }
 .home-traded__head .tab { padding: 5px 10px; font-size: var(--font-size-caption); }
@@ -161,7 +161,22 @@
 
 /* 추이 그래프: 회색 패널 안 */
 .home-traded__chart { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px 6px; border-radius: var(--radius-lg); background: var(--color-surface-muted); }
-.home-traded__chart .home-chart { height: 150px; }
+/* 상세 모달 그래프: 오른쪽 표(약 370px)와 높이를 맞추고 글자를 키워 읽기 쉽게 */
+.home-traded__chart { flex: 1; min-height: 0; padding: 12px 14px 10px; }
+.home-traded__chart .home-chart { flex: 1; min-height: 220px; row-gap: 5px; }
+.home-traded__chart .home-chart__title { font-size: var(--font-size-label); color: var(--color-text-primary); }
+.home-traded__chart .home-chart__unit { font-size: var(--font-size-caption); }
+.home-traded__chart .home-chart__key { font-size: var(--font-size-caption); }
+.home-traded__chart .home-chart__key i { width: 18px; }
+.home-traded__chart .home-chart__y { width: 56px; font-size: 0.75rem; }
+.home-traded__chart .home-chart__x { height: 16px; }
+.home-traded__chart .home-chart__x:has(.home-chart__xtitle) { height: 30px; }
+.home-traded__chart .home-chart__x small, .home-traded__chart .home-chart__xtitle { font-size: 0.75rem; }
+.home-traded__chart .home-chart__xtitle { top: 16px; }
+.home-traded__chart .home-chart__last { padding: 3px 8px; font-size: var(--font-size-caption); }
+.home-traded__chart .home-tsum__line { stroke-width: 2.5; }
+.home-traded__chart .home-chart__line2 { stroke-width: 2; }
+.home-traded__chart .home-tsum__dot { r: 4.5; }
 .home-traded__zero { stroke: var(--color-border-strong); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
 
 /* 순위: 공통 Table을 촘촘하게 */
