@@ -14,14 +14,8 @@
   <div class="login">
     <!-- 왼쪽: 소개 -->
     <aside class="login-intro">
-      <a class="app-brand" href="{{ url_for('login') }}">
-        <span class="app-brand__logo">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12l5 5L20 6"></path></svg>
-        </span>
-        <span class="app-brand__text">
-          <span class="app-brand__name">COSMOA</span>
-          <span class="app-brand__sub">by COSTD</span>
-        </span>
+      <a class="login-logo" href="{{ url_for('login') }}" aria-label="COSTD">
+        <img class="login-logo__img" src="{{ url_for('asset', filename='common/img/costd_logo.png') }}" alt="COSTD — Cosmetic ODM for a Better Tomorrow" width="916" height="271">
       </a>
 
       <div class="login-intro__body">
