@@ -370,9 +370,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .app-user__team { font-size: var(--font-size-caption); color: var(--color-text-secondary); }
 
 /* 내 계정 모달 (회사소개 · 로그인 정보) */
-.app-about { display: flex; flex-direction: column; gap: var(--space-6); }
-.app-about__section { display: flex; flex-direction: column; gap: var(--space-3); }
-.app-about__section + .app-about__section { padding-top: var(--space-5); border-top: 1px solid var(--color-border); }
+#app-user-modal .modal-header { padding-top: var(--space-6); }
+#app-user-modal .modal-body { padding-top: var(--space-4); padding-bottom: var(--space-4); }
+#app-user-modal .modal-footer { padding-bottom: var(--space-6); }
+#app-user-modal .modal { max-width: 800px; }   /* 로그인 정보 · 회사소개 두 열 */
+.app-about { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-6); }
+.app-about__section { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.app-about__section + .app-about__section { padding-left: var(--space-6); border-left: 1px solid var(--color-border); }
 .app-about__title { margin: 0; font-size: var(--font-size-label); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
 .app-about__head, .app-about__brand { display: flex; align-items: center; gap: var(--space-3); }
 .app-about__head .badge { margin-left: auto; }
@@ -381,15 +385,22 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .app-about__who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .app-about__name { font-size: var(--font-size-card-title); font-weight: var(--font-weight-bold); line-height: 1.2; }
 .app-about__list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); margin: 0; }
-.app-about__list > div { display: flex; flex-direction: column; gap: 2px; padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
+.app-about__list > div { display: flex; flex-direction: column; gap: 1px; padding: 8px 14px; border-radius: var(--radius-md); background: var(--color-surface-muted); }
 .app-about__list dt { font-size: var(--font-size-caption); color: var(--color-text-secondary); }
 .app-about__list dd { margin: 0; font-size: var(--font-size-sub); font-weight: var(--font-weight-bold); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.app-about__desc { margin: 0; font-size: var(--font-size-sub); line-height: 1.6; color: var(--color-text-body); }
-.app-about__features { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
-.app-about__features li { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-label); color: var(--color-text-body); }
-.app-about__icon { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-xs); background: var(--color-primary-soft); color: var(--color-primary); }
+.app-about__list dd a { color: var(--color-primary); }
+.app-about__wide { grid-column: 1 / -1; }
+.app-about__wide dd { white-space: normal; line-height: 1.45; }
+.app-about__desc { margin: 0; font-size: var(--font-size-label); line-height: 1.55; color: var(--color-text-body); }
+.app-about__features { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.app-about__features li { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-caption); color: var(--color-text-body); }
+.app-about__icon { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: var(--radius-xs); background: var(--color-primary-soft); color: var(--color-primary); }
+@media (max-width: 900px) {
+  .app-about { grid-template-columns: minmax(0, 1fr); }
+  .app-about__section + .app-about__section { padding-left: 0; border-left: 0; padding-top: var(--space-4); border-top: 1px solid var(--color-border); }
+}
 @media (max-width: 640px) {
-  .app-about__list, .app-about__features { grid-template-columns: minmax(0, 1fr); }
+  .app-about__list { grid-template-columns: minmax(0, 1fr); }
 }
 
 .app-main {

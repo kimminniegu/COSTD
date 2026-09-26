@@ -112,7 +112,7 @@
 
   {# 내 계정 모달 (PM): 사이드바 사용자 영역 클릭 → 회사소개 + 로그인 정보. .container 밖(body 직속)에 두어 항상 화면 가운데에 뜹니다 #}
   <div class="modal-backdrop" id="app-user-modal" role="dialog" aria-modal="true" aria-labelledby="app-user-modal-title">
-    <div class="modal">
+    <div class="modal modal-lg">
       <div class="modal-header">
         <h3 class="modal-title" id="app-user-modal-title">내 계정</h3>
         <button class="modal-close" type="button" data-modal-close aria-label="닫기">×</button>
@@ -131,7 +131,7 @@
             <div><dt>이메일</dt><dd>{{ u.email or "—" }}</dd></div>
             <div><dt>소속</dt><dd>{{ u.team or "—" }}</dd></div>
             <div><dt>로그인 시각</dt><dd>{{ u.logged_in_at or "—" }}</dd></div>
-            <div><dt>로그인 유지</dt><dd>{% if u.remember %}30일 동안 유지{% else %}브라우저를 닫으면 종료{% endif %}</dd></div>
+            <div><dt>로그인 유지</dt><dd>{% if u.remember %}30일 유지{% else %}브라우저 종료 시 해제{% endif %}</dd></div>
           </dl>
           <p class="form-help">비밀번호 변경이나 계정 정보 수정은 PM에게 요청해 주세요.</p>
         </section>
@@ -154,6 +154,11 @@
             <li><span class="app-about__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path></svg></span>AI 제형 · 샘플 시뮬레이션</li>
             <li><span class="app-about__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6M8 13h8M8 17h5"></path></svg></span>개발요청서 생성 · 변환 · 번역</li>
           </ul>
+          <dl class="app-about__list app-about__list--company">
+            <div><dt>회사명</dt><dd>COSTD</dd></div>
+            <div><dt>전화</dt><dd><a href="tel:02-6000-5968">02-6000-5968</a></dd></div>
+            <div class="app-about__wide"><dt>주소</dt><dd title="서울특별시 강남구 영동대로 513 COEX(코엑스 전시장 4층) 스터디룸 3번">서울특별시 강남구 영동대로 513 COEX(코엑스 전시장 4층) 스터디룸 3번</dd></div>
+          </dl>
           <p class="text-caption">© COSTD · 계정 및 이용 문의는 PM에게</p>
         </section>
       </div>
