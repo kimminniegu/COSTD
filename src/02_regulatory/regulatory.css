@@ -200,22 +200,39 @@
 .regulatory-meta dt { color: var(--color-text-secondary); white-space: nowrap; }
 .regulatory-meta dd { margin: 0; color: var(--color-text-primary); }
 
-/* 하단 동작 영역 — 버튼과 안내 문구를 같은 줄에 왼쪽 정렬, 좁은 화면에서는 문구가 아래로 */
-.regulatory-single__actions {
+/* 결과 하단 버튼 행 (직접 검색 카드 · 일괄 결과 · 상세 Modal 공통) -----------------------------
+   ‘규제 원문·출처 보기’(<button>, 상세 Modal)와 ‘식약처에서 사용제한 원료 확인’(<a>, 새 탭 외부 링크)을 같은 공통 보조 버튼(.btn-soft)으로
+   나란히 둔다. 높이·글자·패딩·모서리·hover 는 공통 .btn 규격 그대로(페이지에서 재정의하지 않음). 버튼 너비는 문구 길이대로, 좁은 화면에서는
+   flex-wrap 으로 줄바꿈되며 간격(12px)과 왼쪽 정렬을 유지한다. 공통 .btn 은 nowrap·고정 높이라 아주 좁은 폭에서 긴 문구가 잘릴 수 있어
+   이 행의 버튼만 줄바꿈·자동 높이(최소 높이는 공통 48px)를 허용한다. Focus 는 공통 outline 에 Focus Ring 을 더한다. */
+.regulatory-actions {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: stretch;
   justify-content: flex-start;
   gap: var(--space-3);
 }
-.regulatory-single__detail-btn {
-  font-size: var(--font-size-label);   /* 14px */
-  font-weight: 600;                    /* 디자인 시스템 3단계(400/700/800) 밖의 값 — 요청에 따라 지정 */
+.regulatory-actions .btn {
+  height: auto;
+  min-height: 48px;
+  max-width: 100%;
+  padding-top: var(--space-3);
+  padding-bottom: var(--space-3);
+  white-space: normal;
+  text-align: center;
+  line-height: 1.3;
 }
-.regulatory-single__hint {
-  font-family: var(--font-family-base);
-  font-size: var(--font-size-label);   /* 14px */
-  font-weight: var(--font-weight-regular);
+.regulatory-actions .btn:focus-visible { box-shadow: var(--shadow-focus); }
+/* 버튼 행 아래 안내: 사전검토 안내(14px, 본문색) → 공식 페이지 도움말(13px, 보조색) */
+.regulatory-actions__note {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-label);
+  line-height: 1.6;
+  color: var(--color-text-body);
+}
+.regulatory-actions__help {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-caption);
   line-height: 1.6;
   color: var(--color-text-secondary);
 }
@@ -371,38 +388,8 @@
   .regulatory-detail dd { margin-bottom: var(--space-2); }
 }
 
-/* 식약처 공식 조회 연결 (사전검토 안내 패널 · 보조 버튼 · 행별 텍스트 링크) ---------------
-   직접 검색 결과·일괄 결과 아래에 공통 .alert(중립 배경, 상태색 없음)를 작은 정보 패널로 쓰고, 그 위에 흰색 보조 버튼(.btn-surface.btn-sm)을
-   둔다 — 주요 실행 버튼(.btn-primary)·상세 보기(.btn-soft)보다 낮은 강조도. 상세 Modal 은 같은 패널의 compact 변형(도움말+버튼만).
-   공통 .btn 은 nowrap·고정 높이라 좁은 화면에서 글자가 잘릴 수 있어 이 버튼만 줄바꿈·자동 높이를 허용한다 (공통 CSS 수정 없음).
-   Focus 는 공통 :focus-visible outline 에 Focus Ring(--shadow-focus)을 더해 배경 위에서도 분명히 보이게 한다. */
-.regulatory-mfds-notice > div { min-width: 0; flex: 1 1 auto; }
-.regulatory-mfds-notice__text { margin: var(--space-1) 0 0; overflow-wrap: anywhere; }
-.regulatory-mfds-notice__action {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-3);
-  margin-top: var(--space-3);
-}
-.regulatory-mfds-notice--compact .regulatory-mfds-notice__action { margin-top: var(--space-2); }
-.regulatory-mfds-notice__help {
-  flex: 1 1 240px;
-  min-width: 0;
-  font-size: var(--font-size-caption);
-  color: var(--color-text-secondary);
-  overflow-wrap: anywhere;
-}
-.regulatory-mfds-link {
-  height: auto;
-  min-height: 36px;
-  max-width: 100%;
-  padding: var(--space-2) 14px;
-  white-space: normal;
-  text-align: center;
-  line-height: 1.3;
-}
-.regulatory-mfds-link:focus-visible { box-shadow: var(--shadow-focus); }
+/* 식약처 공식 조회 연결 (외부 링크 아이콘 · 행별 텍스트 링크) ---------------
+   버튼 자체는 위 .regulatory-actions 의 공통 보조 버튼을 쓴다. 아이콘은 외부 링크 표시용(aria-hidden), 새 탭 안내는 .regulatory-sr-only 문구로 제공 */
 .regulatory-mfds-icon { flex: none; vertical-align: -2px; }
 
 /* 조회되지 않은 행·카드의 작은 텍스트 링크 — 상태 배지·사유 문구는 그대로 두고 그 아래 한 줄로만 */
