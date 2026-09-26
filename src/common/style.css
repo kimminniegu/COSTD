@@ -1008,3 +1008,7 @@ body.is-modal-open { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* 브랜드 로고 이미지 변형 (사이드바 상단·회사소개 모달): 파란 배경 없이 COSTD 클로버 마크 표시 */
+.app-brand__logo--img { background: none; box-shadow: none; }
+.app-brand__logo--img img { display: block; width: 34px; height: 34px; object-fit: contain; }

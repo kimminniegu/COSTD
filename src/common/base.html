@@ -31,8 +31,8 @@
 
   {% macro brand() %}
   <a class="app-brand" href="{{ url_for('home') }}" title="COSMOA 홈">
-    <span class="app-brand__logo">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12l5 5L20 6"></path></svg>
+    <span class="app-brand__logo app-brand__logo--img">
+      <img src="{{ url_for('asset', filename='common/img/costd_mark.png') }}" alt="" width="34" height="34" aria-hidden="true">
     </span>
     <span class="app-brand__text">
       <span class="app-brand__name">COSMOA</span>
@@ -141,8 +141,8 @@
         <section class="app-about__section">
           <h4 class="app-about__title">회사소개</h4>
           <div class="app-about__brand">
-            <span class="app-brand__logo" aria-hidden="true">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"></path></svg>
+            <span class="app-brand__logo app-brand__logo--img" aria-hidden="true">
+              <img src="{{ url_for('asset', filename='common/img/costd_mark.png') }}" alt="" width="34" height="34">
             </span>
             <div class="app-about__who">
               <strong class="app-about__name">COSMOA</strong>
