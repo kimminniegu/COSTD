@@ -140,6 +140,16 @@
 .margin-drawer__value { margin-left: auto; font-size: var(--font-size-sub); font-weight: var(--font-weight-extrabold); color: var(--color-text-primary); font-variant-numeric: tabular-nums; }
 .margin-drawer__peek { flex-basis: 100%; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; }
 .margin-erp-dirty { color: var(--color-warning); font-weight: var(--font-weight-bold); }
+/* ERP 연동 완료 안내 (Toast) — body 바로 아래, 화면 아래 가운데 */
+.margin-toast {
+  position: fixed; left: 50%; bottom: var(--space-6); z-index: var(--z-modal);
+  max-width: calc(100vw - 32px); padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-lg); background: var(--color-text-primary); color: var(--color-surface);
+  font-size: var(--font-size-sub); box-shadow: var(--shadow-overlay);
+  opacity: 0; transform: translate(-50%, 8px); pointer-events: none;
+  transition: opacity var(--transition-base), transform var(--transition-base);
+}
+.margin-toast.is-show { opacity: 1; transform: translate(-50%, 0); }
 .margin-drawer__head:focus-visible { outline: none; box-shadow: var(--shadow-focus); border-radius: var(--radius-lg); }
 .margin-drawer__body { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-1) var(--space-4) var(--space-4); }
 .margin-drawer .form-control { background: var(--color-surface); }

@@ -164,10 +164,15 @@
     return true;
   }
 
-  /* ---------- ERP 연동 (제조원가 · 1차 마진) ----------
-     서버 /api/margin-calculator/erp-cost 가 품목의 원가·1차 마진율을 돌려줍니다. (시연 단계: 예시 품목 1개)
-     받은 값은 세부 항목 칸에 채우고, 이후 직접 고치면 '수정됨'으로 표시합니다. */
+  /* ---------- ERP 연동 (개발 브리프: 견적 조건 · 제조원가 · 1차 마진 · 포장/물류) ----------
+     서버 /api/margin-calculator/erp-cost 가 품목의 개발 브리프를 돌려줍니다. (시연 단계: 예시 품목 1개)
+     받은 값은 입력 칸(단일 원천)에 채운 뒤 render() 한 번으로 4개 탭을 다시 계산합니다.
+     '수정됨' 표시는 제조원가 세부 칸 기준입니다. (견적 조건·물류는 미팅 중 바꾸는 값이라 제외) */
   const ERP_FIELDS = { raw: "raw", proc: "proc", pack: "pack", "r-raw": "rate_raw", "r-proc": "rate_proc", "r-pack": "rate_pack", loss: "loss" };
+  const ERP_QUOTE = { qty: "qty", inco: "incoterm", m2: "m2", m2min: "m2min", target: "target_usd" };
+  const ERP_LOGI = { "cbm-preset": "preset", "cbm-ea": "cbm_ea", "cbm-box": "cbm_box", "cbm-inland": "cbm_inland", "cbm-lcl": "cbm_lcl", logi: "logi", "r-logi": "rate_logi", freight: "freight" };
+  const ERP_MIN_WAIT_MS = 300;   // 연동 중 로딩 표시가 깜빡이지 않도록 최소 대기
+  const fill = (map, src) => { if (src) Object.keys(map).forEach((id) => { if (src[map[id]] != null) $(id).value = src[map[id]]; }); };
   let erp = null;   // { item_code, item_name, synced_at, vals }
 
   function erpDirty() {
@@ -183,21 +188,44 @@
       + (erpDirty() ? '<span class="margin-erp-dirty">ERP 값에서 수정됨</span>' : `${esc(erp.synced_at.slice(11, 16))} 동기화`);
   }
 
+  /* 화면 아래 가운데 잠깐 떴다 사라지는 안내 (공통 컴포넌트가 없어 이 페이지 전용) */
+  let toastTimer = null;
+  function toast(msg) {
+    let el = document.getElementById("margin-toast");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "margin-toast";
+      el.className = "margin-toast";
+      el.setAttribute("role", "status");
+      document.body.appendChild(el);   // .container(Container Query) 밖에 두어 화면 기준으로 배치
+    }
+    el.textContent = msg;
+    el.classList.add("is-show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("is-show"), 3000);
+  }
+
   $("erp-sync").addEventListener("click", async () => {
     const btn = $("erp-sync"), label = btn.textContent;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner spinner-sm"></span> 불러오는 중';
     $("erp-err").textContent = "";
     try {
-      const res = await fetch(root.dataset.erpUrl, { headers: { Accept: "application/json" } });
+      const [res] = await Promise.all([
+        fetch(root.dataset.erpUrl, { headers: { Accept: "application/json" } }),
+        new Promise((ok) => setTimeout(ok, ERP_MIN_WAIT_MS)),
+      ]);
       if (!res.ok || !(res.headers.get("Content-Type") || "").includes("json")) throw new Error();
       const data = await res.json();
       Object.keys(ERP_FIELDS).forEach((id) => { $(id).value = data[ERP_FIELDS[id]]; });
       $("sagup").checked = !!data.sagup;
+      fill(ERP_QUOTE, data.quote);
+      fill(ERP_LOGI, data.logistics);
       if (st.mInput !== "item") $("seg-minput").querySelector('[data-k="item"]').click();   // ERP 는 항목별 마진율
       if (data.product_en) $("q-product").value = data.product_en;
       erp = { item_code: data.item_code, item_name: data.item_name, synced_at: data.synced_at, vals: { ...data, sagup: !!data.sagup } };
       render();
+      toast(`ERP에서 [${data.item_code}] 제품의 원가/물류/로스율(${pctN(data.loss / 100)}) 데이터를 불러왔습니다.`);
       btn.textContent = "연동됨";
       setTimeout(() => { btn.textContent = label; }, 1500);
     } catch (e) {
@@ -211,7 +239,8 @@
   /* ---------- 약식 포장/CBM 추정 (물류비 입력 보조) ----------
      카톤 수 = ⌈수량 ÷ 카톤당 입수⌉, CBM = 카톤 수 × 카톤 부피.
      LCL 은 1 CBM 미만도 1 CBM 으로 청구하는 관행에 맞춰 운임 계산만 최소 1 CBM 을 적용합니다. */
-  const CBM_PRESETS = { toner: { ea: 40, box: 0.025 }, cream: { ea: 60, box: 0.025 }, mask: { ea: 200, box: 0.025 } };
+  const CBM_PRESETS = { toner: { ea: 40, box: 0.025 }, serum: { ea: 48, box: 0.015 }, cream: { ea: 60, box: 0.025 }, mask: { ea: 200, box: 0.025 } };
+  const cbm2 = (v) => (Math.round(v * 100 + 1e-6) / 100).toFixed(2);   // 209 × 0.015 = 3.1349999… → 3.14 (부동소수 오차 보정)
   const FCL_HINT_CBM = 15;   // 이 이상이면 20ft 컨테이너(FCL) 견적 비교를 권장
   let cbmEst = null;
 
@@ -226,8 +255,8 @@
     }
     const cartons = Math.ceil(p.qty / ea), cbm = cartons * box, billed = Math.max(1, cbm);
     cbmEst = { cartons, cbm, logi: Math.round((billed * inland) / 10000) * 10000, freight: Math.ceil(billed * lcl) };
-    $("cbm-peek").textContent = `${cartons.toLocaleString()}카톤 · ${cbm.toFixed(2)} CBM`;
-    $("cbm-out").innerHTML = `<div class="margin-cbm-out__row"><span>카톤 ${cartons.toLocaleString()}박스</span><b>${cbm.toFixed(2)} CBM</b></div>
+    $("cbm-peek").textContent = `${cartons.toLocaleString()}카톤 · ${cbm2(cbm)} CBM`;
+    $("cbm-out").innerHTML = `<div class="margin-cbm-out__row"><span>카톤 ${cartons.toLocaleString()}박스</span><b>${cbm2(cbm)} CBM</b></div>
       <div class="margin-cbm-out__row"><span>FOB 내륙물류비</span><b>${won(cbmEst.logi)}</b></div>
       <div class="margin-cbm-out__row"><span>해상운임 (LCL)</span><b>$${cbmEst.freight.toLocaleString()}</b></div>
       ${cbm < 1 ? '<p class="text-caption">1 CBM 미만은 LCL 최소 1 CBM으로 계산했어요.</p>' : ""}
@@ -314,7 +343,7 @@
     const exw = p.inco === "EXW";
     $("logi-sum").textContent = exw ? "EXW · 미포함" : won(p.logi);
     const peek = exw ? ["바이어 운송"] : [`개당 ${won(r.L)}`, `마진 ${pct(p.rates.logi)}`];
-    if (cbmEst) peek.unshift(`${cbmEst.cbm.toFixed(2)} CBM (${cbmEst.cartons.toLocaleString()}박스)`);
+    if (cbmEst) peek.unshift(`${cbm2(cbmEst.cbm)} CBM (${cbmEst.cartons.toLocaleString()}박스)`);
     if (p.inco === "CFR" || p.inco === "CIF") peek.push(`해상 $${(p.freight || 0).toLocaleString()}`);
     if (p.inco === "CIF") peek.push(`보험 ${(Math.round(p.ins * 10000) / 100)}%`);
     $("logi-peek").textContent = peek.join(" · ");

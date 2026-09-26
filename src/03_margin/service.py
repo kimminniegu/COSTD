@@ -295,20 +295,40 @@ def usd_krw_rate():
 # ---------------------------------------------------------------------------
 # 시연 단계라 예시 품목 1개만 돌려줍니다. 실제 ERP(원가 모듈)와 연결할 때는 erp_cost() 안만 바꾸고 응답 key 는 유지합니다.
 ERP_SAMPLE = {
-    "item_code": "TN-150",
-    "item_name": "토너 150ml",
-    "product_en": "Toner 150ml",
-    "raw": 880,          # 원재료 원가 (원/개)
-    "proc": 420,         # 임가공 원가
-    "pack": 640,         # 부자재 원가
+    "item_code": "EU-SER-041",
+    "item_name": "세럼 30ml",
+    "product_en": "Serum 30ml",
+    # 제조원가 · 1차 마진 (개당, 브리프 기준환율 1,350원/USD)
+    "raw": 1150,         # 원재료 원가 (원/개) — 포뮬러+충진 타깃 $1.25(1,688원)을 원재료/임가공으로 분할
+    "proc": 538,         # 임가공 원가
+    "pack": 1485,        # 부자재 원가 — 부자재 타깃 $1.10
     "rate_raw": 20,      # 1차 마진율 (%)
     "rate_proc": 10,
     "rate_pack": 15,
-    "loss": 1,           # 로스율 (%)
-    "sagup": False,      # 부자재 사급 여부
+    "loss": 3,           # 로스율 (%) — 벌크 잔여 + 충진 파손 양산 로스
+    "sagup": False,      # 부자재 사급 여부 (제조사 일괄 소싱)
+    # 견적 조건 (개발 브리프)
+    "quote": {
+        "qty": 10000,        # 주문수량 (Initial order forecast)
+        "incoterm": "FOB",   # FOB Busan, Korea
+        "m2": 20,            # 목표 영업마진 (%)
+        "m2min": 15,         # 최소 영업마진 (방어선, %)
+        "target_usd": 2.35,  # 바이어 타깃 단가 (역제안 분석 목표가)
+    },
+    # 포장 · 물류 (30ml 유리 드롭퍼 48입 카톤 기준)
+    "logistics": {
+        "preset": "serum",   # 단품 용량/형태 — 세럼/앰플 30ml
+        "cbm_ea": 48,        # 카톤당 입수 (Tertiary 포장)
+        "cbm_box": 0.015,    # 카톤 부피 (CBM, 실측치)
+        "cbm_inland": 150000,  # 내륙·통관 단가 (원/CBM)
+        "cbm_lcl": 50,       # LCL 해상운임 ($/CBM, 바이어 참고용)
+        "logi": 550000,      # FOB 물류비 총액 (내륙운송 + 수출통관 + 항만 부대비용)
+        "rate_logi": 10,     # 물류 마진율 (%)
+        "freight": 157,      # 해상운임 총액 ($) = ⌈3.14 CBM × $50⌉ (CFR·CIF 에서만 단가에 반영)
+    },
 }
 
 
 def erp_cost():
-    """ERP 품목 원가 {"item_code", "item_name", "product_en", "raw", "proc", "pack", "rate_*", "loss", "sagup", "synced_at"}."""
+    """ERP 개발 브리프 {"item_code", "item_name", "product_en", "raw", "proc", "pack", "rate_*", "loss", "sagup", "quote", "logistics", "synced_at"}."""
     return {**ERP_SAMPLE, "synced_at": datetime.now(KST).strftime("%Y-%m-%d %H:%M")}
