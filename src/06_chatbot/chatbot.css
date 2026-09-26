@@ -7,9 +7,9 @@
 .chatbot { position: fixed; right: var(--space-6); bottom: var(--space-6); z-index: calc(var(--z-modal) - 10); font-family: var(--font-family-base); }
 
 /* 런처 버튼 ------------------------------------------------------------- */
-/* 닫힘: "AI 챗봇" 말풍선 라벨 + 누끼 로고(배경 없음) / 열림: 작은 흰색 원형 × 버튼 */
+/* 닫힘: 누끼 로고(배경 없음) + 아래 연한 "AI 챗봇" 글자 / 열림: 작은 흰색 원형 × 버튼 */
 .chatbot__launcher {
-  display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--space-2);
+  display: inline-flex; flex-direction: column; align-items: center; gap: var(--space-1);
   padding: 0; border: 0; background: none; color: var(--color-text-body); cursor: pointer;
   transition: transform 0.1s ease;
 }
@@ -17,11 +17,10 @@
 .chatbot__launcher-open { display: block; width: 56px; height: 56px; object-fit: contain; filter: drop-shadow(0 6px 14px rgba(25, 31, 40, 0.16)); transition: transform var(--transition-base); }
 .chatbot__launcher:hover .chatbot__launcher-open { transform: translateY(-2px); }
 .chatbot__launcher-label {
-  display: inline-flex; align-items: center; height: 32px; padding: 0 14px;
-  border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-primary);
-  font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); white-space: nowrap;
-  box-shadow: var(--shadow-card-hover);
+  font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); line-height: 1;
+  color: var(--color-text-placeholder); white-space: nowrap; transition: color var(--transition-base);
 }
+.chatbot__launcher:hover .chatbot__launcher-label { color: var(--color-text-secondary); }
 .chatbot__launcher-close {
   display: none; width: 44px; height: 44px; padding: 10px; box-sizing: border-box;
   border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-text-body); box-shadow: var(--shadow-overlay);
@@ -32,7 +31,7 @@
 
 /* 패널 ------------------------------------------------------------------- */
 .chatbot__panel {
-  position: absolute; right: 0; bottom: calc(56px + var(--space-3));
+  position: absolute; right: 0; bottom: calc(56px + 4px + 13px + var(--space-3));   /* 로고 56 + 간격 4 + 라벨 13 */
   display: flex; flex-direction: column;
   width: 380px; height: min(640px, calc(100vh - 56px - var(--space-6) * 2 - var(--space-3)));
   background: var(--color-surface); border-radius: var(--radius-2xl); box-shadow: var(--shadow-overlay);
