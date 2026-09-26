@@ -41,7 +41,7 @@
 | 2 | `margin` | `/margin-calculator` | 원가·마진 시뮬레이션 |
 | 3 | `dev_request` | `/dev-request` | 개발요청서 |
 | 4 | `regulatory` | `/regulatory` | 국가별 인허가 규제 |
-| 5 | `simulation` | `/ai-formulation` | AI 제형ㆍ샘플 |
+| 5 | `simulation` | `/ai-formulation` | AI 제형모델링 |
 
 ## 3. Sidebar
 

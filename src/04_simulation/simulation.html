@@ -1,5 +1,5 @@
 {% extends "common/base.html" %}
-{% block title %}AI 제형ㆍ샘플{% endblock %}
+{% block title %}AI 제형모델링{% endblock %}
 {% block body_class %}simulation-shell{% endblock %}
 {% block page_css %}<link rel="stylesheet" href="{{ url_for('asset', filename='04_simulation/simulation.css') }}">{% endblock %}
 {% macro help(id, label, text, ingredient=false) %}
@@ -11,7 +11,7 @@
 {% block content %}
 <div class="simulation-page">
   <header class="page-header">
-    <h1 class="page-title">AI 제형ㆍ샘플</h1>
+    <h1 class="page-title">AI 제형모델링</h1>
     <div class="page-actions">
       <button class="btn btn-primary btn-sm simulation-brief-open" id="simulation-brief-open" type="button" data-modal-open="simulation-brief-modal"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5H6a1.5 1.5 0 0 0-1.5 1.5v12A1.5 1.5 0 0 0 6 17.5h8a1.5 1.5 0 0 0 1.5-1.5V6.5z"/><path d="M11.5 2.5v4h4M7.5 10.5h5M7.5 13.5h3"/></svg>개발요청서 분석/적용</button>
       <button class="btn btn-surface btn-sm" id="simulation-reset" type="button">초기화</button>

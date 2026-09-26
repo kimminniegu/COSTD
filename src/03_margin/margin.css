@@ -39,7 +39,8 @@
 }
 
 /* 페이지 머리 ↔ 본문 간격 (공통 72px은 입력형 화면에 넓어서 이 페이지만 줄임) */
-.margin-page .page-header { margin-bottom: var(--space-8); }
+.margin-page .page-header { margin-bottom: var(--space-4); }
+.margin-page .page-description { margin-top: var(--space-2); }
 
 /* Layout: 좌측 입력 Card + 우측 결과 */
 .margin-layout {
