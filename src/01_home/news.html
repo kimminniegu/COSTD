@@ -4,7 +4,7 @@
 {% block title %}화장품 뉴스{% endblock %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{{ url_for('asset', filename='01_home/home.css') }}">
+<link rel="stylesheet" href="{{ url_for('asset', filename='01_home/home.css') }}?v={{ home_asset_v }}">
 {% endblock %}
 
 {% block content %}

@@ -27,6 +27,7 @@ from urllib.parse import unquote, urljoin
 from zoneinfo import ZoneInfo
 
 import feedparser
+import numpy as np
 import requests
 from bs4 import BeautifulSoup
 
@@ -43,7 +44,7 @@ TRADE_TTL = 24 * 3600        # 5-4
 RATE_MAX_LOOKBACK_DAYS = 7   # 4-3
 
 NEWS_LIMIT = 12              # 서버가 홈에 보내는 뉴스 건수 (2-7)
-NEWS_PER_SOURCE = 3          # 출처당 최대 건수 (6-3)
+NEWS_PER_SOURCE = 6          # 출처당 최대 건수 (6-3) — 한 출처에 최신 기사가 몰려도 홈 4건이 '가장 최신' 순이 되도록 3 → 6
 REG_LIMIT = 8                # 규제 소식 건수 (8-6)
 
 # ---------------------------------------------------------------------------
@@ -80,8 +81,17 @@ def init(db_path: Path) -> None:
                 published_at TEXT, fetched_at TEXT
             );
             CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+            CREATE TABLE IF NOT EXISTS trade_totals (
+                yymm TEXT, hs_code TEXT, exp_usd REAL, imp_usd REAL, balance REAL, fetched_at TEXT,
+                PRIMARY KEY (yymm, hs_code)
+            );
             """
         )
+        # 환율 상세(4-4)용 컬럼 — 이미 만들어진 DB에도 추가 (송금 받을 때 / 보낼 때 / 장부가격)
+        have = {r[1] for r in c.execute("PRAGMA table_info(exchange_rates)")}
+        for col in ("ttb", "tts", "bkpr"):
+            if col not in have:
+                c.execute(f"ALTER TABLE exchange_rates ADD COLUMN {col} REAL")
 
 
 def _conn() -> sqlite3.Connection:
@@ -181,6 +191,7 @@ EXIM_URL = os.getenv("EXIM_API_URL", "https://oapi.koreaexim.go.kr/site/program/
 # 표시 순서. 앞에서부터 6개를 채우며, 응답에 없는 통화(VND 등)는 건너뜁니다. (4-2, 10장)
 RATE_CODES = ["USD", "JPY(100)", "CNH", "EUR", "THB", "VND", "SGD", "MYR"]
 RATE_DISPLAY = 6
+RATE_WARN_PCT = 10.0   # 전일 대비 이 % 이상 움직이면 이상값으로 표시 (명세 13-1)
 
 
 def _exim_fetch(day: date) -> list[dict] | None:
@@ -206,7 +217,12 @@ def _exim_fetch(day: date) -> list[dict] | None:
         if not code or rate is None:
             continue
         unit = 100 if "(100)" in code else 1
-        rows.append({"code": code, "name": d.get("cur_nm", ""), "unit": unit, "rate": rate})
+        rows.append({
+            "code": code, "name": d.get("cur_nm", ""), "unit": unit, "rate": rate,
+            "ttb": _to_float(d.get("ttb")),     # 전신환 받으실 때 (외화 → 원화)
+            "tts": _to_float(d.get("tts")),     # 전신환 보내실 때 (원화 → 외화)
+            "bkpr": _to_float(d.get("bkpr")),   # 장부가격
+        })
     return rows
 
 
@@ -217,26 +233,46 @@ def _rates_for(day: date) -> list[dict]:
 
 
 def _ensure_rates(day: date) -> list[dict]:
-    """해당 날짜 환율을 DB에서 찾고, 없으면 API로 가져와 저장. 휴일이면 [] 반환."""
+    """해당 날짜 환율을 DB에서 찾고, 없으면 API로 가져와 저장. 휴일이면 [] 반환.
+    빈 표식(__EMPTY__)은 name 에 표식 시각을 남기며, 그날 정오 전에 남긴 표식은 고시 전 호출일 수 있어 한 번 더 확인합니다."""
     rows = _rates_for(day)
     if rows:
-        return rows
+        marker = rows[0] if len(rows) == 1 and rows[0]["code"] == "__EMPTY__" else None
+        if not marker:
+            return rows
+        marked = _parse_iso(marker.get("name") or "")
+        recheck = (marked is not None and marked.date() == day and marked.hour < 12
+                   and _now().date() == day and _now().hour >= 12)
+        if not recheck:
+            return rows
     fetched = _exim_fetch(day)
     if fetched is None:
         return []
     with _conn() as c:
         if fetched:
             c.executemany(
-                "INSERT OR REPLACE INTO exchange_rates (date, code, name, unit, rate) VALUES (?,?,?,?,?)",
-                [(day.isoformat(), r["code"], r["name"], r["unit"], r["rate"]) for r in fetched],
+                "INSERT OR REPLACE INTO exchange_rates (date, code, name, unit, rate, ttb, tts, bkpr) VALUES (?,?,?,?,?,?,?,?)",
+                [(day.isoformat(), r["code"], r["name"], r["unit"], r["rate"], r.get("ttb"), r.get("tts"), r.get("bkpr")) for r in fetched],
             )
         else:
             # 휴일 표시: 다음번에 다시 호출하지 않도록 빈 표식을 남깁니다.
             c.execute(
                 "INSERT OR REPLACE INTO exchange_rates (date, code, name, unit, rate) VALUES (?,?,?,?,?)",
-                (day.isoformat(), "__EMPTY__", "", 0, 0),
+                (day.isoformat(), "__EMPTY__", _iso(_now()), 0, 0),
             )
     return fetched
+
+
+def _backfill_rate_detail(day: date) -> None:
+    """송금 환율(ttb/tts/bkpr) 컬럼이 생기기 전에 저장된 날짜는 한 번 다시 받아 채웁니다 (4-4)."""
+    fetched = _exim_fetch(day)
+    if not fetched:
+        return
+    with _conn() as c:
+        c.executemany(
+            "UPDATE exchange_rates SET ttb=?, tts=?, bkpr=? WHERE date=? AND code=?",
+            [(r.get("ttb"), r.get("tts"), r.get("bkpr"), day.isoformat(), r["code"]) for r in fetched],
+        )
 
 
 def _latest_two_rate_days() -> tuple[tuple[date, list[dict]] | None, tuple[date, list[dict]] | None]:
@@ -286,6 +322,9 @@ def get_rates() -> dict:
             continue
         p = prev.get(code)
         change = ((r["rate"] - p["rate"]) / p["rate"] * 100) if p and p["rate"] else None
+        warning = change is not None and abs(change) >= RATE_WARN_PCT
+        if warning:
+            log.warning("환율 이상값: %s 전일 대비 %.2f%% (%s → %s)", code, change, p["rate"], r["rate"])
         items.append({
             "code": code.replace("(100)", ""),
             "unit": r["unit"],
@@ -295,6 +334,7 @@ def get_rates() -> dict:
             "change": change,
             "change_text": (f"{abs(change):.2f}%" if change is not None else "—"),
             "direction": "up" if (change or 0) > 0 else ("down" if (change or 0) < 0 else "flat"),
+            "warning": warning,   # 전일 대비 RATE_WARN_PCT 이상 변동 → 화면에 경고 표시
         })
         if len(items) == RATE_DISPLAY:
             break
@@ -302,11 +342,114 @@ def get_rates() -> dict:
     return {"items": items, "date": latest_date, "date_text": f"{d.month}/{d.day}", "error": None}
 
 
+RATE_HISTORY_DAYS = 30           # 상세 모달에 보여줄 영업일 수 (4-4)
+RATE_HISTORY_LOOKBACK = 50       # 영업일 30일을 채우기 위해 거슬러 갈 최대 달력일 수
+EXIM_PAGE_URL = "https://www.koreaexim.go.kr/ir/HPHKIR020M01?apino=2&viewtype=1"
+
+
+def _resolve_rate_code(code: str) -> str | None:
+    """화면 코드(JPY) → 저장 코드(JPY(100)). 목록에 없으면 None"""
+    c = (code or "").strip().upper()
+    for full in RATE_CODES:
+        if full == c or full.split("(")[0] == c:
+            return full
+    return None
+
+
+def get_rate_detail(code: str, days: int = RATE_HISTORY_DAYS) -> dict | None:
+    """환율 상세 (4-4): 통화 하나의 최근 영업일 값, 송금 환율, 최근 30영업일 추이와 numpy 통계.
+    이력은 exchange_rates 에 날짜별로 캐시되므로 처음 한 번만 API를 여러 번 호출합니다."""
+    full = _resolve_rate_code(code)
+    if not full:
+        return None
+    history: list[dict] = []
+    day = _now().date()
+    backfilled = 0
+    for _ in range(RATE_HISTORY_LOOKBACK):
+        try:
+            rows = _ensure_rates(day)
+            r = next((x for x in rows if x["code"] == full), None)
+            if r and r.get("ttb") is None and backfilled < 5:   # 컬럼 추가 전 저장분 → 최근 5개 날짜만 보강
+                backfilled += 1
+                _backfill_rate_detail(day)
+                r = next((x for x in _rates_for(day) if x["code"] == full), r)
+        except Exception as err:  # noqa: BLE001 — 하루 실패해도 계속
+            log.warning("환율 이력 조회 실패(%s): %s", day, err)
+            r = None
+        if r:
+            history.append({"date": day.isoformat(), "rate": float(r["rate"]),
+                            "ttb": r.get("ttb"), "tts": r.get("tts"), "bkpr": r.get("bkpr"), "name": r.get("name", "")})
+            if len(history) >= days:
+                break
+        day -= timedelta(days=1)
+    if not history:
+        return {"code": full.replace("(100)", ""), "ok": False, "error": "환율 정보를 불러오지 못했어요"}
+    history.reverse()                                   # 오래된 날 → 최근 날
+    latest, prev = history[-1], (history[-2] if len(history) > 1 else None)
+    unit = 100 if "(100)" in full else 1
+
+    # numpy 통계 — 최고·최저·평균, 기간 변동률, 일별 등락률 표준편차(변동성)
+    rates = np.array([h["rate"] for h in history], dtype=float)
+    daily_pct = np.diff(rates) / rates[:-1] * 100 if rates.size > 1 else np.array([])
+    hi_i, lo_i = int(np.argmax(rates)), int(np.argmin(rates))
+    span = float(rates.max() - rates.min()) or 1.0
+    change = ((latest["rate"] - prev["rate"]) / prev["rate"] * 100) if prev and prev["rate"] else None
+
+    def _d(iso: str) -> str:
+        d = date.fromisoformat(iso)
+        return f"{d.month}/{d.day}"
+
+    def _num(v) -> str | None:
+        return f"{v:,.2f}" if v is not None else None
+
+    return {
+        "ok": True,
+        "code": full.replace("(100)", ""),
+        "code_full": full,
+        "name": latest["name"],
+        "unit": unit,
+        "unit_text": f"{unit} {full.replace('(100)', '')}",
+        "date": latest["date"],
+        "date_text": _d(latest["date"]),
+        "prev_date_text": _d(prev["date"]) if prev else None,
+        "rate": latest["rate"],
+        "rate_text": _num(latest["rate"]),
+        "change": None if change is None else round(change, 2),
+        "change_text": f"{abs(change):.2f}%" if change is not None else "—",
+        "diff_text": (f"{abs(latest['rate'] - prev['rate']):,.2f}" if prev else None),
+        "direction": "up" if (change or 0) > 0 else ("down" if (change or 0) < 0 else "flat"),
+        "warning": change is not None and abs(change) >= RATE_WARN_PCT,
+        "ttb": latest["ttb"], "ttb_text": _num(latest["ttb"]),
+        "tts": latest["tts"], "tts_text": _num(latest["tts"]),
+        "bkpr": latest["bkpr"], "bkpr_text": _num(latest["bkpr"]),
+        "spread_text": (f"{latest['tts'] - latest['ttb']:,.2f}" if latest["tts"] is not None and latest["ttb"] is not None else None),
+        "history": [
+            {"date": h["date"], "label": _d(h["date"]), "rate": h["rate"], "rate_text": _num(h["rate"]),
+             "pct": round((h["rate"] - float(rates.min())) / span * 100, 1)}   # 차트용 0~100
+            for h in history
+        ],
+        "stats": {
+            "points": int(rates.size),
+            "from_text": _d(history[0]["date"]),
+            "to_text": _d(latest["date"]),
+            "high": float(rates[hi_i]), "high_text": _num(float(rates[hi_i])), "high_date_text": _d(history[hi_i]["date"]),
+            "low": float(rates[lo_i]), "low_text": _num(float(rates[lo_i])), "low_date_text": _d(history[lo_i]["date"]),
+            "mean_text": _num(float(rates.mean())),
+            "period_change": round(float((rates[-1] - rates[0]) / rates[0] * 100), 2) if rates[0] else None,
+            "volatility": round(float(daily_pct.std()), 2) if daily_pct.size else None,   # 일별 등락률 표준편차(%)
+            "position": round(float((rates[-1] - rates.min()) / span * 100), 0),         # 최근값이 기간 범위 중 어디쯤인지
+        },
+        "source_url": EXIM_PAGE_URL,
+    }
+
+
 # ---------------------------------------------------------------------------
 # 5. 화장품 수출입 — 관세청 품목별 국가별 수출입실적 (공공데이터포털)
 # ---------------------------------------------------------------------------
 TRADE_URL = os.getenv("TRADE_API_URL", "https://apis.data.go.kr/1220000/nitemtrade/getNitemtradeList")
 HS_CODES = list(dict.fromkeys(c.strip() for c in os.getenv("COSMETIC_HS_CODES", "3304").split(",") if c.strip()))  # 5-3 (중복 제거)
+TRADE_ALL_CODES = ["3303", "3304", "3305", "3307"]   # 상세 모달(5-9)에서 고를 수 있는 품목. 홈 카드는 HS_CODES 만 사용
+_trade_lock = threading.Lock()
 home_trade = importlib.import_module("src.01_home.home_trade")   # pandas 분석 (홈 왼쪽 카드 3개)
 
 
@@ -353,39 +496,149 @@ def _trade_fetch(start_yymm: str, end_yymm: str, hs_code: str) -> list[dict]:
     return rows
 
 
-def refresh_trade() -> None:
-    if not _is_stale("trade_fetched_at", TRADE_TTL):
-        return
-    now = _now()
-    # 관세청 API는 조회 기간이 12개월 이내여야 함(resultCode 99) → 최근 12개월 + 그 앞 12개월, 두 번 나눠 조회
+def _trade_windows(now: datetime) -> list[tuple[str, str]]:
+    """관세청 API는 조회 기간이 12개월 이내여야 함(resultCode 99) → 12개월씩 3구간 = 36개월 (24개월 + 전년 동기 비교용)
+    실적은 항상 전월까지만 발표되므로 전월을 기준으로 잡아 36개월이 온전히 비교 범위에 들어가게 합니다."""
     first = now.replace(day=1)
     def _ym(months_back: int) -> str:
         y, m = first.year, first.month - months_back
         while m <= 0:
             y, m = y - 1, m + 12
         return f"{y}{m:02d}"
-    windows = [(_ym(11), _ym(0)), (_ym(23), _ym(12)), (_ym(26), _ym(24))]   # 전년 동기간 비교용으로 약 27개월
-    ok = False
-    for hs in HS_CODES:
-        rows = []
-        for start, end in windows:
-            try:
-                rows += _trade_fetch(start, end, hs)
-            except Exception as err:  # noqa: BLE001
-                log.warning("수출입 조회 실패(%s %s~%s): %s", hs, start, end, err)
-        if not rows:
+    return [(_ym(12), _ym(1)), (_ym(24), _ym(13)), (_ym(36), _ym(25))]
+
+
+# 5-7-1. 관세청 품목별 수출입실적(GW) — 국가 구분 없는 공식 총계. 국가별 합산과 교차 비교(13-1)에 씁니다.
+#   공공데이터포털에서 "관세청_품목별 수출입실적(GW)"(15101609)에 활용신청을 해야 같은 키로 호출됩니다.
+#   신청 전이면 SERVICE_KEY_IS_NOT_REGISTERED(403)가 오므로 하루 동안 건너뛰고 상태만 기록합니다.
+TRADE_TOTAL_URL = os.getenv("TRADE_TOTAL_API_URL", "https://apis.data.go.kr/1220000/Itemtrade/getItemtradeList")
+
+
+def _trade_total_fetch(start_yymm: str, end_yymm: str, hs_code: str) -> list[dict] | None:
+    """품목별 총계 한 구간. 활용신청이 안 된 키면 None"""
+    key = _data_go_kr_key()
+    if not key:
+        return None
+    res = requests.get(TRADE_TOTAL_URL, params={"serviceKey": key, "strtYymm": start_yymm, "endYymm": end_yymm, "hsSgn": hs_code},
+                       headers=HEADERS, timeout=20)
+    if res.status_code == 403 or b"SERVICE_KEY_IS_NOT_REGISTERED" in res.content or b"NO_OPENAPI_SERVICE" in res.content:
+        return None
+    res.raise_for_status()
+    root = ET.fromstring(res.content)
+    code = root.findtext(".//resultCode")
+    if code not in (None, "00", "0"):
+        raise RuntimeError(f"관세청 품목별 API resultCode={code} {root.findtext('.//resultMsg')}")
+    rows = []
+    for item in root.iter("item"):
+        yymm = (item.findtext("year") or "").strip().replace(".", "").replace("-", "")
+        if not yymm.isdigit() or len(yymm) != 6:
             continue
+        hs6 = (item.findtext("hsCd") or "").strip()
+        rows.append({"yymm": yymm, "hs_code": hs6 if hs6.isdigit() else hs_code,
+                     "exp_usd": _to_float(item.findtext("expDlr")) or 0.0, "imp_usd": _to_float(item.findtext("impDlr")) or 0.0,
+                     "balance": _to_float(item.findtext("balPayments")) or 0.0})
+    return rows
+
+
+def _fetch_trade_totals(hs: str, now: datetime) -> None:
+    if _meta_get("trade_totals_status") == "not_registered" and not _is_stale("trade_totals_checked_at", 86400):
+        return
+    rows, unavailable = [], False
+    for start, end in _trade_windows(now):
+        try:
+            got = _trade_total_fetch(start, end, hs)
+        except Exception as err:  # noqa: BLE001
+            log.warning("품목별 총계 조회 실패(%s %s~%s): %s", hs, start, end, err)
+            continue
+        if got is None:
+            unavailable = True
+            break
+        rows += got
+    _meta_set("trade_totals_checked_at", _iso(now))
+    if unavailable:
+        _meta_set("trade_totals_status", "not_registered")
+        log.info("품목별 총계 API 미신청 — 공공데이터포털에서 '관세청_품목별 수출입실적(GW)' 활용신청 후 사용 가능")
+        return
+    if rows:
         with _conn() as c:
-            c.executemany(
-                "INSERT OR REPLACE INTO trade_stats (yymm, hs_code, country, country_name, exp_usd, imp_usd, balance, fetched_at)"
-                " VALUES (?,?,?,?,?,?,?,?)",
-                [(r["yymm"], r["hs_code"], r["country"], r["country_name"], r["exp_usd"], r["imp_usd"], r["balance"], _iso(now))
-                 for r in rows],
-            )
-        ok = True
+            c.executemany("INSERT OR REPLACE INTO trade_totals (yymm, hs_code, exp_usd, imp_usd, balance, fetched_at) VALUES (?,?,?,?,?,?)",
+                          [(r["yymm"], r["hs_code"], r["exp_usd"], r["imp_usd"], r["balance"], _iso(now)) for r in rows])
+        _meta_set("trade_totals_status", "ok")
+
+
+def _trade_totals_rows(codes: list[str]) -> list[dict]:
+    with _conn() as c:
+        return [dict(r) for r in c.execute("SELECT yymm, hs_code, exp_usd, imp_usd, balance FROM trade_totals WHERE "
+                                            + " OR ".join("hs_code LIKE ?" for _ in codes), [f"{cd}%" for cd in codes])]
+
+
+def _fetch_trade_code(hs: str, now: datetime) -> bool:
+    """HS 4단위 코드 하나를 3구간으로 받아 저장. 성공하면 코드별 수집 시각(meta)을 남깁니다. 총계(품목별 API)도 함께 받습니다."""
+    _fetch_trade_totals(hs, now)
+    rows = []
+    for start, end in _trade_windows(now):
+        try:
+            rows += _trade_fetch(start, end, hs)
+        except Exception as err:  # noqa: BLE001
+            log.warning("수출입 조회 실패(%s %s~%s): %s", hs, start, end, err)
+    if not rows:
+        return False
+    with _conn() as c:
+        c.executemany(
+            "INSERT OR REPLACE INTO trade_stats (yymm, hs_code, country, country_name, exp_usd, imp_usd, balance, fetched_at)"
+            " VALUES (?,?,?,?,?,?,?,?)",
+            [(r["yymm"], r["hs_code"], r["country"], r["country_name"], r["exp_usd"], r["imp_usd"], r["balance"], _iso(now))
+             for r in rows],
+        )
+    _meta_set(f"trade_fetched_at:{hs}", _iso(now))
+    log.info("수출입 수집 %s: %d행", hs, len(rows))
+    return True
+
+
+def refresh_trade() -> None:
+    if not _is_stale("trade_fetched_at", TRADE_TTL):
+        return
+    now = _now()
+    ok = False
+    with _trade_lock:
+        for hs in HS_CODES:
+            ok = _fetch_trade_code(hs, now) or ok
     if ok:
         _meta_set("trade_fetched_at", _iso(now))
     _meta_set("trade_last_try", _iso(now))
+
+
+def ensure_trade_codes(codes: list[str]) -> list[str]:
+    """상세 모달에서 고른 품목이 아직 없거나 오래됐으면 지금 받아옵니다 (요청 스레드에서 동기 실행). 받아온 코드 목록 반환"""
+    fetched = []
+    now = _now()
+    with _trade_lock:
+        for hs in codes:
+            if hs in TRADE_ALL_CODES and _is_stale(f"trade_fetched_at:{hs}", TRADE_TTL) and _is_stale(f"trade_last_try:{hs}", 600):
+                _meta_set(f"trade_last_try:{hs}", _iso(now))
+                if _fetch_trade_code(hs, now):
+                    fetched.append(hs)
+    return fetched
+
+
+def get_trade_detail(hs: str = "3304", months: int = 12, country: str = "", metric: str = "exp") -> dict | None:
+    """수출입 상세 (5-9). 품목 코드가 목록에 없으면 None"""
+    hs = (hs or "all").strip()
+    if hs != "all" and (not hs.isdigit() or hs[:4] not in TRADE_ALL_CODES or len(hs) not in (4, 6)):
+        return None
+    codes = TRADE_ALL_CODES if hs == "all" else [hs[:4]]
+    fetched = ensure_trade_codes(codes)
+    with _conn() as c:
+        rows = [dict(r) for r in c.execute(
+            "SELECT yymm, hs_code, country, country_name, exp_usd, imp_usd, balance FROM trade_stats WHERE "
+            + " OR ".join("hs_code LIKE ?" for _ in codes), [f"{cd}%" for cd in codes])]
+    try:
+        out = home_trade.build_detail(rows, hs=hs, months=months, country=country, metric=metric)
+    except Exception as err:  # noqa: BLE001
+        log.warning("수출입 상세 분석 실패: %s", err)
+        out = {"ok": False, "message": "수출입 실적을 분석하지 못했어요", "kstat_url": "https://stat.kita.net/"}
+    out["fetched_now"] = fetched
+    return out
 
 
 def _trade_monthly_totals() -> dict[str, dict]:
@@ -432,7 +685,7 @@ def get_trade_cards() -> dict:
     try:
         with _conn() as c:
             rows = [dict(r) for r in c.execute("SELECT yymm, hs_code, country, country_name, exp_usd, imp_usd, balance FROM trade_stats")]
-        return home_trade.build_cards(rows, HS_CODES)
+        return home_trade.build_cards(rows, HS_CODES, totals=_trade_totals_rows(HS_CODES))
     except Exception as err:  # noqa: BLE001
         log.warning("수출입 분석 실패: %s", err)
         return {"ok": False, "message": "수출입 실적을 분석하지 못했어요", "kstat_url": "https://stat.kita.net/"}
@@ -1014,6 +1267,64 @@ def kick_refresh(sections=("rates", "trade", "news", "regulations")) -> list[str
 def is_refreshing() -> list[str]:
     with _lock:
         return sorted(_refreshing)
+
+
+def get_validation() -> dict:
+    """/api/home/validation — 데이터 교차검증 요약 (명세 13장)
+    구역별 마지막 성공·시도 시각과 오래됨 여부, 환율 이상값, 수출입 정리·불일치 건수, 저장 건수를 한 번에 돌려줍니다."""
+    now = _now()
+
+    def section(success_key: str, try_key: str, ttl: int) -> dict:
+        ok, tr = _parse_iso(_meta_get(success_key)), _parse_iso(_meta_get(try_key))
+        return {
+            "last_success": _iso(ok),
+            "last_try": _iso(tr),
+            "stale": ok is None or (now - ok).total_seconds() > ttl,   # 갱신 주기를 넘김
+            "failing": bool(tr and (ok is None or tr > ok)),           # 마지막 시도가 성공보다 뒤 = 실패 중
+        }
+
+    rates = get_rates()
+    cards = get_trade_cards()
+    with _conn() as c:
+        news_by_source = dict(c.execute("SELECT source, COUNT(*) FROM news_items GROUP BY source").fetchall())
+        reg_by_country = dict(c.execute("SELECT country, COUNT(*) FROM regulation_items GROUP BY country").fetchall())
+        reg_by_source = dict(c.execute("SELECT CASE WHEN source='KOTRA' THEN 'KOTRA' ELSE '언론' END, COUNT(*) FROM regulation_items GROUP BY 1").fetchall())
+        trade_rows = c.execute("SELECT COUNT(*) FROM trade_stats").fetchone()[0]
+        trade_months = c.execute("SELECT COUNT(DISTINCT yymm) FROM trade_stats").fetchone()[0]
+    rate_warnings = [it["code"] for it in rates["items"] if it.get("warning")]
+    return {
+        "generated_at": _iso(now),
+        "refreshing": is_refreshing(),
+        "rates": {
+            "latest_date": rates.get("date"),
+            "prev_date": _meta_get("rates_prev_date") or None,
+            "last_try": _meta_get("rates_last_try"),
+            "count": len(rates["items"]),
+            "has_change": all(it["change"] is not None for it in rates["items"]) if rates["items"] else False,
+            "warn_pct": RATE_WARN_PCT,
+            "warnings": rate_warnings,      # 전일 대비 급변 통화
+            "ok": bool(rates["items"]) and not rate_warnings,
+        },
+        "trade": section("trade_fetched_at", "trade_last_try", TRADE_TTL) | {
+            "rows": trade_rows,
+            "months": trade_months,
+            "hs_codes": HS_CODES,
+            "cleaning": cards.get("cleaning"),
+            "validation": cards.get("validation"),
+            "ok": bool(cards.get("ok")) and bool((cards.get("validation") or {}).get("ok")),
+        },
+        "news": section("news_fetched_at", "news_last_try", NEWS_TTL) | {
+            "by_source": news_by_source,
+            "missing_sources": [s for s in NEWS_SOURCES if not news_by_source.get(s)],   # 한 건도 없는 매체
+            "ok": all(news_by_source.get(s) for s in NEWS_SOURCES),
+        },
+        "regulations": section("reg_fetched_at", "reg_last_try", REG_TTL) | {
+            "by_country": reg_by_country,
+            "by_source": reg_by_source,
+            "kotra_configured": bool(os.getenv("KOTRA_NEWS_URL") and _data_go_kr_key()),
+            "ok": bool(reg_by_country),
+        },
+    }
 
 
 def get_dashboard() -> dict:

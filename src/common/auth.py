@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from datetime import datetime
 from functools import wraps
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -73,7 +75,8 @@ def current_user() -> dict | None:
 
 def login_user(user: dict, remember: bool = False) -> None:
     session.clear()
-    session["user"] = user
+    # 로그인 시각·유지 여부도 함께 두어 사이드바 "내 계정" 모달(base.html)에서 보여줍니다
+    session["user"] = dict(user, logged_in_at=datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M"), remember=bool(remember))
     session.permanent = remember  # 로그인 상태 유지 → PERMANENT_SESSION_LIFETIME 만큼
 
 
