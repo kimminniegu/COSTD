@@ -109,3 +109,27 @@
   .requisition-reference-upload { align-items: stretch; flex-direction: column; }
   .requisition-reference-upload .btn { width: 100%; }
 }
+
+/* ── 글자 크기 통일 (2026-09-26): 개발요청서 탭은 입력 항목이 많아 전체적으로 한 단계 작게 ──
+   제목 16px / 본문·입력·버튼·탭 14px / 라벨·도움말 13px / 캡션 12px */
+#requisition-app { font-size: var(--font-size-label); }
+#requisition-app .page-description,
+#requisition-app .card-subtitle,
+#requisition-app .form-control,
+#requisition-app .tab,
+#requisition-app .btn,
+#requisition-app .file-upload__title,
+#requisition-app .requisition-summary dd,
+#requisition-app .form-check,
+#requisition-app .text-secondary { font-size: var(--font-size-label); }
+#requisition-app .card-title,
+#requisition-app .requisition-section > h2 { font-size: var(--font-size-body); }
+#requisition-app .form-label,
+#requisition-app .form-help,
+#requisition-app .requisition-summary dt,
+#requisition-app .requisition-fields > .form-group > .form-label,
+#requisition-app .requisition-field-note .form-label,
+#requisition-app .requisition-country-empty { font-size: var(--font-size-caption); }
+#requisition-app .text-caption { font-size: 0.75rem; }
+#requisition-app .form-control { min-height: 40px; padding-top: 8px; padding-bottom: 8px; }
+#requisition-app .requisition-section-tabs .tab { min-height: 38px; }

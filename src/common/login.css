@@ -13,14 +13,25 @@
 .login-intro {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  gap: var(--space-10);
-  padding: 64px 80px;
-  background: var(--color-background);
+  justify-content: flex-start;   /* 로고 바로 아래에 제목이 오도록 (균등 분배 X) */
+  gap: 28px;
+  padding: 40px 80px 56px;   /* 상단 여백은 로고가 너무 아래로 내려오지 않게 줄임 */
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  /* 배경 이미지(img/login_bg.webp)를 왼쪽 기준으로 채우고, 로딩 전·실패 시에는 아래 CSS 그라데이션이 보입니다 */
+  background:
+    radial-gradient(42% 38% at 86% 94%, rgba(252, 243, 168, 0.8) 0%, rgba(252, 243, 168, 0.35) 45%, rgba(252, 243, 168, 0) 100%),   /* 로고 톤의 연노랑 포인트 (오른쪽 아래) */
+    url(img/login_bg.webp) left center / cover no-repeat,
+    radial-gradient(52% 46% at 8% 6%, rgba(160, 205, 255, 0.55) 0%, rgba(160, 205, 255, 0) 100%),
+    radial-gradient(38% 34% at 96% 30%, rgba(197, 224, 255, 0.55) 0%, rgba(197, 224, 255, 0) 100%),
+    radial-gradient(48% 42% at 92% 96%, rgba(250, 244, 180, 0.7) 0%, rgba(214, 240, 190, 0.45) 55%, rgba(214, 240, 190, 0) 100%),
+    radial-gradient(36% 32% at 6% 94%, rgba(190, 220, 255, 0.55) 0%, rgba(190, 220, 255, 0) 100%),
+    #fbfdff;
 }
-.login-intro .app-brand__logo { width: 36px; height: 36px; }
-.login-intro .app-brand__name { font-size: 1.3125rem; }
-.login-intro .app-brand__sub { font-size: var(--font-size-caption); }
+/* 로고: 별도 배경 없이, 로고 윤곽을 따라가는 흰 후광(drop-shadow)만 줘서 배경 이미지 위에서 또렷하게 */
+.login-logo { display: inline-flex; width: fit-content; line-height: 0; margin-left: -6px; }   /* GIF 안쪽 여백만큼 당겨 제목과 좌측 정렬 */
+.login-logo__img { display: block; width: auto; max-width: 100%; height: 100px; filter: drop-shadow(0 0 3px rgba(255, 255, 255, 1)) drop-shadow(0 0 14px rgba(255, 255, 255, 0.9)) drop-shadow(0 4px 10px rgba(49, 130, 246, 0.14)); }
 
 .login-intro__body { display: flex; flex-direction: column; gap: 28px; animation: page-enter 0.5s cubic-bezier(0.33, 1, 0.68, 1) both; }
 .login-intro__title { font-size: 3.25rem; line-height: 1.3; font-weight: var(--font-weight-extrabold); letter-spacing: -1.5px; }
@@ -40,7 +51,7 @@
   box-shadow: var(--shadow-card);
 }
 
-.login-intro__copy { font-size: var(--font-size-label); color: var(--color-text-secondary); }
+.login-intro__copy { margin-top: auto; font-size: var(--font-size-label); color: var(--color-text-secondary); }   /* 저작권 표기는 맨 아래 고정 */
 
 /* 오른쪽 폼 영역 */
 .login-panel { display: flex; align-items: center; justify-content: center; padding: 64px; }
@@ -49,6 +60,10 @@
 .login-form__title { font-size: 1.875rem; font-weight: var(--font-weight-extrabold); letter-spacing: -0.8px; }
 .login-form__desc { font-size: var(--font-size-body); color: var(--color-text-secondary); }
 .login-form__row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.login-form__link { padding: 0; border: 0; background: none; font: inherit; font-size: var(--font-size-caption); color: var(--color-text-secondary); cursor: pointer; transition: color var(--transition-base); }
+.login-form__link:hover, .login-form__link[aria-expanded="true"] { color: var(--color-primary); }
+.login-form__note { margin-top: var(--space-2); }
+.login-form__note[hidden] { display: none; }   /* 공통 .alert 의 display:flex 보다 우선 */
 .login-form__foot { text-align: center; font-size: var(--font-size-sub); color: var(--color-text-secondary); }
 .login-form__foot strong { color: var(--color-text-body); }
 .login-form__hint {
@@ -65,16 +80,19 @@
 
 /* Tablet 이하: 소개 영역을 위로, 폼을 아래로 */
 @media (max-width: 1024px) {
-  .login { grid-template-columns: minmax(0, 1fr); }
-  .login-intro { padding: var(--space-10) var(--space-8); gap: var(--space-8); }
+  .login { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }   /* 소개 영역은 내용 높이만큼, 나머지는 폼 */
+  .login-intro { padding: var(--space-10) var(--space-8); gap: 20px; }
+  .login-logo__img { height: 76px; }
   .login-intro__title { font-size: 2.25rem; letter-spacing: -1px; }
   .login-intro__desc { font-size: var(--font-size-body); }
   .login-features { display: none; }
   .login-intro__copy { display: none; }
+  .login-intro { background-position: left top; }   /* 가로로 넓어진 소개 영역은 이미지 상단(파랑) 기준 */
   .login-panel { padding: var(--space-10) var(--space-8); }
 }
 @media (max-width: 640px) {
   .login-intro { padding: var(--space-8) var(--space-5); }
+  .login-logo__img { height: 60px; }
   .login-intro__title { font-size: 1.75rem; }
   .login-panel { padding: var(--space-8) var(--space-5); }
 }

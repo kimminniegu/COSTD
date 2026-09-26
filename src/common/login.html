@@ -5,6 +5,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>로그인 | COSMOA</title>
+  <link rel="icon" type="image/png" sizes="64x64" href="{{ url_for('asset', filename='common/img/favicon.png') }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('asset', filename='common/img/apple-touch-icon.png') }}">
   <link rel="preload" as="font" type="font/otf" crossorigin href="{{ url_for('asset', filename='common/fonts/nanum_square_neo_rg.otf') }}">
   <link rel="preload" as="font" type="font/otf" crossorigin href="{{ url_for('asset', filename='common/fonts/nanum_square_neo_eb.otf') }}">
   <link rel="stylesheet" href="{{ url_for('asset', filename='common/style.css') }}">
@@ -14,14 +16,9 @@
   <div class="login">
     <!-- 왼쪽: 소개 -->
     <aside class="login-intro">
-      <a class="app-brand" href="{{ url_for('login') }}">
-        <span class="app-brand__logo">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12l5 5L20 6"></path></svg>
-        </span>
-        <span class="app-brand__text">
-          <span class="app-brand__name">COSMOA</span>
-          <span class="app-brand__sub">by COSTD</span>
-        </span>
+      <a class="login-logo" href="{{ url_for('login') }}" aria-label="COSTD">
+        {# 인트로 애니메이션 GIF (1회 재생 후 완성 로고로 정지). 정적 로고는 common/img/costd_logo.png #}
+        <img class="login-logo__img" src="{{ url_for('asset', filename='common/img/costd_logo_intro.gif') }}" alt="COSTD — Cosmetic ODM for a Better Tomorrow" width="913" height="327">
       </a>
 
       <div class="login-intro__body">
@@ -77,7 +74,12 @@
           </div>
           <div class="login-form__row">
             <label class="form-check"><input type="checkbox" name="remember" value="1"> 로그인 상태 유지</label>
-            <span class="text-caption" title="준비 중인 기능이에요">비밀번호 찾기</span>
+            <button class="login-form__link" type="button" id="login-forgot" aria-controls="login-forgot-note" aria-expanded="false">비밀번호 찾기</button>
+          </div>
+          {# 비밀번호 찾기: 자동 재설정 기능이 없으므로 PM 문의 안내만 표시 #}
+          <div class="alert alert-info login-form__note" id="login-forgot-note" role="status" hidden>
+            <span class="alert-title">비밀번호 찾기</span>
+            <span>비밀번호 재설정은 PM에게 문의해 주세요. 확인 후 새 비밀번호를 안내해 드려요.</span>
           </div>
         </div>
 
@@ -91,5 +93,16 @@
       </form>
     </main>
   </div>
+  <script>
+    (function () {
+      var btn = document.getElementById("login-forgot"), note = document.getElementById("login-forgot-note");
+      if (!btn || !note) return;
+      btn.addEventListener("click", function () {
+        var open = note.hidden;
+        note.hidden = !open;
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+    })();
+  </script>
 </body>
 </html>

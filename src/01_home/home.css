@@ -8,20 +8,21 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: var(--space-8) var(--space-10) var(--space-8);
-  overflow: hidden;
+  padding: var(--space-5) var(--space-10) var(--space-8);   /* 상단 여백 축소: 날짜·인사말이 너무 아래로 내려오지 않게 */
+  overflow: auto;   /* 내용이 화면보다 길면 스크롤 (잘림 방지) */
 }
 .is-home .app-footer { display: none; }
 
 .home { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--space-5); }
 
+/* 굵기 원칙: 카드 제목·대표 수치·시각·인사말 이름만 굵게(700/800), 라벨·단위·보조 텍스트·목록 제목은 보통(400) */
 /* 2. 인사말 줄 */
 .home-top { flex: none; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); min-height: 48px; }
 .home-greeting { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; font-size: 1.125rem; color: var(--color-text-body); }
 .home-greeting__date { font-variant-numeric: tabular-nums; }
 .home-greeting__sep { color: var(--color-text-placeholder); }
 .home-greeting__text { color: var(--color-text-primary); }
-.home-greeting strong { font-weight: var(--font-weight-extrabold); }
+.home-greeting strong { font-weight: var(--font-weight-bold); }
 
 /* 3. 상단 정보 줄: 환율 띠 (2/3) + 바이어 현지 시각 (1/3), 높이 88px */
 .home-strip { flex: none; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--space-5); }
@@ -29,22 +30,191 @@
 
 /* 환율 카드: 위쪽 머리줄(제목 + 기준) / 아래 통화 6칸. 수출 카드와 같은 구성 */
 .home-rates { justify-content: center; gap: 6px; padding: 14px var(--space-6); container: home-rates / inline-size; }
-.home-rates__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); white-space: nowrap; }
+.home-rates__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); color: var(--color-text-secondary); white-space: nowrap; }
 .home-rates__head small { margin-left: var(--space-1); font-size: 0.75rem; font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
 /* 통화 6개를 같은 폭의 칸으로 고정 — 한 줄 유지, 서로 겹치지 않음 */
 .home-rates__items { min-width: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: center; }
 .home-rates__items > .home-loading, .home-rates__items > .home-error { grid-column: 1 / -1; }
 .home-rate { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 0 var(--space-3); border-left: 1px solid var(--color-border-strong); cursor: default; }
 .home-rate:first-child { padding-left: 0; border-left: 0; }
-.home-rate__code { font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); letter-spacing: 0.2px; white-space: nowrap; }
+.home-rate__code { font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); color: var(--color-text-secondary); letter-spacing: 0.2px; white-space: nowrap; }
 .home-rate__code small { font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
 /* 환율 숫자와 등락률은 위아래 두 줄로 — 한 줄에 두면 칸이 좁을 때 옆 통화와 겹침 */
 .home-rate__value { display: flex; flex-direction: column; gap: 0; min-width: 0; white-space: nowrap; }
 .home-rate__rate, .home-rate__change { overflow: hidden; text-overflow: ellipsis; line-height: 1.35; }
 .home-rate__rate { font-size: var(--font-size-body); font-weight: var(--font-weight-bold); font-variant-numeric: tabular-nums; }
-.home-rate__change { font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); font-variant-numeric: tabular-nums; color: var(--color-text-secondary); }
+.home-rate__change { font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); font-variant-numeric: tabular-nums; color: var(--color-text-secondary); }
 .home-rate__change.is-up { color: var(--color-up); }
 .home-rate__change.is-down { color: var(--color-down); }
+.home-rate__warn { display: inline-grid; place-items: center; width: 14px; height: 14px; margin-left: 4px; border-radius: 50%; background: var(--color-warning-soft); color: var(--color-warning); font-size: 10px; font-weight: var(--font-weight-extrabold); line-height: 1; vertical-align: 1px; }
+.home-rate.is-warn .home-rate__rate { color: var(--color-warning); }
+.home-rate[data-code] { cursor: pointer; border-radius: var(--radius-xs); transition: background var(--transition-base); }
+.home-rate[data-code]:hover, .home-rate[data-code]:focus-visible { background: var(--color-surface-muted); }
+
+/* 환율 상세 모달 (4-4) */
+/* 한 화면에 들어가도록 두 열(왼쪽: 환율·송금·계산기 / 오른쪽: 추이·통계). 900px 이하에서 한 열 */
+.home-rated { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-6); }
+#home-rate-modal .modal-header { padding-top: var(--space-6); }
+#home-rate-modal .modal-body { padding-top: var(--space-4); padding-bottom: var(--space-4); }
+#home-rate-modal .modal-footer { padding-bottom: var(--space-6); }
+.home-rated__col { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.home-rated__col:last-child { padding-left: var(--space-6); border-left: 1px solid var(--color-border-strong); }
+.home-rated__head { display: flex; flex-direction: column; gap: var(--space-1); }
+.home-rated__main { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
+.home-rated__rate { font-size: var(--font-size-kpi); font-weight: var(--font-weight-extrabold); letter-spacing: -0.5px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.home-rated__rate small { margin-left: 2px; font-size: var(--font-size-label); font-weight: var(--font-weight-regular); color: var(--color-text-secondary); }
+.home-rated__change { font-size: var(--font-size-sub); font-weight: var(--font-weight-regular); font-variant-numeric: tabular-nums; color: var(--color-text-secondary); }
+.home-rated__change.is-up { color: var(--color-up); }
+.home-rated__change.is-down { color: var(--color-down); }
+.home-rated__sub { margin: 0; font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+.home-rated__warn { align-self: flex-start; margin-top: var(--space-1); }
+.home-rated__tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+.home-rated__tile { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: var(--space-3); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
+.home-rated__label { font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); color: var(--color-text-secondary); }
+.home-rated__num { font-size: var(--font-size-body); font-weight: var(--font-weight-bold); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-rated__tile small { font-size: 0.6875rem; color: var(--color-text-placeholder); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-rated__section { display: flex; flex-direction: column; gap: var(--space-2); }
+.home-rated__section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); color: var(--color-text-secondary); }
+.home-rated__section-head small { font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
+.home-rated .home-chart { height: 150px; }
+
+/* 공통 꺾은선 차트 (lineChart): 세로축 눈금값 + 격자 + 마지막 값 + 점 툴팁 */
+.home-chart { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto; column-gap: 6px; row-gap: 3px; min-height: 0; min-width: 0; }
+.home-chart__head { grid-row: 1; grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); min-width: 0; }
+.home-chart__title { font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-chart__unit { flex: none; font-size: 0.6875rem; color: var(--color-text-placeholder); white-space: nowrap; }
+.home-chart__legend { grid-row: 2; grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 2px var(--space-3); min-height: 12px; }
+.home-chart__key { display: inline-flex; align-items: center; gap: 5px; font-size: 0.6875rem; color: var(--color-text-secondary); white-space: nowrap; }
+.home-chart__key i { width: 14px; height: 0; border-top: 2px solid var(--color-primary-bright); border-radius: 2px; }
+.home-chart__key.is-dashed i { border-top: 2px dashed var(--color-text-placeholder); }
+.home-chart__y { grid-row: 3; grid-column: 1; position: relative; width: 44px; min-height: 0; font-size: 0.625rem; line-height: 1; color: var(--color-text-placeholder); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.home-chart__y span { position: absolute; right: 0; transform: translateY(-50%); }
+.home-chart__line2 { fill: none; stroke: var(--color-text-placeholder); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.home-chart__line2.is-dashed { stroke-dasharray: 4 3; }
+.home-chart__xtitle { position: absolute; right: 0; top: 12px; font-size: 0.625rem; font-style: normal; color: var(--color-text-placeholder); }
+.home-chart__plot { grid-row: 3; grid-column: 2; position: relative; min-height: 0; min-width: 0; }   /* 제목·범례가 없어도 항상 3행(1fr)에 놓이도록 행 고정 */
+.home-chart__plot svg { position: absolute; inset: 0; display: block; width: 100%; height: 100%; overflow: visible; }   /* 절대 배치: SVG 고유 크기(정사각형)가 레이아웃 높이에 끼어들지 않게 */
+.home-chart__grid { stroke: var(--color-border-strong); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.home-chart__zero { stroke: var(--color-text-placeholder); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.home-chart__hit { fill: transparent; }
+.home-chart__hit:hover { fill: rgba(49, 130, 246, 0.08); }
+.home-chart__last { position: absolute; transform: translate(-100%, calc(-100% - 6px)); padding: 2px 6px; border-radius: var(--radius-pill); background: var(--color-surface); box-shadow: var(--shadow-card-hover, 0 2px 6px rgba(25, 31, 40, 0.12)); font-size: 0.6875rem; font-weight: var(--font-weight-regular); color: var(--color-primary); white-space: nowrap; pointer-events: none; }
+.home-chart__x { grid-row: 4; grid-column: 2; position: relative; height: 12px; }
+.home-chart__x:has(.home-chart__xtitle) { height: 24px; }
+.home-chart__x small { position: absolute; top: 0; transform: translateX(-50%); font-size: 0.625rem; line-height: 1; color: var(--color-text-placeholder); white-space: nowrap; }
+.home-chart__x small:first-child { transform: translateX(0); }
+.home-chart__x small:last-child { transform: translateX(-100%); }
+.home-chart__x small.is-hidden { display: none; }
+.home-chart__last.is-below { transform: translate(-100%, 8px); }
+.home-chart__last.is-left { transform: translate(0, calc(-100% - 6px)); }
+.home-chart__last.is-below.is-left { transform: translate(0, 8px); }
+.home-chart__x small.is-current { font-weight: var(--font-weight-regular); color: var(--color-primary); }
+.home-chart__none { margin: 0; padding: var(--space-4) 0; font-size: var(--font-size-caption); color: var(--color-text-placeholder); text-align: center; }
+.home-rated__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2) var(--space-3); margin: var(--space-2) 0 0; }
+.home-rated__stats > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.home-rated__stats dt { font-size: 0.6875rem; font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
+.home-rated__stats dd { display: flex; flex-direction: column; margin: 0; font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.home-rated__stats dd small { font-size: 0.625rem; font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
+.home-rated__stats dd.is-up { color: var(--color-up); }
+.home-rated__stats dd.is-down { color: var(--color-down); }
+.home-rated__calc-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: var(--space-2); }
+.home-rated__field { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.home-rated__field > span { font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); color: var(--color-text-secondary); }
+.home-rated__eq { padding-bottom: 10px; color: var(--color-text-placeholder); }
+.home-rated__input { text-align: right; font-variant-numeric: tabular-nums; }
+.home-rated__foot { justify-content: space-between; align-items: center; }
+.home-rated__foot-actions { display: flex; align-items: center; gap: var(--space-4); }
+
+/* 수출입 상세 모달 (5-9) */
+.home-tcard[data-trade-open] { cursor: pointer; transition: box-shadow var(--transition-base), transform var(--transition-base); }
+.home-tcard[data-trade-open]:hover, .home-tcard[data-trade-open]:focus-visible { box-shadow: var(--shadow-card-hover, 0 6px 20px rgba(25, 31, 40, 0.08)); }
+.home-traded { display: flex; flex-direction: column; gap: var(--space-4); transition: opacity var(--transition-base); }
+.home-traded.is-loading { opacity: 0.5; pointer-events: none; }
+#home-trade-modal .modal-body { padding-top: var(--space-4); padding-bottom: var(--space-4); }   /* 넘치면 공통 규칙대로 본문 스크롤 */
+#home-trade-modal .modal-header { padding-top: var(--space-6); }
+#home-trade-modal .modal-footer { padding-bottom: var(--space-6); }
+#home-trade-modal .modal-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#home-trade-modal .modal { max-width: 960px; }   /* 표 가독성: 두 열이 넉넉하도록 공통 modal-lg(800px)보다 넓게 */
+
+/* 조건 선택: 공통 Segmented Control(.tabs) + Select. 회색 패널 위에 놓아 Card 안 배치 규칙을 따름 */
+.home-traded__controls { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; border-radius: var(--radius-lg); background: var(--color-surface-muted); }
+.home-traded__ctl { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
+.home-traded__ctl-label { flex: none; margin: 0; font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+.home-traded__ctl .tabs { background: var(--color-background); }
+.home-traded__ctl .tab { padding: 5px 10px; font-size: var(--font-size-caption); }
+.home-traded__select { width: auto; height: 32px; padding: 0 32px 0 10px; border-radius: var(--radius-xs); background-color: var(--color-surface); background-position: right 8px center; background-size: 16px; font-size: var(--font-size-caption); max-width: 170px; }
+.home-traded__select--right { margin-left: auto; }
+
+/* 본문 두 열: 테두리 대신 간격으로 구분 */
+.home-traded__cols { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: var(--space-6); }
+.home-traded__col { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; min-height: 0; }
+.home-traded__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 32px; }
+.home-traded__head .tabs { flex: none; padding: 3px; }
+.home-traded__head .tab { padding: 5px 10px; font-size: var(--font-size-caption); }
+.home-traded__title { font-size: var(--font-size-label); font-weight: var(--font-weight-regular); color: var(--color-text-primary); }
+
+/* 합계 3종: 공통 Stat Tile */
+.home-traded__tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+.home-traded__tile { gap: 2px; padding: 10px; }
+.home-traded__tile .stat-tile__value { font-size: 0.9375rem; font-weight: var(--font-weight-bold); letter-spacing: -0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-traded__tile .stat-tile__value small { margin-left: 1px; font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); letter-spacing: 0; color: var(--color-text-secondary); }
+.home-traded__tile .kpi-delta { font-size: var(--font-size-caption); }
+
+/* 추이 그래프: 회색 패널 안 */
+.home-traded__chart { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px 6px; border-radius: var(--radius-lg); background: var(--color-surface-muted); }
+/* 상세 모달 그래프: 오른쪽 표(약 370px)와 높이를 맞추고 글자를 키워 읽기 쉽게 */
+.home-traded__chart { flex: 1; min-height: 0; padding: 12px 14px 10px; }
+.home-traded__chart .home-chart { flex: 1; min-height: 220px; row-gap: 5px; }
+.home-traded__chart .home-chart__title { font-size: var(--font-size-label); color: var(--color-text-primary); }
+.home-traded__chart .home-chart__unit { font-size: var(--font-size-caption); }
+.home-traded__chart .home-chart__key { font-size: var(--font-size-caption); }
+.home-traded__chart .home-chart__key i { width: 18px; }
+.home-traded__chart .home-chart__y { width: 56px; font-size: 0.75rem; }
+.home-traded__chart .home-chart__x { height: 16px; }
+.home-traded__chart .home-chart__x:has(.home-chart__xtitle) { height: 30px; }
+.home-traded__chart .home-chart__x small, .home-traded__chart .home-chart__xtitle { font-size: 0.75rem; }
+.home-traded__chart .home-chart__xtitle { top: 16px; }
+.home-traded__chart .home-chart__last { padding: 3px 8px; font-size: var(--font-size-caption); }
+.home-traded__chart .home-tsum__line { stroke-width: 2.5; }
+.home-traded__chart .home-chart__line2 { stroke-width: 2; }
+.home-traded__chart .home-tsum__dot { r: 4.5; }
+.home-traded__zero { stroke: var(--color-border-strong); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+
+/* 순위: 공통 Table을 촘촘하게 */
+/* 순위 표: 공통 Table 규격(14px, 행 구분선, 회색 헤더)에 맞추되 행 높이 30px로 읽기 쉽게 */
+.home-traded__table { font-size: var(--font-size-label); table-layout: fixed; }
+.home-traded__table th, .home-traded__table td { padding: 6px 8px; line-height: 1.3; }
+.home-traded__table th { padding-top: 7px; padding-bottom: 7px; font-size: var(--font-size-caption); }
+.home-traded__table th:first-child, .home-traded__table td:first-child { width: 26px; padding-left: var(--space-2); padding-right: 2px; }
+.home-traded__table th:nth-child(3) { width: 52px; }
+.home-traded__table th:nth-child(4) { width: 96px; }
+.home-traded__table th:nth-child(5) { width: 54px; }
+.home-traded__table th:nth-child(6) { width: 70px; }
+.home-traded__table tbody tr:nth-child(even) { background: var(--color-surface-muted); }   /* 줄무늬로 행 구분 */
+.home-traded__table tbody tr:hover { background: var(--color-primary-soft); }
+.home-traded__meta { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-traded__no { color: var(--color-text-secondary); font-weight: var(--font-weight-regular); }
+.home-traded__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: var(--font-weight-regular); color: var(--color-text-strong); }
+.home-traded__name small { margin-left: 5px; font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
+.home-traded__barcell { padding-left: 0 !important; padding-right: 0 !important; }
+.home-traded__barcell .home-rank__bar { height: 8px; }
+.home-traded__val { font-weight: var(--font-weight-bold); color: var(--color-text-primary); }
+.home-traded__share { color: var(--color-text-secondary); }
+.home-traded__table .home-rank__delta { font-size: var(--font-size-caption); }
+.home-traded__state { padding: var(--space-5) var(--space-4); text-align: center; }
+.home-traded__state .state-title { font-size: var(--font-size-sub); }
+.home-traded__state .spinner { margin: 0 auto var(--space-2); }
+@media (max-width: 900px) {
+  .home-traded__cols { grid-template-columns: minmax(0, 1fr); }
+  .home-traded__select--right { margin-left: 0; }
+}
+@media (max-width: 900px) {
+  .home-rated { grid-template-columns: minmax(0, 1fr); }
+  .home-rated__col:last-child { padding-left: 0; border-left: 0; padding-top: var(--space-4); border-top: 1px solid var(--color-border-strong); }
+}
+@media (max-width: 640px) {
+  .home-rated__tiles, .home-rated__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .home-rates__meta { font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
 /* 환율 카드 자체가 좁으면(창이 작거나 태블릿) 3칸 × 2줄로 — 화면 폭이 아니라 카드 폭 기준 */
 @container home-rates (max-width: 600px) {
@@ -57,10 +227,10 @@
 .home-error { color: var(--color-text-secondary); }
 
 /* 4. 아래 영역: 왼쪽 수출입 카드 3개 (약 52%) / 오른쪽 뉴스 + 규제 (약 48%) */
-/* 행을 minmax(0,1fr) 로 명시해 목록 내용량과 무관하게 Card 높이가 남은 공간에 고정되게 합니다 (auto 행이면 내용만큼 늘어남) */
-.home-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 10fr); grid-template-rows: minmax(0, 1fr); gap: var(--space-5); }
-.home-trade-col { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-5); }
-.home-side { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1.22fr) minmax(0, 1fr); gap: var(--space-5); }
+/* Card 는 내용 높이만큼만 차지합니다 (화면을 억지로 채워 Card 안에 흰 여백이 남지 않게). 내용이 화면보다 길면 .container 가 스크롤됩니다 */
+.home-body { flex: none; display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 10fr); grid-template-rows: auto; align-items: start; gap: var(--space-5); }
+.home-trade-col { min-width: 0; display: grid; grid-template-rows: auto auto auto; gap: var(--space-5); }
+.home-side { min-width: 0; display: grid; grid-template-rows: auto auto; gap: var(--space-5); }
 .home-side > .card { min-width: 0; }
 
 
@@ -72,7 +242,7 @@
 .home-panel__title { display: flex; align-items: center; gap: var(--space-2); white-space: nowrap; font-size: var(--font-size-card-title); font-weight: var(--font-weight-bold); letter-spacing: -0.4px; }
 .home-panel__sub { margin-left: var(--space-1); font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
 .home-panel__meta { font-size: var(--font-size-caption); color: var(--color-text-placeholder); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.home-more { font-size: var(--font-size-label); font-weight: var(--font-weight-bold); }
+.home-more { font-size: var(--font-size-label); font-weight: var(--font-weight-regular); }
 
 /* 목록 — 영역 높이만큼만 표시하고 넘치는 항목은 JS가 숨김 (2-7) */
 .home-list { flex: 1; min-height: 0; margin: 0; padding: 0; list-style: none; overflow: hidden; }
@@ -87,7 +257,7 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
   font-size: var(--font-size-body);
-  font-weight: var(--font-weight-bold);
+  font-weight: var(--font-weight-regular);
   line-height: 1.45;
   letter-spacing: -0.3px;
   transition: color var(--transition-base);
@@ -98,6 +268,7 @@
 .home-list__empty { padding: var(--space-8) 0; text-align: center; font-size: var(--font-size-label); color: var(--color-text-placeholder); }
 .home-news .home-list__title, .home-reg .home-list__title { font-size: var(--font-size-sub); }
 .home-news .home-list__link, .home-reg .home-list__link { padding: var(--space-2) 0; }
+.home-news .home-list__title { -webkit-line-clamp: 1; }   /* 뉴스 제목은 한 줄로 고정해 항목 높이를 일정하게 → 카드 아래 빈 공간 없이 4건 표시 */
 .home-list--modal { overflow: visible; }
 
 .home-live { height: 22px; padding: 0 var(--space-2); font-size: 0.6875rem; gap: 5px; }
@@ -107,17 +278,17 @@
 /* 5. 바이어 현지 시각 (7장) — 상단 띠 안의 한 줄형: 머리줄 + 도시 4칸 */
 .home-clock--strip { justify-content: center; gap: 6px; padding: 14px var(--space-6); }
 .home-clock__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
-.home-clock__title { font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); white-space: nowrap; }
+.home-clock__title { font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); color: var(--color-text-secondary); white-space: nowrap; }
 .home-clock__tools { display: flex; align-items: center; gap: var(--space-1); }
 .home-clock__tabs { padding: 2px; }
 .home-clock__tabs .tab { padding: 2px var(--space-2); font-size: 0.6875rem; }
-.home-clock__edit { border: 0; padding: 2px 6px; border-radius: var(--radius-xs); background: transparent; font-size: 0.6875rem; font-weight: var(--font-weight-bold); color: var(--color-primary); cursor: pointer; }
+.home-clock__edit { border: 0; padding: 2px 6px; border-radius: var(--radius-xs); background: transparent; font-size: 0.6875rem; font-weight: var(--font-weight-regular); color: var(--color-primary); cursor: pointer; }
 .home-clock__edit:hover { background: var(--color-primary-soft); }
 .home-clock__list { min-width: 0; margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: center; }
 .home-clock__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "city" "time"; grid-template-columns: minmax(0, 1fr); align-items: center; column-gap: var(--space-1); min-width: 0; padding: 0 var(--space-3); border-left: 1px solid var(--color-border-strong); cursor: default; }
 .home-clock__row:first-child { padding-left: 0; border-left: 0; }
-.home-clock__city { grid-area: city; display: flex; align-items: baseline; gap: var(--space-1); min-width: 0; font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.home-clock__rank { font-size: 0.6875rem; font-weight: var(--font-weight-bold); color: var(--color-text-placeholder); }
+.home-clock__city { grid-area: city; display: flex; align-items: baseline; gap: var(--space-1); min-width: 0; font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-clock__rank { font-size: 0.6875rem; font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
 .home-clock__code { display: none; }
 .home-clock__time { grid-area: time; white-space: nowrap; font-size: var(--font-size-body); font-weight: var(--font-weight-bold); font-variant-numeric: tabular-nums; line-height: 1.35; }
 .home-clock__offset { display: none; }
@@ -131,33 +302,58 @@
 .home-tcard .home-panel__title { white-space: nowrap; min-width: 0; overflow: hidden; }
 .home-tcard .home-panel__sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .home-tcard__body { min-height: 0; display: flex; }
-.home-tsum { flex: 1; min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-4); }
-.home-tsum__kpis { display: grid; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 0; }
-.home-tsum__kpi { display: grid; grid-template-columns: 56px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: var(--space-2); align-items: baseline; }
-.home-tsum__label { grid-row: 1 / 3; align-self: center; font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
-.home-tsum__value { font-size: 1.25rem; font-weight: var(--font-weight-extrabold); letter-spacing: -0.5px; font-variant-numeric: tabular-nums; line-height: 1.2; white-space: nowrap; }
-.home-tsum__value small { margin-left: 1px; font-size: var(--font-size-label); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
+/* 화장품 수출입 요약 카드: 왼쪽 지표 3줄 + 누계 / 오른쪽 회색 패널 그래프 (테두리 없이 배경 차이로 구분) */
+.home-tsum { flex: 1; min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr); gap: var(--space-4); }
+.home-tsum__kpis { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.home-tsum__row { display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; align-items: baseline; column-gap: var(--space-2); padding: 5px 0; border-bottom: 1px solid var(--color-border); }
+.home-tsum__row:last-of-type { border-bottom: 0; }
+.home-tsum__label { font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); color: var(--color-text-secondary); white-space: nowrap; }
+.home-tsum__value { min-width: 0; font-size: 1.0625rem; font-weight: var(--font-weight-bold); letter-spacing: -0.4px; font-variant-numeric: tabular-nums; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-tsum__value small { margin-left: 1px; font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); letter-spacing: 0; color: var(--color-text-secondary); }
+.home-tsum__delta { font-size: var(--font-size-caption); text-align: right; white-space: nowrap; }
+.home-tsum__foot { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-2); padding: 6px 10px; border-radius: var(--radius-xs); background: var(--color-surface-muted); font-size: var(--font-size-caption); color: var(--color-text-secondary); white-space: nowrap; }
+.home-tsum__foot strong { font-variant-numeric: tabular-nums; color: var(--color-text-primary); }
 /* 최근 12개월 꺾은선 — Chart 라이브러리 없이 inline SVG (design_system: 선 primary-bright, 영역 primary-soft) */
-.home-tsum__trend { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding-left: var(--space-3); border-left: 1px solid var(--color-border-strong); }
+.home-tsum__trend { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; min-height: 0; padding: 10px 12px 8px; border-radius: var(--radius-lg); background: var(--color-surface-muted); }
+.home-tsum__trend-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); color: var(--color-text-secondary); white-space: nowrap; }
+.home-tsum__trend-head small { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 0.6875rem; font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
+.home-tsum__trend .home-chart { flex: none; height: 126px; padding-top: 2px; }   /* 그래프 높이 고정 (제목·범례 포함) */
+.home-tsum__trend .home-chart__last { box-shadow: var(--shadow-card); }
+@media (max-width: 1400px) {   /* 좁은 화면: 값 글자를 줄여 한 줄에 유지 */
+  .home-tsum__row { grid-template-columns: 46px minmax(0, 1fr) auto; }
+  .home-tsum__value { font-size: 1rem; letter-spacing: -0.2px; }
+  .home-tsum__trend-head small { display: none; }
+}
+@media (max-width: 1300px) {
+  .home-tsum__row { grid-template-columns: 40px minmax(0, 1fr) auto; column-gap: 6px; }
+  .home-tsum__value { font-size: 0.9375rem; }
+  .home-tsum__delta { font-size: 0.75rem; }
+  .home-tsum__foot { padding: 5px 8px; font-size: 0.75rem; }
+}
+/* 이전 버전 home.js(캐시)가 그리는 구형 차트도 깨지지 않게 두는 안전장치 */
 .home-tsum__chart { flex: 1; width: 100%; min-height: 0; overflow: visible; }
-.home-tsum__area { fill: var(--color-primary-soft); }
-.home-tsum__line { fill: none; stroke: var(--color-primary-bright); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
-.home-tsum__dot { fill: var(--color-primary); stroke: var(--color-surface); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .home-tsum__axis { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); margin-top: var(--space-1); }
 .home-tsum__axis small { font-size: 0.625rem; line-height: 1; text-align: center; color: var(--color-text-placeholder); white-space: nowrap; }
 .home-tsum__axis small:nth-child(even) { visibility: hidden; }
-.home-tsum__axis small.is-current { visibility: visible; font-weight: var(--font-weight-bold); color: var(--color-primary); }
+.home-tsum__axis small.is-current { visibility: visible; font-weight: var(--font-weight-regular); color: var(--color-primary); }
+.home-rated__chart { width: 100%; height: 120px; overflow: visible; }
+.home-rated__axis { display: flex; justify-content: space-between; }
+.home-rated__axis small { font-size: 0.625rem; line-height: 1; color: var(--color-text-placeholder); }
+.home-rated__axis small.is-hidden { display: none; }
+.home-tsum__area { fill: var(--color-primary-soft); }
+.home-tsum__line { fill: none; stroke: var(--color-primary-bright); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.home-tsum__dot { fill: var(--color-primary); stroke: var(--color-surface); stroke-width: 2; vector-effect: non-scaling-stroke; }
 
 /* 순위 목록: 이름 / 막대 / 금액 / 비중 / 전년비 */
-.home-rank { min-height: 0; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; justify-content: space-around; overflow: hidden; }
+.home-rank { min-height: 0; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; justify-content: flex-start; gap: 10px; overflow: hidden; }   /* 행을 위에서부터 일정 간격으로 (카드가 커져도 행 사이가 벌어지지 않게) */
 .home-rank__item { display: grid; grid-template-columns: minmax(96px, 1.1fr) minmax(0, 1fr) 82px 50px 64px; align-items: center; gap: var(--space-2); min-height: 24px; font-size: var(--font-size-label); font-variant-numeric: tabular-nums; }
-.home-rank__name { display: flex; align-items: baseline; gap: var(--space-1); min-width: 0; font-weight: var(--font-weight-bold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-rank__name { display: flex; align-items: baseline; gap: var(--space-1); min-width: 0; font-weight: var(--font-weight-regular); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-rank__name small { font-size: 0.6875rem; font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); }
 .home-rank__bar { display: block; height: 8px; border-radius: var(--radius-pill); background: var(--color-background); overflow: hidden; }
 .home-rank__bar > span { display: block; height: 100%; border-radius: var(--radius-pill); background: var(--color-primary-bright); }
 .home-rank__value { text-align: right; font-weight: var(--font-weight-bold); white-space: nowrap; }
 .home-rank__share { text-align: right; color: var(--color-text-secondary); white-space: nowrap; }
-.home-rank__delta { text-align: right; font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-placeholder); white-space: nowrap; }
+.home-rank__delta { text-align: right; font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); color: var(--color-text-placeholder); white-space: nowrap; }
 .home-rank__delta.is-up { color: var(--color-up); }
 .home-rank__delta.is-down { color: var(--color-down); }
 .home-rank__delta.is-flat { color: var(--color-text-secondary); }
@@ -177,8 +373,6 @@
   .is-home .app-footer { display: flex; }
   .home-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; }
   .home-trade-col { grid-template-rows: auto auto auto; }
-  .home-tcard--summary .home-tsum { min-height: 200px; }
-  .home-tcard .home-rank { min-height: 150px; }
   .home-side { grid-template-rows: auto auto; }
   .home-list { overflow: visible; }
 }
@@ -193,11 +387,7 @@
   .is-home .app-main { height: auto; }
   .is-home .container { height: auto; overflow: visible; }
   .is-home .app-footer { display: flex; }
-  .home-body { grid-template-rows: auto; align-items: start; }
-  .home-trade-col { grid-template-rows: auto auto auto; }
-  .home-tcard--summary .home-tsum { min-height: 150px; }
-  .home-tcard .home-rank { min-height: 124px; }
-  .home-side { grid-template-rows: minmax(360px, auto) minmax(300px, auto); }
+  .home-side { grid-template-rows: auto auto; }
   .home-list { overflow: visible; }
 }
 @media (max-width: 640px) {
@@ -205,7 +395,7 @@
   .home-clock__list { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--space-2); }
   .home-clock__row:nth-child(2n + 1) { padding-left: 0; border-left: 0; }
   .home-tsum { grid-template-columns: minmax(0, 1fr); }
-  .home-tsum__trend { padding-left: 0; border-left: 0; min-height: 96px; }
+  .home-tsum__trend { min-height: 110px; }
   .home-rank__item { grid-template-columns: minmax(72px, 1fr) minmax(0, 1fr) auto auto; }
   .home-rank__name small { display: none; }
   .home-rank__delta { display: none; }
@@ -253,7 +443,7 @@
   transition: background var(--transition-base), color var(--transition-base);
 }
 .home-chip:hover { background: var(--color-border-strong); color: var(--color-text-primary); }
-.home-chip.is-active { background: var(--color-primary); color: var(--color-text-inverse); font-weight: var(--font-weight-bold); }
+.home-chip.is-active { background: var(--color-primary); color: var(--color-text-inverse); font-weight: var(--font-weight-regular); }
 .home-result { margin-bottom: var(--space-2); font-size: var(--font-size-label); color: var(--color-text-secondary); }
 .home-result strong { color: var(--color-text-primary); }
 .home-list mark { padding: 0 1px; border-radius: 3px; background: var(--color-primary-soft); color: inherit; }

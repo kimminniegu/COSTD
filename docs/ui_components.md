@@ -35,13 +35,13 @@
 - **상태**: 기본 `#4E5968` / Hover → 배경 `surface-muted` / Active → `.is-active` 배경 `primary-soft` + 글자 `primary` + Bold (현재 URL 기준 자동 적용, `aria-current="page"`)
 - 링크는 반드시 `url_for()` 사용: `href="{{ url_for('regulatory') }}"`
 
-| endpoint | URL | 메뉴명 |
-|---|---|---|
-| `home` | `/` | 홈 |
-| `regulatory` | `/regulatory` | 국가별 인허가 규제 |
-| `margin` | `/margin-calculator` | 원가·마진 시뮬레이션 |
-| `simulation` | `/ai-formulation` | AI 제형/샘플 시뮬레이션 |
-| `dev_request` | `/dev-request` | 개발요청서 |
+| 순서 | endpoint | URL | 메뉴명 |
+|---|---|---|---|
+| 1 | `home` | `/` | 홈 |
+| 2 | `margin` | `/margin-calculator` | 원가·마진 시뮬레이션 |
+| 3 | `dev_request` | `/dev-request` | 개발요청서 |
+| 4 | `regulatory` | `/regulatory` | 국가별 인허가 규제 |
+| 5 | `simulation` | `/ai-formulation` | AI 제형모델링 |
 
 ## 3. Sidebar
 
@@ -53,8 +53,9 @@
   - 본문(`.app-main`)의 좌측 여백도 함께 줄어듭니다 (0.28s Transition)
   - 페이지 JS에서 강제로 바꿔야 할 때: `Common.setSidebarCollapsed(true | false)`
 - **상태 (≤1024px)**: 숨김 → `[data-sidebar-toggle]` 클릭 시 `.is-open` (Drawer, 항상 펼친 모양). 배경 클릭 / ESC로 닫힘. 접기 버튼은 표시되지 않습니다.
-- 사용자 영역(`.app-user`): 이름 첫 글자 아바타(`.app-user__avatar`) + 이름/소속(세션 `current_user`) + 로그아웃 링크(`.app-user__logout`, `/logout`). 접힘 상태에서는 아바타와 로그아웃 아이콘만 세로로 표시됩니다.
-- 로그인 화면은 공통 Layout 을 쓰지 않는 독립 화면입니다: `src/common/login.html` + `login.css` (Class 접두사 `login-`). 좌측 소개 패널(`--color-background`) + 우측 400px 폼, ≤1024px 에서 1열.
+- 사용자 영역(`.app-user`): 아바타 + 이름/소속 버튼(`.app-user__main`, `data-modal-open="app-user-modal"`) + 로그아웃 링크(`.app-user__logout`, `/logout`). 접힘 상태에서는 아바타와 로그아웃 아이콘만 세로로 표시됩니다.
+- 내 계정 모달(`#app-user-modal`, `base.html`): 아바타·이름 클릭 시 열림. ① 로그인 정보 — 이메일·소속·로그인 시각·로그인 유지 여부(세션 `current_user`의 `logged_in_at`, `remember`), ② 회사소개 — COSMOA 소개 문단, 기능 4가지(`.app-about__features`), 회사 정보(회사명 COSTD · 전화 02-6000-5968 · 주소 서울특별시 강남구 영동대로 513 COEX(코엑스 전시장 4층) 스터디룸 3, `.app-about__list--company`). Footer에 로그아웃·닫기. Class 접두사 `app-about-`.
+- 로그인 화면은 공통 Layout 을 쓰지 않는 독립 화면입니다: `src/common/login.html` + `login.css` (Class 접두사 `login-`). 좌측 소개 패널(`--color-background`) + 우측 400px 폼, ≤1024px 에서 1열. "비밀번호 찾기"(`.login-form__link`)를 누르면 PM 문의 안내(`alert-info`, `#login-forgot-note`)가 폼 안에 펼쳐집니다(재설정 기능 없음).
 
 ## 4. Button
 

@@ -161,6 +161,17 @@ def dev_request():
 
 # [A] Home — 접두사: /api/home/...  (명세: src/01_home/home.md 9-1)
 
+@app.context_processor
+def home_asset_version():
+    """홈 CSS·JS 링크에 ?v=수정시각 을 붙여, 파일이 바뀌면 브라우저가 캐시 대신 새 파일을 받게 합니다 (담당자 A 페이지 전용)"""
+    home_dir = SRC_DIR / "01_home"
+    try:
+        ver = int(max(p.stat().st_mtime for p in (home_dir / "home.css", home_dir / "home.js")))
+    except OSError:
+        ver = 0
+    return {"home_asset_v": ver}
+
+
 @app.template_filter("home_highlight")
 def home_highlight(text, q):
     """원문에서 검색어를 찾고 각 조각을 escape 해서 안전하게 강조합니다."""
@@ -215,6 +226,38 @@ def home_api_regulations():
     """규제 새 소식 — ?since=<ISO 시각> 이후 게시된 것만 (화면에서 10분마다 호출)"""
     home_data.kick_refresh(("regulations",))
     return jsonify(home_data.get_regulations(since=request.args.get("since")))
+
+
+@app.route("/api/home/rates/<code>")
+@login_required
+def home_api_rate_detail(code):
+    """환율 상세 (명세 4-4) — 통화 하나의 송금 환율, 최근 30영업일 추이·통계"""
+    detail = home_data.get_rate_detail(code)
+    if detail is None:
+        return jsonify({"ok": False, "error": "지원하지 않는 통화예요"}), 404
+    return jsonify(detail)
+
+
+@app.route("/api/home/trade")
+@login_required
+def home_api_trade_detail():
+    """수출입 상세 (명세 5-9) — ?hs=3304|330499|all &months=3|6|12|24 &country=CN &metric=exp|imp|bal"""
+    detail = home_data.get_trade_detail(
+        hs=_arg("hs") or "3304",
+        months=request.args.get("months", 12, type=int),
+        country=_arg("country"),
+        metric=_arg("metric", ("exp", "imp", "bal")) or "exp",
+    )
+    if detail is None:
+        return jsonify({"ok": False, "error": "지원하지 않는 품목 코드예요"}), 400
+    return jsonify(detail)
+
+
+@app.route("/api/home/validation")
+@login_required
+def home_api_validation():
+    """데이터 교차검증 요약 (명세 13장) — 구역별 마지막 성공·시도 시각, 환율 이상값, 수출입 정리·불일치 건수"""
+    return jsonify(home_data.get_validation())
 
 
 # [B] 국가별 인허가 규제 — 접두사: /api/regulatory/...
