@@ -31,7 +31,12 @@
 .requisition-paper > .card-header { padding: var(--space-8); }
 .requisition-paper > .card-body { padding: var(--space-6) var(--space-8) var(--space-8); }
 .requisition-fields > .form-group { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; margin: 0; }
+.requisition-fields > .requisition-field-wide { grid-column: 1 / -1; }
 .requisition-fields > .form-group > .form-label { margin: 0; color: var(--color-text-body); font-size: var(--font-size-label); font-weight: var(--font-weight-bold); }
+.requisition-field-note { padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
+.requisition-field-note .form-label { margin: 0 0 var(--space-2); color: var(--color-text-body); font-size: var(--font-size-label); font-weight: var(--font-weight-bold); }
+.requisition-field-note textarea.form-control { min-height: 104px; background: var(--color-surface); resize: vertical; }
+.requisition-field-note .requisition-field-value { min-height: auto; background: var(--color-surface); }
 .requisition-field-content { min-width: 0; }
 .requisition-fields > #requisition-field-export_countries { position: relative; z-index: 5; }
 .requisition-fields > #requisition-field-export_countries .requisition-country-list { z-index: 30; }

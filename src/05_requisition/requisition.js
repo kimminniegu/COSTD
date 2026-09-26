@@ -11,6 +11,7 @@
   const kinds = Object.fromEntries(definitions.map(([key, , kind]) => [key, kind]));
   labels.reference_notes = "기타사항";
   kinds.reference_notes = "textarea";
+  const wideNoteFields = new Set(["company_description", "basic_notes", "ingredients.other_notes"]);
   const chipFields = definitions.filter(([, , kind]) => kind === "list").map(([key]) => key);
   const get = (data, key) => key.split(".").reduce((value, part) => value?.[part], data);
   function set(data, key, value) {
@@ -115,7 +116,7 @@
       if (provenance.review_status === "not_applicable") control = '<p class="requisition-field-value">해당 없음</p>';
       control += '<small class="text-caption">' + ({ confirmed: "✓ 확인 완료", needs_review: "⚠ 확인 필요", missing: "미입력", not_applicable: "해당 없음", user_edited: "✓ 사용자 수정" }[provenance.review_status] || "") + '</small>';
     }
-    return '<div class="form-group" id="requisition-field-' + key + '">' +
+    return '<div class="form-group' + (wideNoteFields.has(key) ? ' requisition-field-wide requisition-field-note' : '') + '" id="requisition-field-' + key + '">' +
       (editing() && key !== "target_price_tier" ? '<label class="form-label" for="requisition-input-' + key + '">' : '<p class="form-label">') +
       labels[key] + (editing() && required ? ' <span class="is-required">*</span>' : "") +
       (editing() && key !== "target_price_tier" ? "</label>" : "</p>") + '<div class="requisition-field-content">' + control +
@@ -241,7 +242,7 @@
     $("references").innerHTML = '<div class="requisition-reference-grid">' + referenceMarkup(current()) + '</div>' +
       (originalFile ? '<button type="button" class="btn btn-secondary" data-original-file>원본 RFP 다운로드</button>' : '') +
       (editing() ? '<div class="requisition-reference-upload"><div><p class="form-label">참고자료 추가</p><p class="form-help">PNG, JPG, WEBP, PDF, DOCX, XLSX · 파일당 5MB · 전체 20MB</p></div><input class="requisition-file-input" type="file" id="requisition-reference-input" multiple accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.xlsx"><label class="btn btn-soft" for="requisition-reference-input"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/></svg>파일 선택</label></div><p class="form-help requisition-reference-help">선택한 이미지는 PDF에 함께 표시되고, 문서는 파일명으로 표시돼요.</p>' : !(current().reference_files || []).length ? '<div class="requisition-reference-empty"><p>등록된 참고자료가 없어요.</p></div>' : '') +
-      '<div class="form-group requisition-reference-notes"><label class="form-label" for="requisition-input-reference_notes">기타사항</label><div class="requisition-field-content">' +
+      '<div class="form-group requisition-reference-notes requisition-field-note"><label class="form-label" for="requisition-input-reference_notes">기타사항</label><div class="requisition-field-content">' +
       (editing() ? '<textarea class="form-control" rows="4" maxlength="10000" id="requisition-input-reference_notes" data-field="reference_notes">' + escape(current().reference_notes || "") + '</textarea>' : '<p class="requisition-field-value">' + escape(current().reference_notes || "미입력") + '</p>') + '</div></div>';
   }
   $("document").addEventListener("change", async (event) => {
