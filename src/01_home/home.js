@@ -39,7 +39,7 @@
     });
   }
   function arrow(direction) { return direction === "up" ? "▲" : direction === "down" ? "▼" : "–"; }
-  var NEWS_LIMIT = 4, REG_LIMIT = 3;   // 홈의 뉴스 · 규제 표시 건수
+  var NEWS_LIMIT = 8, REG_LIMIT = 6;   // 홈의 뉴스 · 규제 표시 상한 — 실제 표시 수는 카드 높이에 맞춰 fitList 가 결정 (큰 화면에서 빈 공간 방지)
   function isNarrow() { return window.matchMedia("(max-width: 1024px)").matches; }
 
   /* 1. 환율 띠 -------------------------------------------------------------- */

@@ -309,7 +309,7 @@
 .home-tsum__row { display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; align-items: baseline; column-gap: var(--space-2); padding: 5px 0; border-bottom: 1px solid var(--color-border); }
 .home-tsum__row:last-of-type { border-bottom: 0; }
 .home-tsum__label { font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); color: var(--color-text-secondary); white-space: nowrap; }
-.home-tsum__value { min-width: 0; font-size: 1.1875rem; font-weight: var(--font-weight-extrabold); letter-spacing: -0.4px; font-variant-numeric: tabular-nums; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-tsum__value { min-width: 0; font-size: 1.1875rem; font-weight: var(--font-weight-bold); letter-spacing: -0.4px; font-variant-numeric: tabular-nums; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-tsum__value small { margin-left: 1px; font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); letter-spacing: 0; color: var(--color-text-secondary); }
 .home-tsum__delta { font-size: var(--font-size-caption); text-align: right; white-space: nowrap; }
 .home-tsum__foot { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-2); padding: 6px 10px; border-radius: var(--radius-xs); background: var(--color-surface-muted); font-size: var(--font-size-caption); color: var(--color-text-secondary); white-space: nowrap; }
