@@ -17,7 +17,8 @@
     <!-- 왼쪽: 소개 -->
     <aside class="login-intro">
       <a class="login-logo" href="{{ url_for('login') }}" aria-label="COSTD">
-        <img class="login-logo__img" src="{{ url_for('asset', filename='common/img/costd_logo.png') }}" alt="COSTD — Cosmetic ODM for a Better Tomorrow" width="916" height="271">
+        {# 인트로 애니메이션 GIF (1회 재생 후 완성 로고로 정지). 정적 로고는 common/img/costd_logo.png #}
+        <img class="login-logo__img" src="{{ url_for('asset', filename='common/img/costd_logo_intro.gif') }}" alt="COSTD — Cosmetic ODM for a Better Tomorrow" width="913" height="327">
       </a>
 
       <div class="login-intro__body">
