@@ -2,10 +2,10 @@
 /* 여백은 원가·마진 탭 기준에 맞춥니다: 좌우는 공통값(56px), 위 24px, 카드 간격 16px, 카드 안쪽 20px. */
 .simulation-shell { --layout-page-padding-y: var(--space-6); --layout-footer-height: var(--space-6); }
 .simulation-page { --simulation-columns: minmax(0, 1fr) clamp(236px, 20%, 272px); --layout-card-padding: var(--space-5); --layout-section-gap: var(--layout-card-gap); min-width: 0; }
-/* 머리글도 본문과 같은 두 칸: 개발요청서 버튼은 샘플 제형 카드 오른쪽 위, 초기화·시연 버튼은 배합 조절 카드 왼쪽 위에 맞춥니다. */
+/* 머리글도 본문과 같은 두 칸: 개발요청서 버튼은 샘플 제형 카드 오른쪽 위, 초기화·시연 버튼은 배합 조절 카드 오른쪽 위에 맞춥니다. */
 .simulation-page .page-header { display: grid; grid-template-columns: var(--simulation-columns); align-items: center; gap: var(--layout-card-gap); }
 .simulation-header-main { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-width: 0; }
-.simulation-page .page-actions { justify-content: flex-start; }
+.simulation-page .page-actions { justify-content: flex-end; }
 .simulation-page .page-title { font-size: var(--font-size-section-title); }
 .simulation-page .card-header { align-items: center; gap: var(--space-2); }
 .simulation-page .card-header + .card-body { padding-top: var(--space-3); }
