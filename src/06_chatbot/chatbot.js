@@ -176,10 +176,6 @@
   input.addEventListener("keydown", function (e) {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(input.value); }
   });
-  body.addEventListener("click", function (e) {
-    var chip = e.target.closest("[data-chatbot-prompt]");
-    if (chip) send(chip.getAttribute("data-chatbot-prompt"));
-  });
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && !panel.hidden && !document.querySelector(".modal-backdrop.is-open")) setOpen(false);
   });

@@ -66,16 +66,6 @@
 .login-form__note[hidden] { display: none; }   /* 공통 .alert 의 display:flex 보다 우선 */
 .login-form__foot { text-align: center; font-size: var(--font-size-sub); color: var(--color-text-secondary); }
 .login-form__foot strong { color: var(--color-text-body); }
-.login-form__hint {
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-muted);
-  border: 1px dashed var(--color-border-strong);
-  font-size: var(--font-size-caption);
-  color: var(--color-text-secondary);
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
 .login-form .alert { align-items: baseline; flex-wrap: wrap; }
 
 /* Tablet 이하: 소개 영역을 위로, 폼을 아래로 */
