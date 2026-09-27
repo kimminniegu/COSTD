@@ -173,7 +173,7 @@
      '수정됨' 표시는 제조원가 세부 칸 기준입니다. (견적 조건·물류는 미팅 중 바꾸는 값이라 제외) */
   const ERP_FIELDS = { raw: "raw", proc: "proc", pack: "pack", "r-raw": "rate_raw", "r-proc": "rate_proc", "r-pack": "rate_pack", loss: "loss" };
   const ERP_QUOTE = { qty: "qty", inco: "incoterm", m2: "m2", m2min: "m2min" };
-  const ERP_LOGI = { "cbm-preset": "preset", "cbm-ea": "cbm_ea", "cbm-box": "cbm_box", "cbm-inland": "cbm_inland", "cbm-lcl": "cbm_lcl", logi: "logi", "r-logi": "rate_logi", freight: "freight" };
+  const ERP_LOGI = { "r-logi": "rate_logi" };   // 입수·부피·단가·물류비 총액은 logistics.preset 으로 handlePackagingPresetChange 가 채움
   const ERP_MIN_WAIT_MS = 300;   // 연동 중 로딩 표시가 깜빡이지 않도록 최소 대기
   const fill = (map, src) => { if (src) Object.keys(map).forEach((id) => { if (src[map[id]] != null) $(id).value = src[map[id]]; }); };
   let erp = null;   // { item_code, item_name, synced_at, vals }
@@ -224,6 +224,7 @@
       $("sagup").checked = !!data.sagup;
       fill(ERP_QUOTE, data.quote);
       fill(ERP_LOGI, data.logistics);
+      handlePackagingPresetChange(data.logistics && data.logistics.preset);   // 입수·부피·단가 → 물류비 총액·해상운임까지 자동 세팅
       /* 새 품목 기준으로 다시 맞춤: 가격표 행 물류비(이전 품목 값이면 수량이 적은 행이 더 비싸짐) · 역제안 시뮬레이션(VE 체크·마진 조정) */
       const q0 = num("qty"), l0 = num("logi");
       if (q0 > 0 && l0 >= 0) st.qtyRows.forEach((row) => { row.l = row.q === q0 ? l0 : estLogi(q0, l0, row.q); });
@@ -236,7 +237,7 @@
       /* 바이어 목표가 — 연동 후 견적 단가에서 counter_pct 만큼 낮춘 첫 역제안 (기준 환율이 바뀌어도 판정 구간이 같게 단가 기준으로) */
       const cp = data.quote && data.quote.counter_pct;
       if (cp > 0 && st.quote) { $("target").value = (Math.round(st.quote.unit * (1 - cp / 100) * 100) / 100).toFixed(2); render(); }
-      toast(`ERP에서 [${data.item_code}] 제품의 원가/물류/로스율(${pctN(data.loss / 100)}) 데이터를 불러왔습니다.`);
+      toast(`ERP에서 [${data.item_code}] 제품의 제조원가 및 표준 물류 프리셋을 불러왔습니다.`);
       btn.textContent = "연동됨";
       setTimeout(() => { btn.textContent = label; }, 1500);
     } catch (e) {
@@ -247,48 +248,84 @@
     }
   });
 
-  /* ---------- 약식 포장/CBM 추정 (물류비 입력 보조) ----------
-     카톤 수 = ⌈수량 ÷ 카톤당 입수⌉, CBM = 카톤 수 × 카톤 부피.
-     LCL 은 1 CBM 미만도 1 CBM 으로 청구하는 관행에 맞춰 운임 계산만 최소 1 CBM 을 적용합니다. */
-  const CBM_PRESETS = { toner: { ea: 40, box: 0.025 }, serum: { ea: 48, box: 0.015 }, cream: { ea: 60, box: 0.025 }, mask: { ea: 200, box: 0.025 } };
+  /* ---------- 약식 포장/CBM 추정 (ODM 표준 패키징 프리셋) ----------
+     카톤 수 = ⌈수량 ÷ 카톤당 입수⌉, CBM = 카톤 수 × 카톤 부피 (소수 2자리).
+     LCL 은 1 CBM 미만도 1 CBM 으로 청구하는 관행에 맞춰 금액 계산만 최소 1 CBM 을 적용합니다.
+     자동 반영 중(logiAuto)이면 계산한 내륙물류비·해상운임을 FOB 물류비 총액·해상운임 칸(단일 원천)에 넣고,
+     사용자가 그 칸을 직접 고치면 해당 칸만 자동 반영을 끕니다. 프리셋 변경·ERP 연동·'물류비 자동 반영' 버튼은 다시 켭니다. */
+  const ODM_PACKAGING_PRESETS = {
+    SERUM_30ML: { id: "SERUM_30ML", name: "세럼/앰플 30ml", unitsPerCarton: 48, cbmPerCarton: 0.015, defaultInternalLogisticFeePerCbm: 150000, defaultOceanFreightPerCbm: 50 },
+    TONER_150ML: { id: "TONER_150ML", name: "토너/에센스 100~150ml", unitsPerCarton: 40, cbmPerCarton: 0.024, defaultInternalLogisticFeePerCbm: 150000, defaultOceanFreightPerCbm: 50 },
+    CREAM_50ML: { id: "CREAM_50ML", name: "크림 50ml (단지)", unitsPerCarton: 48, cbmPerCarton: 0.020, defaultInternalLogisticFeePerCbm: 150000, defaultOceanFreightPerCbm: 50 },
+    MASK_SET: { id: "MASK_SET", name: "마스크팩 (10매 세트박스)", unitsPerCarton: 20, cbmPerCarton: 0.026, defaultInternalLogisticFeePerCbm: 150000, defaultOceanFreightPerCbm: 50 },   // 20세트 (총 200장)
+    TUBE_120ML: { id: "TUBE_120ML", name: "클렌징 폼/튜브 100~150ml", unitsPerCarton: 50, cbmPerCarton: 0.022, defaultInternalLogisticFeePerCbm: 150000, defaultOceanFreightPerCbm: 50 },
+  };
+  const DEFAULT_PRESET = "TONER_150ML";
   const cbm2 = (v) => (Math.round(v * 100 + 1e-6) / 100).toFixed(2);   // 209 × 0.015 = 3.1349999… → 3.14 (부동소수 오차 보정)
   const FCL_HINT_CBM = 15;   // 이 이상이면 20ft 컨테이너(FCL) 견적 비교를 권장
+  const logiAuto = { logi: false, freight: false };   // 처음 화면은 예시 값(1,200,000원 · $1,500) 그대로 — 프리셋을 고르거나 ERP 연동하면 켜짐
   let cbmEst = null;
 
-  function renderCbm(p) {
-    const ea = num("cbm-ea"), box = num("cbm-box"), inland = num("cbm-inland"), lcl = num("cbm-lcl");
-    if ([ea, box, inland, lcl].some(isNaN) || ea <= 0 || box <= 0 || inland < 0 || lcl < 0) {
-      cbmEst = null;
+  $("cbm-preset").innerHTML = Object.values(ODM_PACKAGING_PRESETS).map((pr) => `<option value="${pr.id}">${pr.name}</option>`).join("");
+
+  /* 입력 칸 → 추정값. 입력이 잘못되면 null */
+  function estimateCbm() {
+    const qty = num("qty"), ea = num("cbm-ea"), box = num("cbm-box"), inland = num("cbm-inland"), lcl = num("cbm-lcl");
+    if ([qty, ea, box, inland, lcl].some(isNaN) || qty <= 0 || ea <= 0 || box <= 0 || inland < 0 || lcl < 0) return null;
+    const cartons = Math.ceil(qty / ea), cbm = Number(cbm2(cartons * box)), billed = Math.max(1, cbm);
+    return { cartons, cbm, logi: Math.round((billed * inland) / 10000) * 10000, freight: Math.round(billed * lcl) };
+  }
+
+  /* 추정값을 계산하고, 자동 반영 중인 칸에 넣음 (render 의 readInputs 보다 먼저) */
+  function syncCbmLogi() {
+    cbmEst = estimateCbm();
+    if (!cbmEst) return;
+    if (logiAuto.logi) $("logi").value = cbmEst.logi;
+    if (logiAuto.freight) $("freight").value = cbmEst.freight;
+  }
+
+  /* [단품 용량/형태] 변경 — 프리셋의 입수·부피·단가를 채우고 물류비 자동 반영을 켬 */
+  function handlePackagingPresetChange(id, link = true) {
+    const pr = ODM_PACKAGING_PRESETS[id];
+    if (!pr) return;
+    $("cbm-preset").value = pr.id;
+    $("cbm-ea").value = pr.unitsPerCarton;
+    $("cbm-box").value = pr.cbmPerCarton;
+    $("cbm-inland").value = pr.defaultInternalLogisticFeePerCbm;
+    $("cbm-lcl").value = pr.defaultOceanFreightPerCbm;
+    if (link) { logiAuto.logi = true; logiAuto.freight = true; }
+    syncCbmLogi();
+  }
+
+  function renderCbm() {
+    const btn = $("cbm-apply"), on = logiAuto.logi && logiAuto.freight;
+    if (!cbmEst) {
       $("cbm-peek").textContent = "";
       $("cbm-out").innerHTML = '<p class="form-error">카톤당 입수·부피는 0보다 크고, 단가는 0 이상이어야 해요.</p>';
-      $("cbm-apply").disabled = true;
+      btn.disabled = true;
+      btn.textContent = "물류비 자동 반영";
       return;
     }
-    const cartons = Math.ceil(p.qty / ea), cbm = cartons * box, billed = Math.max(1, cbm);
-    cbmEst = { cartons, cbm, logi: Math.round((billed * inland) / 10000) * 10000, freight: Math.ceil(billed * lcl) };
+    const { cartons, cbm } = cbmEst;
     $("cbm-peek").textContent = `${cartons.toLocaleString()}카톤 · ${cbm2(cbm)} CBM`;
     $("cbm-out").innerHTML = `<div class="margin-cbm-out__row"><span>카톤 ${cartons.toLocaleString()}박스</span><b>${cbm2(cbm)} CBM</b></div>
       <div class="margin-cbm-out__row"><span>FOB 내륙물류비</span><b>${won(cbmEst.logi)}</b></div>
-      <div class="margin-cbm-out__row"><span>해상운임 (LCL)</span><b>$${cbmEst.freight.toLocaleString()}</b></div>
+      <div class="margin-cbm-out__row"><span>해상운임 (LCL, 참고용)</span><b>$${cbmEst.freight.toLocaleString()}</b></div>
       ${cbm < 1 ? '<p class="text-caption">1 CBM 미만은 LCL 최소 1 CBM으로 계산했어요.</p>' : ""}
       ${cbm >= FCL_HINT_CBM ? `<p class="text-caption margin-cbm-out__hint">${FCL_HINT_CBM} CBM 이상이에요. 20ft 컨테이너(FCL) 견적과 비교해 보세요.</p>` : ""}`;
-    $("cbm-apply").disabled = false;
+    btn.disabled = on;
+    btn.textContent = on ? "위 물류비·해상운임에 자동 반영 중" : "물류비 자동 반영";
   }
 
-  $("cbm-preset").addEventListener("input", () => {   // 아래 입력 Card 공통 listener(render)보다 먼저 등록
-    const pr = CBM_PRESETS[$("cbm-preset").value];
-    $("cbm-ea").value = pr.ea;
-    $("cbm-box").value = pr.box;
-  });
+  $("cbm-preset").addEventListener("input", () => handlePackagingPresetChange($("cbm-preset").value));   // 아래 입력 Card 공통 listener(render)보다 먼저 등록
+  $("logi").addEventListener("input", () => { logiAuto.logi = false; });        // 직접 입력한 값이 우선
+  $("freight").addEventListener("input", () => { logiAuto.freight = false; });
   $("cbm-apply").addEventListener("click", () => {
-    if (!cbmEst) return;
-    $("logi").value = cbmEst.logi;
-    $("freight").value = cbmEst.freight;
+    logiAuto.logi = true;
+    logiAuto.freight = true;
     render();
-    const b = $("cbm-apply");
-    b.textContent = "반영됨 · 직접 수정 가능";
-    setTimeout(() => { b.textContent = "운임 반영"; }, 1500);
   });
+  handlePackagingPresetChange(DEFAULT_PRESET, false);   // 입수·부피 칸 기본값도 프리셋 표에서
 
   /* ---------- 현재 USD TTB (서버 /api/margin-calculator/fx-rate, 10분 캐시) ----------
      수출 대금을 원화로 받는 기준인 TTB(전신환 받으실 때)를 기준 환율 라벨 아래 'TTB 1,351.1' 알약 버튼으로 보여주고,
@@ -347,6 +384,7 @@
   /* ---------- 렌더 ---------- */
   function render() {
     syncLiveFx();
+    syncCbmLogi();           // 자동 반영 중이면 물류비·해상운임 칸을 먼저 채워 readInputs 가 같은 값을 읽도록
     const p = readInputs();
     const inco = $("inco").value;
     $("sea-row").style.display = ["CFR", "CIF"].includes(inco) ? "grid" : "none";
@@ -355,7 +393,7 @@
     syncErpStatus();
     if (p.error) { $("cost-sum").textContent = "-"; return; }
     const r = forward(p);
-    renderCbm(p);            // 물류비 요약이 CBM 추정값을 쓰므로 먼저 계산
+    renderCbm();
     renderInputSummary(p, r);
     renderForward(p, r);
     renderReverse(p, r);
@@ -962,7 +1000,7 @@
       if (!isNaN(v) && v > 0) {
         const row = i >= 0 ? st.qtyRows[i] : null;
         const cur = row ? row.q === p.qty : true;
-        if (e.dataset.f === "l" && cur) $("logi").value = v;
+        if (e.dataset.f === "l" && cur) { $("logi").value = v; logiAuto.logi = false; }   // 표에서 고친 물류비도 직접 입력으로 우선
         if (e.dataset.f === "q" && !row) $("qty").value = v;
         if (row) row[e.dataset.f] = v;
       }
