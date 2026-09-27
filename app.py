@@ -94,7 +94,8 @@ def login():
         error = "이메일 또는 비밀번호를 다시 확인해 주세요."
     demo_hint = None
     if app.debug:  # 개발 중에만 데모 계정 안내 표시
-        demo_hint = f"{os.getenv('COSMOA_DEMO_EMAIL', 'demo@costd.kr')} / {os.getenv('COSMOA_DEMO_PASSWORD', 'cosmoa1234')}"
+        demo_email, demo_password, _n, _t = auth.demo_account()
+        demo_hint = f"{demo_email} / {demo_password}"
     return render_template("common/login.html", error=error, email=email, next=next_url, demo_hint=demo_hint), (401 if error else 200)
 
 
