@@ -16,6 +16,7 @@ HTML은 Flask 템플릿이므로 파일을 브라우저에서 직접 열지 않�
 - 항목별 원문 페이지와 `confirmed/needs_review/missing/not_applicable/user_edited` 상태 보존
 - 참고자료 추가/삭제/다운로드, 이미지의 PDF 포함 (파일당 5MB, 전체 20MB, 최대 20개)
 - 최종 결과를 A4 인쇄용 문서로 생성. `PDF로 저장`을 누르고 브라우저 인쇄 창에서 PDF 저장을 선택합니다.
+- 인쇄 문서 양식은 견적서 PDF(`src/03_margin/margin_quote_document.html`)와 동일한 규격을 따릅니다: 회사 머리글(회사명·주소·전화, 내 계정 모달의 회사 정보에서 읽음) + 파란 제목 DEVELOPMENT REQUEST, Request to / 문서 정보 2단, 조건 4칸(샘플 구분·제품 유형·목표 가격대·수출 대상국), 파란 헤더 표, Notes, Prepared by / Reviewed by 서명란, 꼬리글.
 - 권장 파일명을 인쇄 문서 제목으로 설정합니다. 브라우저에 따라 저장 창에서 이름을 확인해야 할 수 있습니다.
 
 ## 자동변환 설정
