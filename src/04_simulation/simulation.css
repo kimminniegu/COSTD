@@ -62,7 +62,7 @@
 .simulation-formula-legend { display: flex; flex-wrap: wrap; gap: 2px 10px; margin: 0; padding: 0; list-style: none; font-size: 10px; color: #64748b; }
 .simulation-formula-legend li { display: inline-flex; align-items: center; gap: 4px; }
 .simulation-formula-legend li::before { content: ''; width: 6px; height: 6px; border-radius: 2px; background: var(--seg); }
-.simulation-formula-status .text-caption { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; color: #64748b; }
+.simulation-formula-status .text-caption { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; color: #64748b; white-space: nowrap; }
 .simulation-formula-badge { --badge-tone: var(--color-success); --badge-soft: var(--color-success-soft); display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: var(--radius-pill); font-size: 11px; font-weight: var(--font-weight-bold); color: var(--badge-tone); background: var(--badge-soft); white-space: nowrap; }
 .simulation-formula-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .simulation-formula-badge::after { content: '· ' attr(data-en); }
