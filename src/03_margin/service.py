@@ -34,9 +34,9 @@ except ImportError:
 
 # 우리 회사 정보 — 견적서 머리글·서명란에 자동으로 들어갑니다. 회사 정보가 바뀌면 여기만 고칩니다.
 COMPANY = {
-    "name": "COSTD Co., Ltd.",
-    "address": "",   # 예: "123, Teheran-ro, Gangnam-gu, Seoul, Republic of Korea"
-    "phone": "",     # 예: "+82-2-1234-5678"
+    "name": "COSTD",
+    "address": "513, Yeongdong-daero, Gangnam-gu, Seoul (COEX 4F, Study Room 3)",   # 내 계정 모달의 회사 주소와 동일 (영문 표기)
+    "phone": "+82-2-6000-5968",
     "email": "",     # 예: "sales@costd.co.kr"
 }
 
