@@ -37,13 +37,25 @@ def init(db_path: Path) -> None:
                  created_at TEXT DEFAULT CURRENT_TIMESTAMP
                )"""
         )
+        # 이메일이 비어 있는 계정(.env.example 을 그대로 복사해 값이 빈 경우 생김)은 로그인할 수 없으므로 지우고,
+        # 로그인 가능한 계정이 하나도 없으면 데모 계정을 만듭니다. 빈 값(COSMOA_DEMO_EMAIL=)도 기본값으로 처리합니다.
+        c.execute("DELETE FROM users WHERE trim(email) = ''")
         if c.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
-            create_user(
-                os.getenv("COSMOA_DEMO_EMAIL", "demo@costd.kr"),
-                os.getenv("COSMOA_DEMO_PASSWORD", "cosmoa1234"),
-                os.getenv("COSMOA_DEMO_NAME", "데모 사용자"),
-                os.getenv("COSMOA_DEMO_TEAM", "해외영업팀"),
+            email, password, name, team = demo_account()
+            c.execute(   # 같은 연결로 넣습니다 (위 DELETE 가 쓰기 잠금을 잡고 있어 새 연결은 잠김)
+                "INSERT OR IGNORE INTO users (email, name, team, password_hash) VALUES (?,?,?,?)",
+                (email.lower(), name, team, generate_password_hash(password)),
             )
+
+
+def demo_account() -> tuple[str, str, str, str]:
+    """데모 계정 (email, password, name, team). .env 값이 없거나 비어 있으면 기본값."""
+    return (
+        os.getenv("COSMOA_DEMO_EMAIL", "").strip() or "demo@costd.kr",
+        os.getenv("COSMOA_DEMO_PASSWORD", "").strip() or "cosmoa1234",
+        os.getenv("COSMOA_DEMO_NAME", "").strip() or "데모 사용자",
+        os.getenv("COSMOA_DEMO_TEAM", "").strip() or "해외영업팀",
+    )
 
 
 def _conn() -> sqlite3.Connection:
