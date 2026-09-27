@@ -1,17 +1,20 @@
 /* 이 페이지에 한정한 밀도/배치. 공통 파일은 수정하지 않습니다. */
-.simulation-shell { --layout-page-padding-y: var(--space-4); --layout-page-padding-x: var(--space-6); --layout-footer-height: var(--space-6); }
-.simulation-page { --layout-card-padding: var(--space-3); --layout-section-gap: var(--space-3); min-width: 0; }
+/* 여백은 원가·마진 탭 기준에 맞춥니다: 좌우는 공통값(56px), 위 24px, 카드 간격 16px, 카드 안쪽 20px. */
+.simulation-shell { --layout-page-padding-y: var(--space-6); --layout-footer-height: var(--space-6); }
+.simulation-page { --layout-card-padding: var(--space-5); --layout-section-gap: var(--layout-card-gap); min-width: 0; }
 .simulation-page .page-header { align-items: center; }
 .simulation-page .page-title { font-size: var(--font-size-section-title); }
 .simulation-page .card-header { align-items: center; gap: var(--space-2); }
 .simulation-page .card-header + .card-body { padding-top: var(--space-3); }
-.simulation-top-grid, .simulation-bottom-grid { display: grid; gap: var(--space-3); }
-.simulation-top-grid { grid-template-columns: minmax(0, 4fr) minmax(0, 1fr); }
-.simulation-bottom-grid { margin-top: var(--space-3); grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; }
+.simulation-top-grid, .simulation-bottom-grid { display: grid; gap: var(--layout-card-gap); }
+.simulation-top-grid { grid-template-columns: minmax(0, 1fr) clamp(264px, 24%, 320px); }
+.simulation-bottom-grid { margin-top: var(--layout-card-gap); grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; }
 .simulation-bottom-grid > section { display: flex; flex-direction: column; }
 .simulation-pitch { border-left: 1px solid var(--color-border-strong); }
 .simulation-top-grid > *, .simulation-bottom-grid > * { min-width: 0; }
-.simulation-preview .card-body { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; padding-top: 0; }
+/* 흰 카드 크기는 그대로 두고, 카드 안쪽 여백을 12px로 줄여 스포이드·샬레가 있는 회색 챔버를 최대한 넓힙니다. */
+.simulation-preview > .card-header { padding: var(--space-3) var(--space-3) 0 var(--space-4); }
+.simulation-preview .card-body { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; padding: 0 var(--space-3) var(--space-3); }
 .simulation-preview-header { flex-wrap: wrap; }
 .simulation-sim-value { display: flex; align-items: baseline; gap: var(--space-1); font-variant-numeric: tabular-nums; }
 .simulation-sim-value strong { color: var(--color-primary); font-size: var(--font-size-card-title); font-weight: var(--font-weight-bold); line-height: var(--line-height-base); }
@@ -25,11 +28,11 @@
 .simulation-chamber-data b { font-weight: 500; color: #475569; }
 .simulation-stage { width: min(100%, 600px); aspect-ratio: 4 / 3; margin-inline: auto; position: relative; overflow: hidden; background: transparent; }
 .simulation-stage canvas { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
-.simulation-sim-foot { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-1); margin-block: var(--space-2); font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+.simulation-sim-foot { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-2) var(--space-1) 0; font-size: var(--font-size-caption); color: var(--color-text-secondary); }
 .simulation-controls .card-body { display: flex; flex-direction: column; gap: var(--space-5); min-height: 0; }
 .simulation-hud { flex: 0 0 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
-.simulation-hud .stat-tile { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; align-items: center; justify-items: start; min-width: 0; min-height: 84px; padding: 14px; gap: 10px; border: 1px solid rgba(226,232,240,.7); border-radius: 12px; background: rgba(248,250,252,.6); box-shadow: 0 1px 2px rgba(15,23,42,.04); transition: border-color .15s ease, background .15s ease; }
-.simulation-hud .stat-tile:hover { border-color: #e2e8f0; background: #fff; }
+.simulation-hud .stat-tile { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; align-items: center; justify-items: start; min-width: 0; min-height: 84px; padding: 14px; gap: 10px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-muted); transition: border-color .15s ease, background .15s ease; }
+.simulation-hud .stat-tile:hover { border-color: var(--color-border-strong); background: var(--color-surface); }
 .simulation-hud .stat-tile > span { display: flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 500; letter-spacing: -.2px; color: #64748b; white-space: nowrap; }
 .simulation-hud strong { font-size: 16px; font-weight: var(--font-weight-bold); color: #1e293b; font-variant-numeric: tabular-nums; white-space: nowrap; line-height: 1.3; letter-spacing: -.2px; }
 #simulation-texture { padding: 4px 9px; max-width: 100%; font-size: 12px; font-weight: 600; line-height: 1.3; white-space: normal; word-break: keep-all; letter-spacing: -.3px; border: 1px solid #dbeafe; border-radius: 12px; color: #2563eb; background: #eff6ff; }
@@ -38,7 +41,7 @@
 .simulation-hud meter::-webkit-meter-optimum-value { border-radius: var(--radius-pill); background: #3b82f6; }
 .simulation-hud meter::-moz-meter-bar { border-radius: var(--radius-pill); background: #3b82f6; }
 /* 배합 요약 브릿지: 조절 영역과 결과 지표 사이를 잇는 총량/안정성 표시 */
-.simulation-formula { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'head head' 'bar bar' 'legend legend' 'status status'; gap: var(--space-2); margin-block: auto; }
+.simulation-formula { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'head head' 'bar bar' 'legend legend' 'status status'; gap: var(--space-2); padding: var(--space-3) 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
 .simulation-formula-heading { grid-area: head; } .simulation-formula-bar { grid-area: bar; } .simulation-formula-legend { grid-area: legend; } .simulation-formula-status { grid-area: status; }
 .simulation-formula-heading, .simulation-formula-status { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .simulation-formula-heading > span { font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-body); }
@@ -65,11 +68,13 @@
 .simulation-preset-row { display: flex; align-items: center; gap: var(--space-2); }
 .simulation-preset-row .form-label { flex-shrink: 0; margin: 0; }
 .simulation-preset-row select { flex: 1; min-width: 0; }
-.simulation-sliders { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+/* 슬라이더 묶음이 남는 높이를 나눠 가져 성분 사이 간격이 넓어지고, 아래 요약 패널·지표와는 같은 간격을 둡니다. */
+.simulation-sliders { flex: 1 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); align-content: space-between; gap: var(--space-5); }
 .simulation-slider { display: grid; gap: var(--space-2); }
+.simulation-slider-scale { display: flex; justify-content: space-between; margin-top: -2px; font-size: 10.5px; line-height: 1; color: var(--color-text-placeholder); font-variant-numeric: tabular-nums; }
 .simulation-slider-heading, .simulation-slider-heading > div { display: flex; align-items: center; gap: 3px; }
 .simulation-slider-heading { justify-content: space-between; flex-wrap: wrap; }
-.simulation-slider-heading label { font-size: 13px; font-weight: 500; color: var(--color-text-body); }
+.simulation-slider-heading label { font-size: 14px; font-weight: 500; color: var(--color-text-body); }
 .simulation-slider output { font-size: 13px; font-weight: var(--font-weight-bold); color: var(--color-text-strong); font-variant-numeric: tabular-nums; letter-spacing: -.2px; }
 /* 슬라이더: 3px 트랙 + 대시보드 기본 블루 단색 채움 + 그림자만 있는 흰 손잡이.
    125%·150% 배율에서 3px가 기기 픽셀로 3~4px로 제각각 그려지지 않도록 JS가 --simulation-track 을 기기 픽셀 단위로 맞춥니다. */
@@ -118,18 +123,17 @@
 .simulation-tooltip strong { margin-bottom: var(--space-2); }
 .simulation-tooltip small { margin-top: var(--space-2); color: var(--color-text-inverse-secondary); font-size: var(--font-size-caption); }
 .simulation-controls > .card-header { flex-wrap: wrap; }
-.simulation-controls { --layout-card-padding: var(--space-3); }
-/* 제목 여백은 하단 '용기 적합성 확인'(위 10px · 좌우 12px · 32px 행)과 같고, 본문도 같은 좌우 12px 안에 놓입니다. */
-.simulation-controls > .card-header { min-height: 42px; padding-top: 10px; }
+/* 제목 여백은 하단 '용기 적합성 확인'(위 16px · 좌우 20px · 32px 행)과 같고, 본문도 같은 좌우 20px 안에 놓입니다. */
+.simulation-controls > .card-header { min-height: 48px; padding-top: var(--space-4); }
 .simulation-controls .card-title { font-size: 17px; letter-spacing: -.3px; }
 .simulation-controls .simulation-help-button { width: 14px; height: 14px; color: #cbd5e1; }
 .simulation-controls .simulation-help-button:hover, .simulation-controls .simulation-help-button:focus-visible, .simulation-controls .simulation-help-button[aria-expanded=true] { color: #64748b; }
 /* Desktop: available viewport height is assigned to the preview, never clipped. */
 @media (min-width: 1200px) and (min-height: 700px) {
   /* 상단 시뮬레이션 8 : 하단 용기·제안 2. 하단 행은 용기 적합성 카드가 필요로 하는 높이 아래로 줄지 않습니다. */
-  .simulation-page { height: calc(100dvh - var(--layout-page-padding-y) - var(--layout-footer-height)); display: grid; grid-template-rows: auto minmax(0, 8fr) minmax(max-content, 2fr); gap: var(--space-3); overflow: clip; overflow-clip-margin: var(--space-3); }
-  .simulation-bottom-grid .card-header { padding-top: 10px; }
-  .simulation-bottom-grid .card-header + .card-body { padding-top: 8px; padding-bottom: 10px; }
+  .simulation-page { height: calc(100dvh - var(--layout-page-padding-y) - var(--layout-footer-height)); display: grid; grid-template-rows: auto minmax(0, 8fr) minmax(max-content, 2fr); gap: var(--layout-card-gap); overflow: clip; overflow-clip-margin: var(--layout-card-gap); }
+  .simulation-bottom-grid .card-header { padding-top: var(--space-4); }
+  .simulation-bottom-grid .card-header + .card-body { padding-top: var(--space-3); padding-bottom: var(--space-4); }
   .simulation-bottom-grid .card-title { font-size: var(--font-size-body); }
   .simulation-bottom-grid .form-control-sm, .simulation-bottom-grid .btn-sm { height: 32px; }
   /* 제안 가이드는 행 높이 계산에서 빠지고(contain: size) 남는 높이 안에서 스크롤합니다. */
@@ -139,28 +143,30 @@
   .simulation-report + .simulation-report { padding-top: 0; padding-left: var(--space-4); border-top: 0; border-left: var(--border-default); }
   .simulation-report h3 { font-size: 14px; }
   .simulation-report p { font-size: 13px; line-height: 1.45; }
-  .simulation-pitch .card-body { padding-bottom: 6px; }
+  .simulation-pitch .card-body { padding-bottom: var(--space-3); }
   .simulation-page .page-header, .simulation-bottom-grid { margin: 0; }
   .simulation-top-grid { min-height: 0; }
   /* 사이드바를 접어 늘어난 폭은 배합 조절 쪽이 받아, 미리보기가 과하게 커지지 않게 합니다. */
-  .is-sidebar-collapsed .simulation-top-grid { grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); }
+  .is-sidebar-collapsed .simulation-top-grid { grid-template-columns: minmax(0, 1fr) clamp(264px, 27%, 380px); }
   .simulation-preview { min-height: 0; }
   .simulation-stage { width: 100%; height: 100%; max-width: none; min-height: 0; aspect-ratio: auto; }
   /* 배합 조절 카드는 미리보기와 같은 높이로 고정하고, 실제 카드 높이에 맞춰 밀도를 단계적으로 줄입니다. */
   .simulation-controls { container: mix / size; }
-  .simulation-controls .card-body { gap: var(--space-4); overflow-y: auto; }
+  .simulation-controls .card-body { gap: var(--space-5); overflow-y: auto; }
   .simulation-sliders { gap: var(--space-5); }
   .simulation-hud .stat-tile { min-height: 76px; padding: 12px; gap: 8px; }
 }
 @container mix (max-height: 580px) {
-  .simulation-controls .card-body { gap: var(--space-3); }
-  .simulation-sliders { gap: var(--space-3); }
-  .simulation-formula-legend { display: none; }
+  .simulation-controls .card-body { gap: var(--space-4); }
+  .simulation-sliders { gap: var(--space-4); }
+  .simulation-slider-scale { display: none; }
   .simulation-hud .stat-tile { min-height: 0; padding: 10px; }
 }
 @container mix (max-height: 516px) {
-  .simulation-controls .card-header + .card-body { padding-top: var(--space-2); gap: 10px; }
-  .simulation-sliders { gap: var(--space-2); }
+  .simulation-controls .card-header + .card-body { padding-top: var(--space-2); gap: var(--space-3); }
+  .simulation-sliders { gap: var(--space-3); }
+  .simulation-formula { padding: 10px 12px; }
+  .simulation-formula-legend { display: none; }
   .simulation-slider { gap: 6px; }
   .simulation-formula { grid-template-areas: 'head status' 'bar bar'; column-gap: var(--space-2); row-gap: 6px; }
   .simulation-formula-heading small, .simulation-formula-status .text-caption, .simulation-formula-badge::after { display: none; }
@@ -170,7 +176,8 @@
 }
 @container mix (max-height: 416px) {
   .simulation-controls .card-body { gap: var(--space-2); }
-  .simulation-sliders { gap: 6px; }
+  .simulation-sliders { gap: var(--space-2); }
+  .simulation-formula { padding: var(--space-2) 10px; }
   .simulation-slider { gap: 4px; }
   .simulation-formula { row-gap: 5px; }
   .simulation-formula-bar { height: 6px; }

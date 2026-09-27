@@ -545,10 +545,12 @@ function resize() {
   canvas.height = Math.round(bounds.height * dpr);
   width = 560;
   height = 420;
-  const scale = Math.min(bounds.width / width, bounds.height / height);
+  // 스포이드 윗단(y 32)부터 바닥 눈금 글자(y 395)까지만 맞춰, 위아래 빈 여백 없이 스포이드와 샬레를 최대한 크게 그립니다.
+  const top = 20, bottom = 405;
+  const scale = Math.min(bounds.width / width, bounds.height / (bottom - top));
   ctx.setTransform(dpr * scale, 0, 0, dpr * scale,
     (bounds.width - width * scale) / 2 * dpr,
-    (bounds.height - height * scale) / 2 * dpr);
+    ((bounds.height - (bottom - top) * scale) / 2 - top * scale) * dpr);
   drawScene();
 }
 // Layered transmission, edge depth and a soft key light for clear serum.
@@ -602,7 +604,7 @@ function stepImpact(dt){
 }
 function drawScene(){
  if(!current||!width||!height)return;
- ctx.clearRect(0,0,width,height);
+ ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);ctx.restore();
  const x=width/2,tip=130,floor=height*.8;
  const {thick,energy,dropTime,hanging,spread:restSpread,domeHeight:restDome}=geometry();
  const maxNeck=(floor-tip-restDome)*(.18+thick*.3);
