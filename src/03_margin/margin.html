@@ -1,32 +1,527 @@
 {% extends "common/base.html" %}
-{# 담당자 C — 원가 경쟁력 및 마진 시뮬레이션 / 기능 명세: src/03_margin/margin.md #}
+{# 담당자 C — 원가·마진 시뮬레이션 / 기능 명세: src/03_margin/margin.md #}
 
-{% block title %}원가 경쟁력 및 마진 시뮬레이션{% endblock %}
+{% block title %}원가·마진 시뮬레이션{% endblock %}
+{% block body_class %}is-margin{% endblock %}
 
 {% block page_css %}
 <link rel="stylesheet" href="{{ url_for('asset', filename='03_margin/margin.css') }}">
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <div>
-    <h1 class="page-title">원가 경쟁력 및 마진 시뮬레이션</h1>
-  </div>
-  <div class="page-actions">
-    <a class="btn btn-surface" href="{{ url_for('home') }}">← 홈으로</a>
-  </div>
+{% macro field(id, value, unit, label, step=None) -%}
+<div class="margin-field">
+  <input class="form-control form-control-sm" type="number" id="margin-{{ id }}" value="{{ value }}"{% if step %} step="{{ step }}"{% endif %} aria-label="{{ label }}">
+  <span class="margin-field__unit">{{ unit }}</span>
 </div>
+{%- endmacro %}
+<div class="margin-page" id="margin-app"
+     data-profile-url="{{ url_for('margin_quote_profile') }}"
+     data-pdf-url="{{ url_for('margin_quote_pdf') }}"
+     data-fx-url="{{ url_for('margin_fx_rate') }}"
+     data-erp-url="{{ url_for('margin_erp_cost') }}">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">원가·마진 시뮬레이션</h1>
+      <p class="page-description">원가와 마진을 넣으면 수출 단가, 역제안 대응, 수량별 단가, 환율 영향을 한 번에 계산해요.</p>
+    </div>
+    <div class="page-actions">
+      <a class="btn btn-surface" href="{{ url_for('home') }}">← 홈으로</a>
+    </div>
+  </div>
 
-<section class="section">
-  <div class="card">
-    <div class="card-body">
-      <div class="placeholder">
-        <p class="placeholder-title">원가 경쟁력 및 마진 시뮬레이션</p>
-        <p>이 영역은 margin.md를 기준으로 담당자가 구현합니다.</p>
+  <div class="margin-layout">
+    <!-- 공통 입력 -->
+    <aside class="card margin-inputs" id="margin-inputs" aria-label="시뮬레이션 입력">
+      <div class="card-body">
+        <!-- ① 견적 조건 — 미팅 중 가장 자주 바꾸는 값. 입력 Card 를 스크롤해도 위에 고정 -->
+        <div class="margin-group margin-pin" id="margin-pin">
+          <div class="margin-group__head">
+            <h3 class="margin-group__title">견적 조건</h3>
+            <div class="margin-group__tools">
+              <span class="text-caption" id="margin-mode-hint">판매가 대비</span>
+              <div class="tabs margin-seg" id="margin-seg-mmode" role="tablist" aria-label="영업마진 계산 방식">
+                <button type="button" class="tab is-active" data-k="margin" role="tab" aria-selected="true">마진율</button>
+                <button type="button" class="tab" data-k="markup" role="tab" aria-selected="false">마크업</button>
+              </div>
+            </div>
+          </div>
+          <div class="margin-pair">
+            <div class="form-group"><span class="form-label">주문수량</span>{{ field('qty', 10000, '개', '주문수량', 1000) }}</div>
+            <div class="form-group"><label class="form-label" for="margin-inco">인코텀즈</label>
+              <select class="form-control form-control-sm" id="margin-inco"><option>EXW</option><option selected>FOB</option><option>CFR</option><option>CIF</option></select></div>
+          </div>
+          <div class="margin-pair">
+            <div class="form-group"><span class="form-label">목표 영업마진</span>{{ field('m2', 20, '%', '목표 영업마진', 0.5) }}</div>
+            <div class="form-group"><span class="form-label" title="최종 판매가 기준으로 우리 회사가 절대 밑돌면 안 되는 영업마진 한계선입니다.">최소 영업마진 (방어선)</span>{{ field('m2min', 15, '%', '최소 영업마진 (방어선)', 0.5) }}</div>
+          </div>
+        </div>
+
+        <!-- ② 제조원가 · 1차 마진 — ERP 에서 받아오는 값. 기본은 합계만, 펼치면 세부 항목 -->
+        <div class="margin-group">
+          <div class="margin-group__head">
+            <h3 class="margin-group__title">제조원가 · 1차 마진</h3>
+            <button type="button" class="btn btn-soft btn-sm" id="margin-erp-sync">ERP 연동</button>
+          </div>
+          <details class="margin-drawer" id="margin-cost">
+            <summary class="margin-drawer__head">
+              <span class="margin-drawer__title">원가 합계 <span class="text-caption">개당</span></span>
+              <b class="margin-drawer__value" id="margin-cost-sum"></b>
+              <span class="margin-drawer__peek text-caption" id="margin-erp-status"></span>
+            </summary>
+            <div class="margin-drawer__body">
+              <div class="margin-inline">
+                <span class="form-label">1차 마진 입력</span>
+                <div class="tabs margin-seg" id="margin-seg-minput" role="tablist" aria-label="1차 마진 입력 방식">
+                  <button type="button" class="tab is-active" data-k="item" role="tab" aria-selected="true">항목별</button>
+                  <button type="button" class="tab" data-k="all" role="tab" aria-selected="false">일괄</button>
+                </div>
+              </div>
+              <div class="margin-cost-row"><span></span><span class="form-label">원가 (개당)</span><span class="form-label">마진율</span></div>
+              <div class="margin-cost-row"><span class="margin-cost-row__name">원재료</span>{{ field('raw', 850, '원', '원재료 원가') }}<div class="margin-item-rate">{{ field('r-raw', 20, '%', '원재료 마진율', 0.5) }}</div></div>
+              <div class="margin-cost-row"><span class="margin-cost-row__name">임가공</span>{{ field('proc', 400, '원', '임가공 원가') }}<div class="margin-item-rate">{{ field('r-proc', 10, '%', '임가공 마진율', 0.5) }}</div></div>
+              <div class="margin-cost-row"><span class="margin-cost-row__name">부자재</span>{{ field('pack', 650, '원', '부자재 원가') }}<div class="margin-item-rate">{{ field('r-pack', 15, '%', '부자재 마진율', 0.5) }}</div></div>
+              <div class="margin-cost-row" id="margin-all-row" style="display:none"><span class="margin-cost-row__name">1차 마진</span><span class="text-caption">세 항목에 같은 마진율</span>{{ field('m1', 15, '%', '일괄 1차 마진율', 0.5) }}</div>
+              <div class="margin-cost-row">
+                <span class="margin-cost-row__name">로스율</span>
+                <span class="text-caption">원가 세 항목에 적용</span>
+                {{ field('loss', 0, '%', '로스율', 0.5) }}
+              </div>
+              <label class="form-check margin-check-sm"><input type="checkbox" id="margin-sagup"> 부자재 사급 (부자재 마진 0%)</label>
+            </div>
+          </details>
+          <p class="form-error" id="margin-erp-err" role="alert"></p>
+        </div>
+
+        <!-- ③ 물류비 — 미팅에서 거의 손대지 않는 값. 기본 접힘, 요약만 표시 -->
+        <div class="margin-group">
+          <div class="margin-group__head"><h3 class="margin-group__title">물류비</h3></div>
+          <details class="margin-drawer" id="margin-logi-box">
+            <summary class="margin-drawer__head">
+              <span class="margin-drawer__title">FOB 물류비 총액</span>
+              <b class="margin-drawer__value" id="margin-logi-sum"></b>
+              <span class="margin-drawer__peek text-caption" id="margin-logi-peek"></span>
+            </summary>
+            <div class="margin-drawer__body">
+              <div class="margin-pair">
+                <div class="form-group"><span class="form-label">FOB 물류비 총액</span>{{ field('logi', 1200000, '원', 'FOB 물류비 총액', 100000) }}</div>
+                <div class="form-group"><span class="form-label">물류 마진율</span>{{ field('r-logi', 10, '%', '물류 마진율', 0.5) }}</div>
+              </div>
+              <div class="margin-pair" id="margin-sea-row" style="display:none">
+                <div class="form-group"><span class="form-label">해상운임 총액</span>{{ field('freight', 1500, '$', '해상운임 총액') }}</div>
+                <div class="form-group" id="margin-ins-box"><span class="form-label">보험요율</span>{{ field('ins', 0.2, '%', '보험요율', 0.05) }}</div>
+              </div>
+
+              <!-- 약식 포장/CBM 추정 — ODM 표준 패키징 프리셋(margin.js ODM_PACKAGING_PRESETS)으로 입수·부피·단가를 채우고,
+                   자동 반영 중이면 계산한 내륙물류비·해상운임이 위 두 칸에 바로 들어가요. (두 칸을 직접 고치면 그 값이 우선) -->
+              <div class="margin-cbm" id="margin-cbm">
+                <div class="margin-inline">
+                  <span class="margin-cbm__title">약식 포장/CBM 추정</span>
+                  <span class="text-caption" id="margin-cbm-peek"></span>
+                </div>
+                <div class="form-group"><label class="form-label" for="margin-cbm-preset">단품 용량/형태</label>
+                  <select class="form-control form-control-sm" id="margin-cbm-preset"></select></div>
+                <div class="margin-pair">
+                  <div class="form-group"><span class="form-label">카톤당 입수</span>{{ field('cbm-ea', 40, 'ea', '카톤당 입수', 10) }}</div>
+                  <div class="form-group margin-unit-wide"><span class="form-label">카톤 부피</span>{{ field('cbm-box', 0.024, 'CBM', '카톤당 CBM', 0.001) }}</div>
+                </div>
+                <div class="margin-pair">
+                  <div class="form-group"><span class="form-label">내륙·통관 <span class="text-caption">/CBM</span></span>{{ field('cbm-inland', 150000, '원', 'CBM당 FOB 내륙물류비', 10000) }}</div>
+                  <div class="form-group"><span class="form-label">LCL 운임 <span class="text-caption">/CBM</span></span>{{ field('cbm-lcl', 50, '$', 'CBM당 LCL 해상운임', 5) }}</div>
+                </div>
+                <div class="margin-cbm-out" id="margin-cbm-out"></div>
+                <button type="button" class="btn btn-soft btn-sm btn-block" id="margin-cbm-apply">물류비 자동 반영</button>
+              </div>
+            </div>
+          </details>
+        </div>
+        <p class="form-error" id="margin-err" role="alert"></p>
+
+        <!-- 현재 견적 요약 — 입력 Card 가 화면 높이를 채울 때 아래쪽에 고정 (어느 탭에서든 확인) -->
+        <div class="margin-quick" id="margin-quick" aria-live="polite"></div>
+      </div>
+    </aside>
+
+    <!-- 결과 영역 -->
+    <div class="margin-results">
+      <div class="card card-sm">
+        <div class="card-body margin-toolbar">
+          <div class="tabs" role="tablist" aria-label="시뮬레이션 화면">
+            <button type="button" class="tab is-active" data-tab-target="margin-view-forward" role="tab" aria-selected="true">견적 계산</button>
+            <button type="button" class="tab" data-tab-target="margin-view-reverse" role="tab" aria-selected="false">역제안 분석</button>
+            <button type="button" class="tab" data-tab-target="margin-view-tier" role="tab" aria-selected="false">수량별 단가</button>
+            <button type="button" class="tab" data-tab-target="margin-view-fx" role="tab" aria-selected="false">환율 영향</button>
+          </div>
+          <div class="margin-fxbox">
+            <span class="margin-fxbox__label"><b>기준 환율</b><button type="button" class="margin-fxlive__apply" id="margin-fxlive-apply" disabled>TTB 확인 중</button></span>
+            <div class="margin-fxbox__field">{{ field('fx', 1320, '원', '기준환율 (USD/KRW)', 10) }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 견적 계산 -->
+      <section class="tab-panel is-active" id="margin-view-forward">
+        <div class="margin-stack">
+          <div class="card">
+            <div class="card-body">
+              <div class="margin-hero">
+                <div>
+                  <p class="kpi-label" id="margin-hero-cap">FOB 단가</p>
+                  <p class="kpi-value kpi-value-lg is-primary" id="margin-hero-usd">$0.00</p>
+                </div>
+                <div class="margin-hero__sub" id="margin-hero-sub"></div>
+              </div>
+              <div class="margin-bar" id="margin-bar"></div>
+              <div class="margin-legend" id="margin-bar-legend">
+                <span data-seg="is-cost"><i class="margin-swatch is-cost"></i>원가</span>
+                <span data-seg="is-m1"><i class="margin-swatch is-m1"></i>1차 마진</span>
+                <span data-seg="is-logi"><i class="margin-swatch is-logi"></i>물류비</span>
+                <span data-seg="is-logi-m"><i class="margin-swatch is-logi-m"></i>물류 마진</span>
+                <span data-seg="is-m2"><i class="margin-swatch is-m2"></i>영업마진</span>
+                <span data-seg="is-disc"><i class="margin-swatch is-disc"></i>수량 할인</span>
+                <span data-seg="is-sur"><i class="margin-swatch is-sur"></i>소량 할증</span>
+              </div>
+              <div class="margin-stats" id="margin-stats"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-body">
+              <div class="tabs" role="tablist" aria-label="견적 상세">
+                <button type="button" class="tab is-active" data-tab-target="margin-sub-items" role="tab" aria-selected="true">항목별 원가</button>
+                <button type="button" class="tab" data-tab-target="margin-sub-quote" role="tab" aria-selected="false">견적서</button>
+              </div>
+
+              <div class="tab-panel is-active" id="margin-sub-items">
+                <div class="table-wrap"><table class="table" id="margin-item-table"></table></div>
+              </div>
+
+              <div class="tab-panel" id="margin-sub-quote">
+                <div class="margin-sec-title">
+                  <h3 class="card-title">바이어에게 보여줄 견적서</h3>
+                  <div class="tabs margin-seg" id="margin-seg-qmode" role="tablist" aria-label="견적서 형식">
+                    <button type="button" class="tab is-active" data-k="one" role="tab" aria-selected="true">통합형</button>
+                    <button type="button" class="tab" data-k="split" role="tab" aria-selected="false">분리형</button>
+                    <button type="button" class="tab" data-k="open" role="tab" aria-selected="false">오픈북형</button>
+                  </div>
+                  <button type="button" class="btn btn-primary btn-sm" id="margin-q-open" data-modal-open="margin-quote-modal">견적서 PDF</button>
+                </div>
+
+                <!-- 발행 옵션: 원가 구성 숨김 / 마진 흡수 (이전 '내부·대외 비교' 탭) -->
+                <label class="form-check margin-check-sm"><input type="checkbox" id="margin-abs-on"> 원가 구성 숨김 / 마진 흡수 발행</label>
+                <div class="margin-abs-box" id="margin-abs-box" hidden>
+                  <div class="margin-sec-title margin-sec-title--sub">
+                    <p class="text-caption">마진 일부를 원가·물류비로 옮겨 분리형·오픈북형 견적에 표시해요. 단가는 그대로예요.</p>
+                    <div class="tabs margin-seg" id="margin-seg-absunit" role="tablist" aria-label="표시 통화">
+                      <button type="button" class="tab is-active" data-k="krw" role="tab" aria-selected="true">원화</button>
+                      <button type="button" class="tab" data-k="usd" role="tab" aria-selected="false">달러</button>
+                    </div>
+                  </div>
+                  <div class="margin-slider"><label for="margin-abs-c">원가에 흡수</label><input type="range" id="margin-abs-c" min="0" max="600" step="10" value="0"><output id="margin-abs-cv">0원</output></div>
+                  <div class="margin-slider"><label for="margin-abs-l">물류비에 흡수</label><input type="range" id="margin-abs-l" min="0" max="300" step="10" value="0"><output id="margin-abs-lv">0원</output></div>
+                  <div class="margin-two">
+                    <div class="margin-panel">
+                      <h4 class="margin-panel__title">내부 원가표</h4>
+                      <table class="table" id="margin-int-table"></table>
+                    </div>
+                    <div class="margin-panel">
+                      <h4 class="margin-panel__title">대외 견적 <span id="margin-abs-warn"></span></h4>
+                      <table class="table" id="margin-ext-table"></table>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="margin-quote" id="margin-quote"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 역제안 분석 — ① 목표가·판정·게이지 → ② 대응 방안 → ③ 내부 원가 절감 시뮬레이션 2분할(VE | 마진 조정) -->
+      <section class="tab-panel" id="margin-view-reverse">
+        <div class="margin-stack">
+          <!-- ① 목표가 입력 + 종합 판정 + 게이지 (VE·마진 조정 결과가 여기 반영) -->
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">바이어 목표가 위치 및 판정 구간</h3>
+            </div>
+            <div class="card-body margin-rtop">
+              <div class="margin-rtop__row">
+                <div class="margin-rtop__inputs">
+                  <div class="margin-rtop__field">
+                    <label class="form-label" for="margin-target">바이어 목표가</label>
+                    {{ field('target', 2.07, '$', '바이어 목표가 (USD)', 0.01) }}
+                  </div>
+                  <div class="margin-rtop__field" title="원재료, 임가공, 부자재, 물류비 각각의 1차 마진에서 최대 어디까지 양보(인하)할 수 있는지 지정하는 기준선입니다.">
+                    <label class="form-label" for="margin-item-floor">1차 마진 양보 <br class="margin-rtop__br">한계치 (항목별)</label>
+                    {{ field('item-floor', 5, '%', '1차 마진 양보 한계치 (항목별)', 0.5) }}
+                  </div>
+                </div>
+                <div class="margin-verdict" id="margin-verdict"></div>
+              </div>
+              <p class="form-error" id="margin-r-err" role="alert"></p>
+              <div class="margin-rtop__gauge">
+                <div class="margin-rtop__gauge-head">
+                  <span class="margin-rtop__gauge-title">가격 위치</span>
+                  <div class="margin-legend">
+                    <span><i class="margin-swatch is-bad"></i>마진만으로 불가</span>
+                    <span><i class="margin-swatch is-warn"></i>1차·물류 마진 조정</span>
+                    <span><i class="margin-swatch is-caution"></i>영업마진 양보</span>
+                    <span><i class="margin-swatch is-good"></i>수락</span>
+                  </div>
+                </div>
+                <div class="margin-gauge" id="margin-gauge"></div>
+                <p class="text-caption margin-rtop__note" id="margin-gauge-note"></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ② 대응 방안 (카운터 오퍼) — 판정 바로 아래에서 브리핑·선택 -->
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">대응 방안</h3>
+              <p class="text-caption">바이어에게 다시 제안할 수 있는 선택지</p>
+            </div>
+            <div class="card-body"><div class="margin-options" id="margin-options"></div></div>
+          </div>
+
+          <!-- ③ 내부 원가 절감 시뮬레이션 2분할 (VE | 마진 직접 조정) — 목표가를 꼭 맞춰야 할 때 -->
+          <div class="margin-rmid">
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title">사양 변경(VE) 추천</h3>
+                  <p class="card-subtitle" id="margin-ve-hint">체크하면 위 판정에 반영돼요</p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="margin-ve-list">
+                  <label class="margin-ve-item"><input type="checkbox" id="margin-ve-coat">
+                    <span class="margin-ve-item__text"><b>부자재 코팅/후가공 생략</b><span class="text-caption">UV 코팅·박·에폭시 제외 (하한 적용)</span></span>
+                    <span class="margin-ve-item__save" id="margin-ve-save-coat"></span></label>
+                  <label class="margin-ve-item"><input type="checkbox" id="margin-ve-box">
+                    <span class="margin-ve-item__text"><b>단상자 평량·도수 축소</b><span class="text-caption">평량 한 단계 하향, 1도 인쇄</span></span>
+                    <span class="margin-ve-item__save" id="margin-ve-save-box"></span></label>
+                  <label class="margin-ve-item"><input type="checkbox" id="margin-ve-raw">
+                    <span class="margin-ve-item__text"><b>원료 등급 대체</b><span class="text-caption">고가 추출물·기능성 원료 → 동등 규격 범용 원료</span></span>
+                    <span class="margin-ve-item__save" id="margin-ve-save-raw"></span></label>
+                </div>
+                <p class="text-caption margin-rmid__foot" id="margin-ve-sum"></p>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title">마진 직접 조정</h3>
+                  <p class="card-subtitle">조정 시 위 판정에 반영</p>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" id="margin-adj-reset">현재값으로</button>
+              </div>
+              <div class="card-body">
+                <div class="margin-adj-list">
+                  <div class="margin-adj-row" id="margin-adj-row-raw"><div class="margin-adj-row__name"><b>원재료(컨셉원료)</b><span class="text-caption"><span id="margin-adj-cur-raw"></span> · <span id="margin-adj-cut-raw"></span></span></div><div class="margin-w-sm">{{ field('adj-raw', '', '%', '원재료(컨셉원료) 조정 마진율', 0.5) }}</div></div>
+                  <div class="margin-adj-row" id="margin-adj-row-proc"><div class="margin-adj-row__name"><b>임가공</b><span class="text-caption"><span id="margin-adj-cur-proc"></span> · <span id="margin-adj-cut-proc"></span></span></div><div class="margin-w-sm">{{ field('adj-proc', '', '%', '임가공 조정 마진율', 0.5) }}</div></div>
+                  <div class="margin-adj-row" id="margin-adj-row-pack"><div class="margin-adj-row__name"><b>부자재</b><span class="text-caption"><span id="margin-adj-cur-pack"></span> · <span id="margin-adj-cut-pack"></span></span></div><div class="margin-w-sm">{{ field('adj-pack', '', '%', '부자재 조정 마진율', 0.5) }}</div></div>
+                  <div class="margin-adj-row" id="margin-adj-row-logi"><div class="margin-adj-row__name"><b>물류비</b><span class="text-caption"><span id="margin-adj-cur-logi"></span> · <span id="margin-adj-cut-logi"></span></span></div><div class="margin-w-sm">{{ field('adj-logi', '', '%', '물류비 조정 마진율', 0.5) }}</div></div>
+                </div>
+                <p class="text-caption margin-rmid__foot" id="margin-adj-sum"></p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- 수량별 단가 -->
+      <section class="tab-panel" id="margin-view-tier">
+        <div class="margin-stack">
+          <div class="card">
+            <div class="card-body margin-head margin-head--tier">
+              <div class="form-group">
+                <label class="form-label" for="margin-moq">MOQ</label>
+                {{ field('moq', 5000, '개', 'MOQ (최소 주문수량)', 500) }}
+              </div>
+              <div class="form-group">
+                <span class="form-label">MOQ 미만 주문</span>
+                <div class="tabs margin-seg margin-seg--block" id="margin-seg-moqmode" role="tablist" aria-label="MOQ 미만 주문 처리">
+                  <button type="button" class="tab is-active" data-k="surcharge" role="tab" aria-selected="true">소량 할증</button>
+                  <button type="button" class="tab" data-k="block" role="tab" aria-selected="false">주문 불가</button>
+                </div>
+              </div>
+              <div class="form-group" id="margin-sur-box">
+                <label class="form-label" for="margin-moq-sur">할증률</label>
+                {{ field('moq-sur', 10, '%', '소량 할증률', 1) }}
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="margin-qty-add">견적 수량 추가</label>
+                <div class="margin-qty-add">
+                  {{ field('qty-add', '', '개', '견적 수량 추가', 1000) }}
+                  <button type="button" class="btn btn-soft btn-sm" id="margin-qty-add-btn">추가</button>
+                </div>
+              </div>
+              <p class="form-error margin-head__err" id="margin-qty-add-err" role="alert"></p>
+              <!-- 수량 할인 구간 — 바꾸면 아래 단가표·견적 단가에 바로 반영 -->
+              <div class="margin-disc">
+                <div class="margin-disc__head">
+                  <span class="form-label">수량 할인 구간</span>
+                  <button type="button" class="btn btn-ghost btn-sm" id="margin-add-tier">+ 구간 추가</button>
+                </div>
+                <div class="margin-disc__list" id="margin-tiers"></div>
+              </div>
+              <div class="margin-verdict is-info margin-tier-summary" id="margin-tier-summary"></div>
+            </div>
+          </div>
+
+          <!-- 수량별 단가: 막대(단가 칸 안)와 가격표를 한 Card 로 -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3 class="card-title">수량별 단가표</h3>
+                <div class="margin-legend">
+                  <span><i class="margin-swatch is-cur"></i>현재 주문</span>
+                  <span><i class="margin-swatch is-other"></i>다른 수량</span>
+                  <span><i class="margin-swatch is-hatch"></i>MOQ 미만</span>
+                </div>
+                <p class="card-subtitle margin-tier-crit" id="margin-tier-crit"></p>
+              </div>
+              <div class="row margin-nowrap">
+                <button type="button" class="btn btn-secondary btn-sm" id="margin-copy-tier">바이어용 가격표 복사</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="margin-copy-mail-tier">영문 이메일 제안문 복사</button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="table-wrap"><table class="table margin-table-compact margin-qtable" id="margin-tier-table"></table></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 환율 영향 -->
+      <section class="tab-panel" id="margin-view-fx">
+        <div class="margin-stack">
+          <!-- 1단계: 결제 환율 조작 + 실시간 손익 (입력과 결과를 한 Card 안에서) -->
+          <div class="card">
+            <div class="card-body margin-fxdash">
+              <div class="margin-fxdash__inputs">
+                <div class="form-group">
+                  <label class="form-label" for="margin-fx-contract">계약 단가 (USD 고정)</label>
+                  {{ field('fx-contract', 2.15, '$', '계약 단가 (USD)', 0.01) }}
+                  <label class="form-check"><input type="checkbox" id="margin-fx-use-quote" checked> 현재 견적 단가 사용</label>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="margin-fx-settle-input">결제 시점 환율</label>
+                  <div class="margin-settle__row">
+                    <div class="margin-settle__input">{{ field('fx-settle-input', 1320, '원', '결제 시점 환율', 1) }}</div>
+                    <span class="margin-settle__chg" id="margin-fx-chg"></span>
+                    <button type="button" class="btn btn-secondary btn-sm" id="margin-fx-reset">견적 환율로</button>
+                  </div>
+                  <div class="margin-settle__slider">
+                    <input type="range" class="margin-fxrange" id="margin-fx-settle" min="1190" max="1450" step="5" value="1320" aria-label="결제 시점 환율 조절">
+                    <div class="margin-settle__ends"><span id="margin-fx-min-l"></span><span id="margin-fx-max-l"></span></div>
+                  </div>
+                </div>
+              </div>
+              <p class="form-error" id="margin-fx-err" role="alert"></p>
+
+              <div class="margin-fxdash__kpis">
+                <div class="margin-kpi">
+                  <span class="stat-tile__label">실현 영업마진</span>
+                  <span class="stat-tile__value" id="margin-fx-kpi-m"></span>
+                  <span id="margin-fx-kpi-m-note"></span>
+                </div>
+                <div class="margin-kpi">
+                  <span class="stat-tile__label">환차손익 (주문 전체)</span>
+                  <span class="stat-tile__value" id="margin-fx-kpi-pnl"></span>
+                  <span class="text-caption" id="margin-fx-kpi-pnl-note"></span>
+                </div>
+                <div class="margin-kpi">
+                  <span class="stat-tile__label">방어 단가</span>
+                  <span class="stat-tile__value" id="margin-fx-kpi-need"></span>
+                  <span class="text-caption" id="margin-fx-kpi-need-note"></span>
+                </div>
+              </div>
+
+              <div class="margin-chips" id="margin-fx-thr" aria-label="마지노선 환율"></div>
+            </div>
+          </div>
+
+          <!-- 2단계: 환율 변동 시나리오 표 (항상 표시) -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3 class="card-title">환율 변동 시나리오</h3>
+                <p class="card-subtitle">견적 환율 대비 ±5% · ±10% · 주문 <span id="margin-fx-qty"></span>개 기준</p>
+              </div>
+            </div>
+            <div class="card-body"><div class="table-wrap"><table class="table margin-table-compact" id="margin-fx-table"></table></div></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- 견적서 PDF 팝업 — 우리 회사는 자동 연동, 고객사·견적 조건만 입력 -->
+  <div class="modal-backdrop" id="margin-quote-modal">
+    <div class="modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="margin-quote-modal-title">
+      <div class="modal-header">
+        <h2 class="modal-title" id="margin-quote-modal-title">견적서 PDF 만들기</h2>
+        <button type="button" class="modal-close" data-modal-close aria-label="닫기">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="margin-modal-summary" id="margin-q-summary"></div>
+
+        <h3 class="margin-modal-section">우리 회사 <span class="text-caption">자동 연동</span></h3>
+        <div class="margin-modal-grid">
+          <div class="form-group margin-modal-grid__wide"><label class="form-label" for="margin-q-company">회사명</label><input class="form-control form-control-sm" type="text" id="margin-q-company" placeholder="" readonly maxlength="200"></div>
+          <div class="form-group"><label class="form-label" for="margin-q-contact-name">담당자</label><input class="form-control form-control-sm" type="text" id="margin-q-contact-name" placeholder="로그인한 사용자" maxlength="200"></div>
+          <div class="form-group"><label class="form-label" for="margin-q-contact-email">담당자 이메일</label><input class="form-control form-control-sm" type="text" id="margin-q-contact-email" placeholder="name@company.com" maxlength="200"></div>
+        </div>
+
+        <h3 class="margin-modal-section">고객사</h3>
+        <div class="margin-modal-grid">
+          <div class="form-group margin-modal-grid__wide"><label class="form-label" for="margin-q-buyer-company">회사명 (영문) <span class="is-required">*</span></label><input class="form-control form-control-sm" type="text" id="margin-q-buyer-company" placeholder="Glow Beauty Inc." maxlength="200"></div>
+          <div class="form-group"><label class="form-label" for="margin-q-buyer-country">국가</label><input class="form-control form-control-sm" type="text" id="margin-q-buyer-country" placeholder="United States" maxlength="200"></div>
+          <div class="form-group"><label class="form-label" for="margin-q-buyer-attn">담당자 (Attn.)</label><input class="form-control form-control-sm" type="text" id="margin-q-buyer-attn" placeholder="Ms. Jane Doe" maxlength="200"></div>
+          <div class="form-group margin-modal-grid__wide"><label class="form-label" for="margin-q-buyer-address">주소</label><input class="form-control form-control-sm" type="text" id="margin-q-buyer-address" placeholder="100 Main St, Los Angeles, CA" maxlength="200"></div>
+          <div class="form-group margin-modal-grid__wide"><label class="form-label" for="margin-q-buyer-email">이메일</label><input class="form-control form-control-sm" type="text" id="margin-q-buyer-email" placeholder="jane@buyer.com" maxlength="200"></div>
+        </div>
+
+        <h3 class="margin-modal-section">견적 조건</h3>
+        <div class="margin-modal-grid">
+          <!-- 가격 조건 = 인코텀즈(좌측 입력과 양방향 연동) + 지정 장소(인코텀즈별 선택지 · 직접 입력) -->
+          <div class="form-group margin-modal-grid__wide">
+            <label class="form-label" for="margin-q-inco">가격 조건 <span class="text-caption" id="margin-q-place-hint">인코텀즈 · 지정 장소 — 좌측 인코텀즈와 연동</span></label>
+            <div class="margin-term">
+              <select class="form-control form-control-sm" id="margin-q-inco" aria-label="인코텀즈 (좌측과 연동)"><option>EXW</option><option selected>FOB</option><option>CFR</option><option>CIF</option></select>
+              <select class="form-control form-control-sm" id="margin-q-place-sel" aria-label="지정 장소 선택"></select>
+              <input class="form-control form-control-sm" type="text" id="margin-q-place" maxlength="200" aria-label="지정 장소 직접 입력" hidden>
+            </div>
+          </div>
+          <div class="form-group"><label class="form-label" for="margin-q-no">견적 번호 <span class="is-required">*</span></label><input class="form-control form-control-sm" type="text" id="margin-q-no" placeholder="QT-20260923-01" maxlength="200"></div>
+          <div class="form-group"><label class="form-label" for="margin-q-validity">유효기간</label><div class="margin-field"><input class="form-control form-control-sm" type="number" id="margin-q-validity" value="30" min="1" step="1"><span class="margin-field__unit">일</span></div></div>
+          <div class="form-group"><label class="form-label" for="margin-q-product">품목명 (영문) <span class="is-required">*</span></label><input class="form-control form-control-sm" type="text" id="margin-q-product" placeholder="Toner 150ml" value="Toner 150ml" maxlength="200"></div>
+          <div class="form-group"><label class="form-label" for="margin-q-payment">결제 조건</label><input class="form-control form-control-sm" type="text" id="margin-q-payment" placeholder="T/T 30% deposit, 70% before shipment" value="T/T" maxlength="200"></div>
+          <div class="form-group"><label class="form-label" for="margin-q-lead">납기</label><input class="form-control form-control-sm" type="text" id="margin-q-lead" placeholder="45 days after PO" maxlength="200"></div>
+          <div class="form-group margin-modal-grid__wide"><label class="form-label" for="margin-q-remarks">비고</label><textarea class="form-control margin-modal-remarks" id="margin-q-remarks" rows="2" maxlength="200" placeholder="Remarks (English)"></textarea></div>
+        </div>
+        <p class="form-error" id="margin-q-err" role="alert"></p>
+        <div class="alert alert-success margin-q-done" id="margin-q-done" role="status" hidden>
+          <div>
+            <p class="alert-title">견적서 PDF를 저장했어요</p>
+            <p>바이어 메일에 붙일 영문 제안문도 복사해 보내세요.</p>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-soft margin-modal-footer__left" id="margin-copy-mail">영문 이메일 제안문 복사</button>
+        <button type="button" class="btn btn-secondary" data-modal-close>닫기</button>
+        <button type="button" class="btn btn-primary" id="margin-q-pdf">PDF 다운로드</button>
       </div>
     </div>
   </div>
-</section>
+</div>
 {% endblock %}
 
 {% block page_js %}

@@ -1,4 +1,528 @@
 /* 국가별 인허가 규제 전용 CSS (담당자 B)
    이 페이지에서만 필요한 스타일만 작성합니다.
    Button / Card / Form 등 공통 요소는 src/common/style.css 를 사용하고 다시 정의하지 않습니다.
-   충돌 방지를 위해 class 이름은 "regulatory-" 접두사를 사용합니다. */
+   충돌 방지를 위해 class 이름은 "regulatory-" 접두사를 사용합니다.
+   값은 design_system.md 의 CSS Variable 만 사용합니다. */
+
+/* hidden 속성 강제 --------------------------------------------------------
+   공통 CSS에 [hidden] 규칙이 없어 .loading / .state / .badge / .alert 등 class 로 display 를 주는 요소는
+   hidden 속성이 무시됩니다. 공통 CSS 는 PM 관리 파일이므로 이 페이지 영역에서만 강제합니다. (PM 협의 사항) */
+#regulatory-panel-search [hidden],
+#regulatory-panel-file [hidden],
+#regulatory-results[hidden],
+#regulatory-results [hidden],
+#regulatory-detail-modal [hidden] { display: none !important; }
+
+/* 페이지 상단 간격 -------------------------------------------------------
+   공통 .page-header 는 하단 margin 이 섹션 간격(--layout-section-gap, 72px)이라 소제목과 안내 배너 사이가 넓습니다.
+   이 페이지의 헤더에만 페이지 접두사 class 를 더해 24px 로 줄입니다. 음수 margin·위치 이동 없이 문서 흐름 그대로 두어
+   배너와 그 아래 조회 카드가 함께 올라오고, 소제목이 여러 줄이 되어도 겹치지 않습니다. 공통 CSS 는 수정하지 않습니다. */
+.page-header.regulatory-page-header { margin-bottom: var(--space-6); }
+
+/* 규제 정보 출처 선택 카드 -------------------------------------------------
+   radio 2개를 카드 모양 label 로 감싼 단일 선택 UI (직접 검색·파일 탭 공통). 공통 규격에 radio 카드가 없어 페이지 전용으로 두되
+   값은 design_system 변수만 사용: 미선택 = 중립 테두리(--color-border-strong)·보조 배경(--color-surface-muted),
+   선택 = 강조 테두리(--color-primary-bright)·옅은 배경(--color-primary-soft), Focus = 공통 Focus Ring(--shadow-focus).
+   선택 상태는 radio 의 checked 가 기준이며 :has() 와 JS 가 붙이는 .is-selected 가 같은 모양을 낸다.
+   카드는 flex-wrap 으로 데스크톱 가로 2개, 좁은 폭에서는 자연스럽게 세로로 내려간다 (음수 margin·위치 이동 없음) */
+.regulatory-source { min-width: 0; margin: 0; padding: 0; border: 0; }
+.regulatory-source legend { padding: 0; margin-bottom: var(--space-2); }      /* .form-group 의 gap 은 legend 에 적용되지 않아 Label ↔ 카드 8px 를 직접 둔다 */
+.regulatory-source__options { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.regulatory-source__option {
+  flex: 1 1 200px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-text-body);
+  font-size: var(--font-size-sub);
+  line-height: 1.3;
+  cursor: pointer;
+  transition: background var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base);
+}
+.regulatory-source__option:hover { background: var(--color-border); }
+.regulatory-source__option input[type="radio"] { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--color-primary-bright); cursor: pointer; }
+.regulatory-source__name { min-width: 0; overflow-wrap: anywhere; }
+.regulatory-source__option.is-selected,
+.regulatory-source__option:has(input:checked) {
+  border-color: var(--color-primary-bright);
+  background: var(--color-primary-soft);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-bold);
+}
+.regulatory-source__option:has(input:focus-visible) { border-color: var(--color-primary-bright); box-shadow: var(--shadow-focus); }
+
+/* 자동완성 후보 목록 -----------------------------------------------------
+   공통 규격이 없어 페이지 전용으로 둡니다. 세부 배치·접근성 표현은 PM 협의 사항 (regulatory.md 12항) */
+.regulatory-autocomplete { position: relative; }
+
+.regulatory-autocomplete__list {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-overlay);
+}
+
+.regulatory-autocomplete__state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-sub);
+  color: var(--color-text-secondary);
+}
+.regulatory-autocomplete__state--error { color: var(--color-danger); }
+
+.regulatory-autocomplete__options { list-style: none; margin: 0; padding: 0; }
+
+.regulatory-autocomplete__option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+}
+.regulatory-autocomplete__option:hover,
+.regulatory-autocomplete__option.is-active { background: var(--color-primary-soft); }
+
+.regulatory-autocomplete__kr { font-weight: var(--font-weight-bold); color: var(--color-text-primary); }
+.regulatory-autocomplete__inci { font-size: var(--font-size-label); color: var(--color-text-secondary); }
+
+/* 확정된 성분 안내 (검색창 아래) */
+.regulatory-selected { color: var(--color-primary); }
+
+/* 파일 조회 진행 단계 ------------------------------------------------------ */
+.regulatory-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0 0 var(--space-6);
+  padding: 0;
+}
+
+.regulatory-steps__item {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  font-size: var(--font-size-label);
+  color: var(--color-text-secondary);
+}
+.regulatory-steps__item.is-active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-bold);
+}
+.regulatory-steps__item.is-done { color: var(--color-success); }
+
+/* 파일 탭 내부 블록 (시트 선택 / 추출값 확인) ------------------------------- */
+.regulatory-block {
+  margin-top: var(--space-8);
+  padding-top: var(--space-8);
+  border-top: var(--border-default);
+}
+
+.regulatory-block__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.regulatory-align-end { justify-content: flex-end; }
+
+/* 추출값 편집 표 — 표 안의 입력은 작은 크기 사용
+   공통 .table 의 nowrap 때문에 원문 성분명·확인 사유·매칭명이 길면 표가 옆으로 늘어난다.
+   결과 표와 같이 글 열만 줄바꿈을 허용하고 열 너비를 비율로 고정해 카드 폭 안에 들어오게 한다. (공통 CSS 수정 없음) */
+.regulatory-review-table { table-layout: fixed; }
+.regulatory-review-table th,
+.regulatory-review-table td { vertical-align: top; }
+/* 열: 조회 | 원문 성분명→수정 | 함량 | 상태 | 성분 확인 | 삭제  (원문 위치·문서 비고는 화면에서 제외, 상세 Modal 에서 확인) */
+.regulatory-review-table td:nth-child(2),
+.regulatory-review-table td:nth-child(3),
+.regulatory-review-table td:nth-child(4),
+.regulatory-review-table td:nth-child(5) { white-space: normal; overflow-wrap: anywhere; }
+.regulatory-review-table .form-control-sm { width: 100%; min-width: 0; }
+.regulatory-review-table .regulatory-col-check { width: 52px; }
+.regulatory-review-table th:nth-child(2) { width: 30%; }
+.regulatory-review-table th:nth-child(3) { width: 21%; }   /* 함량 입력칸 — 범위·단위(예: 0.05-0.1%, q.s. to 100%)가 한눈에 보이는 폭 */
+.regulatory-review-table th:nth-child(4) { width: 15%; }
+.regulatory-review-table th:nth-child(5) { width: 26%; }
+.regulatory-review-table .regulatory-col-action { width: 64px; }
+.regulatory-review-table td:last-child { white-space: nowrap; }
+
+/* 좁은 화면(본문 폭 기준)에서는 고정 폭을 풀고 공통 가로 스크롤로 돌아간다 */
+@container page (max-width: 820px) {
+  .regulatory-review-table { table-layout: auto; }
+  .regulatory-review-table th:nth-child(2),
+  .regulatory-review-table th:nth-child(3),
+  .regulatory-review-table th:nth-child(4),
+  .regulatory-review-table th:nth-child(5) { width: auto; }
+  .regulatory-review-table .form-control-sm { min-width: 160px; }
+}
+.regulatory-review-origin {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-caption);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+.regulatory-review-reason { margin: var(--space-1) 0 0; font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+.regulatory-match__name { margin: var(--space-1) 0 0; font-size: var(--font-size-caption); color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.regulatory-match select.form-control-sm { width: 100%; min-width: 0; }
+.regulatory-result-table .regulatory-result__sub { margin: var(--space-1) 0 0; font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+.regulatory-notes { margin: var(--space-2) 0 0; padding-left: var(--space-5); }
+.regulatory-notes li + li { margin-top: var(--space-1); }
+
+/* 직접 검색 결과 카드 ---------------------------------------------------- */
+.regulatory-single__badge { display: flex; align-items: center; min-height: 26px; }
+
+/* 실제 조회 범위 — 라벨과 값을 왼쪽부터 이어서 배치 (좁은 화면에서는 값이 아래 줄로) */
+.regulatory-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-size: var(--font-size-sub);
+}
+.regulatory-meta dt { color: var(--color-text-secondary); white-space: nowrap; }
+.regulatory-meta dd { margin: 0; color: var(--color-text-primary); }
+
+/* 결과 하단 버튼 행 (직접 검색 카드 · 일괄 결과 · 상세 Modal 공통) -----------------------------
+   ‘규제 원문·출처 보기’(<button>, 상세 Modal)와 ‘식약처에서 사용제한 원료 확인’(<a>, 새 탭 외부 링크)을 같은 공통 보조 버튼(.btn-soft)으로
+   나란히 둔다. 높이·글자·패딩·모서리·hover 는 공통 .btn 규격 그대로(페이지에서 재정의하지 않음). 버튼 너비는 문구 길이대로, 좁은 화면에서는
+   flex-wrap 으로 줄바꿈되며 간격(12px)과 왼쪽 정렬을 유지한다. 공통 .btn 은 nowrap·고정 높이라 아주 좁은 폭에서 긴 문구가 잘릴 수 있어
+   이 행의 버튼만 줄바꿈·자동 높이(최소 높이는 공통 48px)를 허용한다. Focus 는 공통 outline 에 Focus Ring 을 더한다. */
+.regulatory-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: var(--space-3);
+}
+.regulatory-actions .btn {
+  height: auto;
+  min-height: 48px;
+  max-width: 100%;
+  padding-top: var(--space-3);
+  padding-bottom: var(--space-3);
+  white-space: normal;
+  text-align: center;
+  line-height: 1.3;
+}
+.regulatory-actions .btn:focus-visible { box-shadow: var(--shadow-focus); }
+/* 버튼 행 아래 안내: 사전검토 안내(14px, 본문색) → 공식 페이지 도움말(13px, 보조색) */
+.regulatory-actions__note {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-label);
+  line-height: 1.6;
+  color: var(--color-text-body);
+}
+.regulatory-actions__help {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-caption);
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+/* 규제 조건 (직접 검색 카드 본문) — 원문을 항목별로 나눠 충분한 폭으로 표시 */
+.regulatory-conditions {
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
+}
+.regulatory-conditions__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-3);
+}
+.regulatory-cond-entry + .regulatory-cond-entry {
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: var(--border-default);
+}
+.regulatory-cond-entry__title {
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-body);
+  margin-bottom: var(--space-3);
+}
+/* 항목(① 적용 제품·부위 ② 최대 농도 ③ 사용 조건·주의 문구 / 제한사항 / 단서 조항)별 묶음. 항목 안에서 영문 원문 위 · 한국어 제공 내용 아래.
+   항목 제목(16px Bold) → 언어 라벨(13px 보조색) → 본문(15px, 행간 1.6, 본문색). 언어 사이는 얇은 구분선.
+   직접 검색 카드(회색 패널 안)에서는 구분선·여백으로만 나누고, 상세 Modal 에서는 아래 .regulatory-detail-conditions 규칙으로 카드가 된다 */
+.regulatory-cond-group + .regulatory-cond-group {
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: var(--border-default);
+}
+.regulatory-cond-group__title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.3;
+  color: var(--color-text-primary);
+}
+.regulatory-cond-block + .regulatory-cond-block {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-strong);
+}
+.regulatory-cond-block__label {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-secondary);
+}
+.regulatory-cond-block__value,
+.regulatory-cond-items li {
+  margin: 0;
+  font-size: var(--font-size-sub);
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.regulatory-cond-block__value { margin-top: var(--space-1); }
+.regulatory-cond-items {
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+/* 최대 농도: 수치를 조건((a)(b)·단위·RE)과 한 줄로 유지한 채 굵기만 올린다 — 배지로 떼어내지 않는다 */
+.regulatory-cond-group[data-group="concentration"] .regulatory-cond-block__value,
+.regulatory-cond-group[data-group="concentration"] .regulatory-cond-items li { font-weight: var(--font-weight-bold); }
+
+/* 상세 Modal 의 ‘주요 규제 조건’ — 항목마다 중립색 배경 카드(흰 Modal 과 구분). 얇은 테두리 · radius 16px · 패딩 24px · 카드 간격 16px.
+   그림자·그라데이션·아이콘 없음. 색은 정보 구분용이며 허용·안전·적합을 뜻하지 않는다 */
+.regulatory-detail-conditions .regulatory-cond-group {
+  padding: var(--space-6);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
+}
+.regulatory-detail-conditions .regulatory-cond-group + .regulatory-cond-group {
+  margin-top: var(--space-4);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--color-border-strong);
+}
+.regulatory-detail-conditions .regulatory-cond-group__title { margin-bottom: var(--space-4); }
+.regulatory-detail-conditions .regulatory-cond-raw__text { margin-top: var(--space-2); }
+@media (max-width: 640px) {
+  .regulatory-detail-conditions .regulatory-cond-group { padding: var(--space-4); }
+  .regulatory-detail-conditions .regulatory-cond-group + .regulatory-cond-group { padding-top: var(--space-4); }
+}
+.regulatory-cond-note { margin-top: var(--space-4); }
+.regulatory-cond-raw__text {
+  margin: var(--space-2) 0 0;
+  font-family: inherit;
+  font-size: var(--font-size-sub);
+  color: var(--color-text-primary);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 파일 일괄 조회 결과 표 — 성분명·선택 시장·조회 상태·규제 유형·상세. 원문·오류 전문은 상세 Modal
+   공통 .table 은 셀을 nowrap 으로 두어(가로 스크롤 전제) 매칭명·API 안내 문구가 길면 표가 옆으로 늘어난다.
+   이 표에서는 글 열(성분명·조회 상태·규제 유형)만 줄바꿈을 허용해 카드 폭 안에 들어오게 한다. (공통 CSS 수정 없음) */
+.regulatory-result-table { table-layout: fixed; }
+.regulatory-result-table td { vertical-align: top; }
+.regulatory-result-table td:nth-child(1),
+.regulatory-result-table td:nth-child(3),
+.regulatory-result-table td:nth-child(4) { white-space: normal; overflow-wrap: anywhere; }
+.regulatory-result-table th:nth-child(1) { width: 34%; }
+.regulatory-result-table th:nth-child(2) { width: 15%; }
+.regulatory-result-table th:nth-child(3) { width: 25%; }
+.regulatory-result-table th:nth-child(4) { width: 16%; }
+.regulatory-result-table .regulatory-col-action { width: 72px; }
+.regulatory-result-table td:last-child { white-space: nowrap; }
+
+/* 좁은 화면(본문 폭 기준)에서는 고정 폭을 풀고 공통 가로 스크롤로 돌아간다 */
+@container page (max-width: 720px) {
+  .regulatory-result-table { table-layout: auto; }
+  .regulatory-result-table th:nth-child(1),
+  .regulatory-result-table th:nth-child(2),
+  .regulatory-result-table th:nth-child(3),
+  .regulatory-result-table th:nth-child(4) { width: auto; }
+}
+
+/* 빈 결과 아래 확인 필요 목록 */
+.regulatory-review-list__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.regulatory-review-list__items li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
+}
+
+/* 상세 Modal ---------------------------------------------------------------
+   ① 성분·조회 결과 → ② 주요 규제 조건 → ③ 관련 항목(접힘) → ④ 접힌 상세 3종 → ⑤ 간결한 출처 → ⑥ 안내 → 하단 버튼.
+   공통 Modal(.modal-lg 800px · radius 24px · Padding 32px) 위에 여백·구분선·Surface Muted 만 더한다. 스크롤은 공통 .modal-body 한 곳 */
+.regulatory-detail-modal .modal-body { display: flex; flex-direction: column; gap: var(--space-6); }
+
+.regulatory-detail-head { display: flex; flex-direction: column; gap: var(--space-1); }
+.regulatory-detail-head__kr {
+  margin: 0;
+  font-size: var(--font-size-card-title);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.3;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+.regulatory-detail-head__inci { margin: 0; font-size: var(--font-size-sub); color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.regulatory-detail-head__meta { margin-top: var(--space-2); font-size: var(--font-size-sub); color: var(--color-text-primary); }
+.regulatory-detail-head__meta-inner { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.regulatory-detail-head__sep { color: var(--color-text-placeholder); }
+.regulatory-detail-head__amount { margin: var(--space-1) 0 0; font-size: var(--font-size-sub); color: var(--color-text-body); }
+.regulatory-detail-head__reason { margin: var(--space-1) 0 0; font-size: var(--font-size-label); line-height: 1.6; color: var(--color-text-body); overflow-wrap: anywhere; }
+
+.regulatory-detail-section__title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+.regulatory-detail-section__note { margin: 0 0 var(--space-4); font-size: var(--font-size-caption); line-height: 1.6; color: var(--color-text-secondary); }
+.regulatory-detail-conditions .regulatory-cond-entry + .regulatory-cond-entry { margin-top: var(--space-6); padding-top: var(--space-6); border-top: 1px solid var(--color-border-strong); }
+.regulatory-detail-conditions .regulatory-cond-entry__title { margin-bottom: var(--space-4); }
+
+/* 접기·펼치기 — 공통 CSS 에 아코디언이 없어 접근 가능한 details/summary 를 공통 값(Surface Muted · radius-lg · Focus Ring · 48px 높이)으로 정의.
+   상태는 화살표 회전 + ‘펼치기/접기’ 글자로 함께 표시 */
+.regulatory-detail-folds { display: flex; flex-direction: column; gap: var(--space-3); }
+.regulatory-fold { border-radius: var(--radius-lg); background: var(--color-surface-muted); }
+.regulatory-fold__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 48px;
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-sub);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  list-style: none;
+  transition: background var(--transition-base);
+}
+.regulatory-fold__summary::-webkit-details-marker { display: none; }
+.regulatory-fold__summary::marker { content: ""; }
+.regulatory-fold__summary:hover { background: var(--color-background); }
+.regulatory-fold__summary:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.regulatory-fold__title { overflow-wrap: anywhere; }
+.regulatory-fold__state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-secondary);
+}
+.regulatory-fold__chevron { transition: transform var(--transition-base); }
+.regulatory-fold[open] > .regulatory-fold__summary .regulatory-fold__chevron { transform: rotate(180deg); }
+.regulatory-fold__state-close { display: none; }
+.regulatory-fold[open] > .regulatory-fold__summary .regulatory-fold__state-open { display: none; }
+.regulatory-fold[open] > .regulatory-fold__summary .regulatory-fold__state-close { display: inline; }
+.regulatory-fold__body { padding: var(--space-1) var(--space-5) var(--space-5); }
+
+/* 정의 목록 — 각 항목은 제목(14px 보조색) 위 · 값(15px, 행간 1.7) 아래. 짧은 식별정보는 데스크톱 2열, 긴 원문은 1열 */
+.regulatory-detail-list { display: grid; grid-template-columns: 1fr; gap: var(--space-4) var(--space-6); margin: 0; }
+.regulatory-detail-list--2col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.regulatory-detail-list > div { min-width: 0; }
+.regulatory-detail-list__full { grid-column: 1 / -1; }
+.regulatory-detail-list dt { font-size: var(--font-size-label); color: var(--color-text-secondary); }
+.regulatory-detail-list dd { margin: var(--space-1) 0 0; font-size: var(--font-size-sub); line-height: 1.7; color: var(--color-text-primary); overflow-wrap: anywhere; }
+.regulatory-detail__raw { white-space: pre-wrap; word-break: break-word; }
+
+.regulatory-detail-foot { padding-top: var(--space-4); border-top: var(--border-default); }
+.regulatory-detail-foot__line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-sub);
+  color: var(--color-text-primary);
+}
+.regulatory-detail-foot__label { color: var(--color-text-secondary); }
+.regulatory-detail-notes .regulatory-actions__note { margin-top: 0; }
+
+/* 하단 버튼 — 식약처 공식 조회(공통 보조 버튼 .btn-soft, 새 탭 외부 링크) 왼쪽 · 닫기 오른쪽. 긴 문구는 줄바꿈 허용 */
+.regulatory-detail-footer { justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); }
+.regulatory-detail-footer .btn {
+  height: auto;
+  min-height: 48px;
+  max-width: 100%;
+  padding-top: var(--space-3);
+  padding-bottom: var(--space-3);
+  white-space: normal;
+  text-align: center;
+  line-height: 1.3;
+}
+.regulatory-detail-footer .btn:focus-visible { box-shadow: var(--shadow-focus); }
+
+@media (max-width: 640px) {
+  .regulatory-detail-list--2col { grid-template-columns: 1fr; }
+  .regulatory-fold__summary { padding-left: var(--space-4); padding-right: var(--space-4); }
+  .regulatory-fold__body { padding-left: var(--space-4); padding-right: var(--space-4); }
+}
+
+/* 식약처 공식 조회 연결 (외부 링크 아이콘 · 행별 텍스트 링크) ---------------
+   버튼 자체는 위 .regulatory-actions 의 공통 보조 버튼을 쓴다. 아이콘은 외부 링크 표시용(aria-hidden), 새 탭 안내는 .regulatory-sr-only 문구로 제공 */
+.regulatory-mfds-icon { flex: none; vertical-align: -2px; }
+
+/* 조회되지 않은 행·카드의 작은 텍스트 링크 — 상태 배지·사유 문구는 그대로 두고 그 아래 한 줄로만 */
+.regulatory-mfds-textlink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-caption);
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+.regulatory-mfds-textlink:hover { color: var(--color-primary-hover); }
+.regulatory-mfds-textlink:focus-visible { box-shadow: var(--shadow-focus); }
+.regulatory-mfds-inline { margin: var(--space-2) 0 0; }
+
+/* 보조기기용 숨김 문구 — ‘(새 탭에서 열림)’. 공통 CSS 에 해당 유틸리티가 없어 페이지 전용으로 둔다 */
+.regulatory-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

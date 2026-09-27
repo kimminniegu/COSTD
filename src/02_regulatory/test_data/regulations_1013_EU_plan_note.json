@@ -1,0 +1,58 @@
+{
+  "_note": "인증 정보 제거. 실제 호출 기록 (K-Beauty Cosmetic Ingredients / RapidAPI). not_listed_in_country + result_note 에 'markets outside your plan' 문구 확인용",
+  "_request": {
+    "method": "GET",
+    "path": "/v1/ingredient/1013/regulations",
+    "params": {
+      "country": "EU"
+    }
+  },
+  "_called_at_utc": "2026-09-23T07:42:27+00:00",
+  "_http_status": 200,
+  "_response_headers": {
+    "Date": "Wed, 23 Sep 2026 07:42:27 GMT",
+    "Content-Type": "application/json",
+    "X-RateLimit-Requests-Limit": "25000",
+    "X-RateLimit-Requests-Remaining": "24784",
+    "X-RateLimit-Requests-Reset": "2409003",
+    "Server": "RapidAPI-0.0.46"
+  },
+  "body": {
+    "success": true,
+    "ingredient": {
+      "code": 1013,
+      "kr_name": "글리세린",
+      "inci_name": "Glycerin",
+      "regulation_status": "Restricted"
+    },
+    "count": 0,
+    "available_countries": [
+      "한국",
+      "EU",
+      "중국",
+      "미국",
+      "일본",
+      "아세안"
+    ],
+    "data": [],
+    "data_source": "Ministry of Food and Drug Safety (MFDS, nedrug.mfds.go.kr), European Commission CosIng Database (ec.europa.eu/growth/tools-databases/cosing/reference/annexes)",
+    "disclaimer": "Regulatory reference data only. Does not constitute legal, compliance, or safety advice. Data has been processed and normalized from original source datasets.",
+    "result_status": "not_listed_in_country",
+    "result_note": "No entry for EU in our source data. There are entries for markets outside your plan only.",
+    "markets_listed": [],
+    "markets_outside_plan": 1,
+    "country": {
+      "requested": "EU",
+      "resolved": "EU",
+      "code": "EU"
+    },
+    "available_country_codes": [
+      "KR",
+      "EU",
+      "CN",
+      "US",
+      "JP",
+      "ASEAN"
+    ]
+  }
+}
