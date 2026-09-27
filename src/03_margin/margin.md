@@ -56,6 +56,7 @@
 | `src/03_margin/margin.css` | 이 페이지 전용 스타일 (`margin-` 접두사, CSS Variable만 사용) |
 | `src/03_margin/margin.js` | 모든 계산·렌더링·이벤트 (IIFE, 전역 변수 없음) |
 | `src/03_margin/margin.md` | 이 기능 명세서 |
+| `src/03_margin/margin_user_guide.md` | 예비 사용자 배포용 사용설명서 (화면 사용법·워크플로우·팁·문제 해결) |
 | `src/03_margin/service.py` | 견적서 PDF: 회사 정보(`COMPANY`), 입력 검증, 합계 재계산, 영문 금액 표기, PDF 생성 / 현재 USD/KRW 환율 조회(10분 캐시) / ERP 원가 연동(시연용 예시 `ERP_SAMPLE`) |
 | `src/03_margin/margin_quote_document.html` | 견적서 PDF 전용 문서 템플릿 (xhtml2pdf용, base.html 비상속) |
 | `app.py` | `# [C]` 주석 아래 Backend Route 4개만 |
