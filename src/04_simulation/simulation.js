@@ -50,6 +50,13 @@ document.addEventListener('pointerdown', event => {
   if (activeHelp && !activeHelp.button.contains(event.target) && !activeHelp.panel.contains(event.target)) closeHelp();
 });
 window.addEventListener('resize', closeHelp);
+// 슬라이더 트랙을 기기 픽셀 정수로 맞춰, 125%·150% 배율에서도 네 트랙이 같은 굵기로 그려지게 합니다.
+function snapSliderTrack() {
+  const dpr = window.devicePixelRatio || 1;
+  document.querySelector('.simulation-sliders').style.setProperty('--simulation-track', Math.max(1, Math.round(3 * dpr)) / dpr + 'px');
+}
+window.addEventListener('resize', snapSliderTrack);
+snapSliderTrack();
 window.addEventListener('scroll', closeHelp, true);
 
 const PRESETS = {
@@ -232,7 +239,6 @@ function update() {
   }
   shown = { v, flow, score };
   const water = Math.max(0, 100 - a - c - o - h);
-  const activePpm = Math.round(a * 10000);
 
   current = { a, c, o, h, v, state, score, flow, water };
   updateBriefBadge();
@@ -248,11 +254,7 @@ function update() {
   $('oil-out').textContent = o.toFixed(0) + '%';$('hum-out').textContent = h.toFixed(0) + '%';
 
   $('viscosity').textContent = fmt(v);$('flow').textContent = flow + ' / 100';
-  $('water').textContent = water.toFixed(2) + '\%';$('active-val').textContent = fmt(activePpm);
   $('flow-gauge').value = flow;
-  $('water-mix').style.flexGrow = 100 - water;
-  $('water-base').style.flexGrow = water;
-  $('water-gauge').setAttribute('aria-label', `배합 성분 ${(100 - water).toFixed(2)}%, 정제수 ${water.toFixed(2)}%`);
   const parts = { active: a, carb: c, oil: o, hum: h, water };
   Object.entries(parts).forEach(([id, pct]) => {
     $('formula-' + id).style.flexGrow = pct;
