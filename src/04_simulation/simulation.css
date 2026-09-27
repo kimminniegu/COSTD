@@ -1,13 +1,16 @@
 /* 이 페이지에 한정한 밀도/배치. 공통 파일은 수정하지 않습니다. */
 /* 여백은 원가·마진 탭 기준에 맞춥니다: 좌우는 공통값(56px), 위 24px, 카드 간격 16px, 카드 안쪽 20px. */
 .simulation-shell { --layout-page-padding-y: var(--space-6); --layout-footer-height: var(--space-6); }
-.simulation-page { --layout-card-padding: var(--space-5); --layout-section-gap: var(--layout-card-gap); min-width: 0; }
-.simulation-page .page-header { align-items: center; }
+.simulation-page { --simulation-columns: minmax(0, 1fr) clamp(236px, 20%, 272px); --layout-card-padding: var(--space-5); --layout-section-gap: var(--layout-card-gap); min-width: 0; }
+/* 머리글도 본문과 같은 두 칸: 개발요청서 버튼은 샘플 제형 카드 오른쪽 위, 초기화·시연 버튼은 배합 조절 카드 왼쪽 위에 맞춥니다. */
+.simulation-page .page-header { display: grid; grid-template-columns: var(--simulation-columns); align-items: center; gap: var(--layout-card-gap); }
+.simulation-header-main { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-width: 0; }
+.simulation-page .page-actions { justify-content: flex-start; }
 .simulation-page .page-title { font-size: var(--font-size-section-title); }
 .simulation-page .card-header { align-items: center; gap: var(--space-2); }
 .simulation-page .card-header + .card-body { padding-top: var(--space-3); }
 .simulation-top-grid, .simulation-bottom-grid { display: grid; gap: var(--layout-card-gap); }
-.simulation-top-grid { grid-template-columns: minmax(0, 1fr) clamp(236px, 20%, 272px); }
+.simulation-top-grid { grid-template-columns: var(--simulation-columns); }
 .simulation-bottom-grid { margin-top: var(--layout-card-gap); grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; }
 .simulation-bottom-grid > section { display: flex; flex-direction: column; }
 .simulation-pitch { border-left: 1px solid var(--color-border-strong); }
@@ -147,7 +150,7 @@
   .simulation-page .page-header, .simulation-bottom-grid { margin: 0; }
   .simulation-top-grid { min-height: 0; }
   /* 사이드바를 접어 늘어난 폭은 배합 조절 쪽이 받아, 미리보기가 과하게 커지지 않게 합니다. */
-  .is-sidebar-collapsed .simulation-top-grid { grid-template-columns: minmax(0, 1fr) clamp(248px, 21%, 300px); }
+  .is-sidebar-collapsed .simulation-page { --simulation-columns: minmax(0, 1fr) clamp(248px, 21%, 300px); }
   .simulation-preview { min-height: 0; }
   .simulation-stage { width: 100%; height: 100%; max-width: none; min-height: 0; aspect-ratio: auto; }
   /* 배합 조절 카드는 미리보기와 같은 높이로 고정하고, 실제 카드 높이에 맞춰 밀도를 단계적으로 줄입니다. */
@@ -197,7 +200,7 @@
   .simulation-hud strong { font-size: 15px; }
 }
 @container page (max-width: 900px) {
-  .simulation-top-grid, .simulation-bottom-grid { grid-template-columns: minmax(0, 1fr); }
+  .simulation-top-grid, .simulation-bottom-grid, .simulation-page .page-header { grid-template-columns: minmax(0, 1fr); }
   .simulation-stage { width: min(100%, 480px); height: auto; }
   .simulation-pitch { border-left: 0; border-top: 1px solid var(--color-border-strong); }
 }
