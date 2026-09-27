@@ -51,6 +51,7 @@
   margin-bottom: var(--layout-section-gap);
 }
 .margin-inputs {
+  --margin-aside-flex: 0px;   /* 남는 Card 높이를 간격에 나눠 주는 한 단위 (margin.js fitAside, 가중치 합 6.25) */
   position: sticky;
   top: var(--space-6);
   max-height: calc(100vh - var(--space-12));
@@ -75,10 +76,10 @@
 /* 입력 그룹 */
 .margin-inputs > .card-body { display: flex; flex-direction: column; padding: var(--space-6); }
 
-/* 현재 견적 요약 — 입력 Card 맨 아래 (margin-top: auto 로 남는 높이를 채움) */
+/* 현재 견적 요약 — 입력 Card 맨 아래 (남는 높이는 --margin-aside-flex 로 간격에 먼저 나누고, 그래도 남으면 margin-top: auto 로 채움) */
 .margin-quick { display: flex; flex-direction: column; gap: 2px; margin-top: auto; padding: var(--space-3) var(--space-4); background: var(--color-primary-soft); border-radius: var(--radius-lg); }
 .margin-quick:empty { display: none; }
-.margin-group:has(#margin-logi-box) { margin-bottom: var(--space-3); }   /* 마지막 입력 그룹 ↔ 견적 요약 최소 간격 */
+.margin-group:has(#margin-logi-box) { margin-bottom: calc(var(--space-3) + var(--margin-aside-flex)); }   /* 마지막 입력 그룹 ↔ 견적 요약 (최소 12px) */
 .margin-quick__row { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0 var(--space-2); font-size: var(--font-size-label); color: var(--color-text-secondary); }
 .margin-quick__row b { font-variant-numeric: tabular-nums; color: var(--color-text-primary); }
 .margin-quick__price { font-size: var(--font-size-card-title); font-weight: var(--font-weight-extrabold); color: var(--color-primary); }
@@ -102,15 +103,16 @@
   top: calc(var(--space-6) * -1);
   z-index: 1;
   margin: calc(var(--space-6) * -1) calc(var(--space-6) * -1) 0;
-  padding: var(--space-5) var(--space-6) var(--space-3);
-  gap: var(--space-2);
+  padding: var(--space-5) var(--space-6) calc(var(--space-3) + var(--margin-aside-flex));   /* 구분선 위: 1 */
+  gap: calc(var(--space-2) + var(--margin-aside-flex) / 4);   /* 제목 ↔ 1행: 0.25 (아래 제목 ↔ 접이식과 같은 폭) */
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border-strong);
 }
-.margin-pin .form-group { gap: var(--space-1); }   /* 라벨 ↔ 입력칸 (기본 상태에서 입력 Card 가 한 화면에 들어가도록 촘촘하게) */
-.margin-pin + .margin-group { margin-top: var(--space-2); padding-top: 0; border-top: 0; }
-.margin-pin ~ .margin-group + .margin-group { margin-top: var(--space-2); padding-top: 0; border-top: 0; }   /* 접이식 그룹끼리는 선 없이 간격만 (촘촘하게) */
-.margin-pin ~ .margin-group { gap: var(--space-1); }   /* 제조원가·물류비: 제목 ↔ 접이식 박스 */
+.margin-pin .form-group { gap: calc(var(--space-1) + var(--margin-aside-flex) / 4); }   /* 라벨 ↔ 입력칸: 0.25 × 2행 (기본은 촘촘하게) */
+.margin-pin .margin-pair + .margin-pair { margin-top: calc(var(--margin-aside-flex) * 0.75); }   /* 1행 ↔ 2행: 0.25 + 0.75 = 1 (구분선 아래 그룹 간격과 같은 폭) */
+.margin-pin + .margin-group { margin-top: calc(var(--space-2) + var(--margin-aside-flex)); padding-top: 0; border-top: 0; }   /* 구분선 아래: 1 (위 padding-bottom 과 같은 폭으로 늘어남) */
+.margin-pin ~ .margin-group + .margin-group { margin-top: calc(var(--space-2) + var(--margin-aside-flex)); padding-top: 0; border-top: 0; }   /* 접이식 그룹끼리는 선 없이 간격만: 1 */
+.margin-pin ~ .margin-group { gap: calc(var(--space-1) + var(--margin-aside-flex) / 4); }   /* 제조원가·물류비: 제목 ↔ 접이식 박스 0.25 × 2 */
 .margin-pin ~ .margin-group .margin-group__head { min-height: 0; }   /* 제목 줄은 내용 높이만 (ERP 연동 버튼 줄은 버튼 높이) */
 .margin-pin ~ .margin-group .margin-drawer__head { padding-top: calc((var(--space-1) + var(--space-2)) / 2); padding-bottom: calc((var(--space-1) + var(--space-2)) / 2); }   /* 6px */
 .margin-pin ~ .margin-group .margin-drawer__peek { margin-top: 0; }
