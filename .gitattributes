@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# 배포용 식약처 규제 DB — 줄바꿈 변환 없이 그대로 저장
+*.sqlite binary

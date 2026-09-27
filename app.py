@@ -31,23 +31,35 @@ SRC_DIR = BASE_DIR / "src"
 INSTANCE_DIR = BASE_DIR / "instance"          # SQLite 등 로컬 데이터 (Git 제외)
 DB_PATH = INSTANCE_DIR / "cosmoa.db"
 
+# 운영(배포) 환경: Dockerfile 의 COSMOA_ENV=production 또는 Render 가 넣어 주는 RENDER=true. 배포 안내: docs/deploy_render.md
+IS_PRODUCTION = os.getenv("COSMOA_ENV", "").strip().lower() == "production" or os.getenv("RENDER", "").strip().lower() == "true"
+
 # 개발 서버 재시작 때 이전 프로세스에서 상속된 키 대신 수정한 .env를 반영합니다.
-load_dotenv(BASE_DIR / ".env", override=True)
+# 운영에서는 .env 를 읽지 않습니다. (override=True 가 Render 환경변수를 덮어쓰지 않도록)
+if not IS_PRODUCTION:
+    load_dotenv(BASE_DIR / ".env", override=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+_secret_key = os.getenv("FLASK_SECRET_KEY", "").strip()
+if IS_PRODUCTION and (not _secret_key or _secret_key == "dev-only-change-me"):
+    raise RuntimeError("운영 환경에는 FLASK_SECRET_KEY 를 고정된 비밀값으로 설정해야 합니다. (docs/deploy_render.md)")
 
 # 일반적인 templates/ 대신 src/ 전체를 템플릿 폴더로 사용합니다.
 # 템플릿 이름은 src/ 기준 상대 경로입니다. 예: "02_regulatory/regulatory.html"
 # 기본 static 폴더는 사용하지 않고, 아래 asset() Route가 src/ 안의 CSS·JS를 제공합니다.
 app = Flask(__name__, template_folder=str(SRC_DIR), static_folder=None)
-app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or "dev-only-change-me"   # .env 에 빈 값이어도 개발용 기본값 사용
+app.config["SECRET_KEY"] = _secret_key or "dev-only-change-me"   # 로컬: .env 에 빈 값이어도 개발용 기본값 사용
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)   # "로그인 상태 유지" 체크 시
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+if IS_PRODUCTION:
+    app.config["DEBUG"] = False                  # FLASK_DEBUG 가 설정돼 있어도 운영에서는 끔
+    app.config["SESSION_COOKIE_SECURE"] = True   # Render 는 HTTPS 로만 접속
 
 # 공통 모듈 (PM) / 홈 데이터 모듈 (A)
 auth = importlib.import_module("src.common.auth")
 home_data = importlib.import_module("src.01_home.home_data")
-auth.init(DB_PATH)
+auth.init(DB_PATH, production=IS_PRODUCTION)
 home_data.init(DB_PATH)
 login_required = auth.login_required
 
