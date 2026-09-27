@@ -532,46 +532,76 @@
       const printableReferences = referenceMarkup(data, true);
       const printableReferenceNotes = filled(data.reference_notes) ? '<table class="requirements"><tbody>' + row("기타사항", data.reference_notes) + '</tbody></table>' : '';
       const referenceSection = printableReferences || printableReferenceNotes ? '<section class="references"><h2>05 참고자료</h2>' + printableReferences + printableReferenceNotes + '</section>' : '';
-      const printHtml = '<main><header class="document-header"><div class="brand">COSTD <span>COSMOA</span></div>' +
-        '<p class="document-type">연구소 전달용</p><h1>제품 개발 요청서</h1><p class="subtitle">PRODUCT DEVELOPMENT REQUEST</p></header>' +
-        '<table class="document-meta"><caption>문서 정보</caption><tbody>' +
-        '<tr><th scope="row">문서 ID</th><td colspan="3">' + escape(data.document_id || "미지정") + '</td></tr>' +
-        '<tr><th scope="row">출력일</th><td colspan="3">' + issuedDate + '</td></tr>' +
-        '<tr><th scope="row">수신</th><td>연구소</td><th scope="row">작성 방식</th><td>' + escape(methods[data.creation_method] || "미지정") + '</td></tr></tbody></table>' +
+      /* 견적서(03_margin/margin_quote_document.html) PDF 와 같은 양식: 회사 머리글 + 파란 제목, 정보 2단, 조건 4칸, 파란 헤더 표, 서명, 꼬리글.
+         회사 정보는 공통 레이아웃의 내 계정 모달(base.html)에서 읽어 견적서와 같은 값을 씁니다. */
+      const companyCell = (label) => { const dt = [...document.querySelectorAll(".app-about__list--company dt")].find((el) => el.textContent.trim() === label); return dt ? dt.nextElementSibling.textContent.trim() : ""; };
+      const company = { name: companyCell("회사명") || "COSTD", address: companyCell("주소"), phone: companyCell("전화") };
+      const preparedBy = (document.querySelector(".app-user__name")?.textContent || "").trim();
+      const printMeta = (label, value) => '<tr><td class="k">' + escape(label) + '</td><td>' + escape(value) + '</td></tr>';
+      const termCell = (label, value) => '<td><p class="k">' + escape(label) + '</p>' + escape(filled(value) ? value : "-") + '</td>';
+      const listText = (value) => Array.isArray(value) ? value.join(", ") : value;
+      const printHtml =
+        '<table class="brand"><tr><td style="width: 60%;"><span class="company">' + escape(company.name) + '</span>' +
+          (company.address ? '<br><span class="muted">' + escape(company.address) + '</span>' : '') +
+          (company.phone ? '<br><span class="muted">Tel. ' + escape(company.phone) + '</span>' : '') +
+        '</td><td class="title">DEVELOPMENT<br>REQUEST</td></tr></table>' +
+        '<table class="info"><tr><td style="width: 55%;"><span class="label">Request to</span><br><span class="bold" style="font-size: 11pt;">연구소 (R&amp;D Center)</span><br>제품 개발 요청서 · 연구소 전달용' +
+          (filled(data.customer) ? '<br><span class="muted">고객사: ' + escape(data.customer) + '</span>' : '') + '</td>' +
+          '<td><table class="meta">' + printMeta("Document No.", data.document_id || "미지정") + printMeta("Date", issuedDate) +
+          printMeta("Product", data.product_name || "미입력") + printMeta("Prepared by", preparedBy || "-") + printMeta("Method", methods[data.creation_method] || "미지정") + '</table></td></tr></table>' +
+        '<table class="terms"><tr>' + termCell("샘플 구분", pdfValue("sample_request_type")) + termCell("제품 유형", pdfValue("product_type")) +
+          termCell("목표 가격대", pdfValue("target_price_tier")) + termCell("수출 대상국", listText(fieldValue(data, "export_countries"))) + '</tr></table>' +
         sections.map(printableSection).join('') + referenceSection +
-        '<footer><strong>COSTD · COSMOA</strong><span>수출 대상국별 규제 적합성은 별도 확인이 필요합니다.</span></footer></main>';
+        '<table class="notes"><tr><td><p class="sub">Notes</p><ol>' +
+          '<li>본 요청서의 항목은 바이어 요청 원본을 연구소 검토용으로 정리한 것이며, 원문과 다른 해석이 있을 수 있습니다.</li>' +
+          '<li>"확인 필요"로 표시된 항목은 영업 담당자와 다시 확인한 뒤 개발을 진행해 주세요.</li>' +
+          '<li>수출 대상국별 규제 적합성(금지·제한 원료, 표시사항)은 별도 확인이 필요합니다.</li></ol></td></tr></table>' +
+        '<table class="sign"><tr><td class="line" style="width: 42%;">Prepared by<br><span class="bold">' + escape(preparedBy || company.name) + '</span><br><span class="muted">' + escape(company.name) + ' · Overseas Sales</span></td>' +
+          '<td style="width: 16%;">&nbsp;</td><td class="line">Reviewed by<br><span class="bold">&nbsp;</span><br><span class="muted">R&amp;D Center · Signature / Date</span></td></tr></table>' +
+        '<div class="doc-footer">' + escape(company.name) + ' &middot; Development Request ' + escape(data.document_id || "") + ' &middot; ' + issuedDate + '</div>';
       const printStyles = `
-        @page { size: A4; margin: 14mm 14mm 16mm; }
+        @page { size: A4; margin: 16mm 15mm 20mm 15mm; }
         * { box-sizing: border-box; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-        body { margin: 0; color: #202733; background: #fff; font: 9pt/1.55 "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; }
-        .document-header { position: relative; border-top: 3px solid #24364b; padding: 5mm 0 6mm; }
-        .brand { font-size: 15pt; font-weight: 800; letter-spacing: 1px; }
-        .brand span { margin-left: 2mm; font-size: 8pt; font-weight: 400; color: #596574; }
-        .document-type { position: absolute; top: 5mm; right: 0; margin: 0; font-size: 9pt; }
-        h1 { margin: 4mm 0 1mm; text-align: center; font-size: 24pt; letter-spacing: 3px; }
-        .subtitle { margin: 0; text-align: center; font-size: 8pt; letter-spacing: 2px; color: #596574; }
+        body { margin: 0; color: #191f28; background: #fff; font: 9pt/1.4 "Malgun Gothic", "Apple SD Gothic Neo", Helvetica, Arial, sans-serif; }
         table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        td, th { vertical-align: top; overflow-wrap: anywhere; }
+        p { margin: 0; }
         caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-        th, td { border: 1px solid #9ca6b1; padding: 2.5mm 3mm; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
-        th { background: #eef1f4; font-weight: 700; }
-        td { white-space: pre-wrap; }
-        .document-meta { margin-bottom: 6mm; }
-        .document-meta th { width: 26mm; }
+        .muted { color: #6b7684; }
+        .bold { font-weight: bold; }
+        .brand { margin-bottom: 12pt; }
+        .brand td { padding: 0 0 8pt; border-bottom: 2pt solid #1b64da; vertical-align: bottom; }
+        .brand .company { font-size: 15pt; font-weight: bold; }
+        .brand .title { font-size: 20pt; font-weight: bold; color: #1b64da; letter-spacing: 2pt; text-align: right; line-height: 1.1; }
+        .label { font-size: 7.5pt; color: #6b7684; text-transform: uppercase; letter-spacing: 0.6pt; }
+        .info td { padding: 0 0 8pt; }
+        .meta td { padding: 1.5pt 0; }
+        .meta .k { color: #6b7684; width: 26mm; }
+        .terms { margin-bottom: 10pt; }
+        .terms td { border: 0.5pt solid #d1d6db; padding: 4pt 6pt; width: 25%; white-space: pre-wrap; }
+        .terms .k { font-size: 7.5pt; color: #6b7684; }
+        section { margin-top: 8pt; }
+        h2 { margin: 0 0 4pt; font-size: 9pt; font-weight: bold; break-after: avoid; }
+        .requirements thead { display: table-header-group; }
+        .requirements th { background: #1b64da; color: #ffffff; font-size: 8pt; font-weight: bold; padding: 5pt 6pt; text-align: left; }
+        .requirements td, .requirements tbody th { border-bottom: 0.5pt solid #e5e8eb; padding: 5pt 6pt; text-align: left; }
+        .requirements tbody th { background: transparent; color: #6b7684; font-size: 8pt; font-weight: bold; }
+        .requirements td { white-space: pre-wrap; }
         .label-column { width: 36mm; }
-        section { margin-top: 5mm; }
-        h2 { margin: 0 0 2mm; padding: 0 0 2mm; border-bottom: 2px solid #24364b; font-size: 11pt; break-after: avoid; }
-        thead { display: table-header-group; }
-        thead th { background: #dfe5eb; font-size: 8pt; }
         tr { break-inside: avoid; }
-        p { orphans: 3; widows: 3; }
-        .requisition-reference { margin: 0 0 3mm; padding: 3mm; border: 1px solid #9ca6b1; break-inside: avoid; }
-        .requisition-reference img { display: block; margin: 0 auto 2mm; object-fit: contain; }
-        figcaption { font-size: 8pt; overflow-wrap: anywhere; }
-        .empty-reference { border: 1px solid #9ca6b1; padding: 3mm; margin: 0; color: #596574; }
-        .review-signoff { break-inside: avoid; }
-        .review-space { height: 22mm; }
-        footer { margin-top: 6mm; padding-top: 3mm; border-top: 1px solid #24364b; font-size: 8pt; color: #596574; }
-        footer span { float: right; }
+        .references .requisition-reference { margin: 0 0 6pt; padding: 6pt; border: 0.5pt solid #d1d6db; break-inside: avoid; }
+        .references .requisition-reference img { display: block; margin: 0 auto 4pt; max-width: 100%; max-height: 90mm; object-fit: contain; }
+        figcaption { font-size: 8pt; color: #6b7684; overflow-wrap: anywhere; }
+        .empty-reference { margin: 0; padding: 6pt; border: 0.5pt solid #d1d6db; color: #6b7684; }
+        .notes { margin-top: 12pt; }
+        .notes td { padding: 0; }
+        .sub { margin: 0 0 4pt; font-size: 9pt; font-weight: bold; }
+        ol { margin: 2pt 0 0 12pt; padding: 0; }
+        li { margin: 0 0 1.5pt; }
+        .sign { margin-top: 26pt; break-inside: avoid; }
+        .sign td { padding: 0; }
+        .sign .line { border-top: 0.5pt solid #191f28; padding-top: 3pt; }
+        .doc-footer { position: fixed; left: 0; right: 0; bottom: -12mm; font-size: 7pt; color: #8b95a1; text-align: center; }
       `;
       if (printFrame) printFrame.remove();
       const frame = document.createElement("iframe");

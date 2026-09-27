@@ -112,29 +112,25 @@
                 <div class="form-group" id="margin-ins-box"><span class="form-label">보험요율</span>{{ field('ins', 0.2, '%', '보험요율', 0.05) }}</div>
               </div>
 
-              <!-- 약식 포장/CBM 추정 — 운임 반영을 눌렀을 때만 위 물류비·해상운임 칸에 값이 들어가요 -->
+              <!-- 약식 포장/CBM 추정 — ODM 표준 패키징 프리셋(margin.js ODM_PACKAGING_PRESETS)으로 입수·부피·단가를 채우고,
+                   자동 반영 중이면 계산한 내륙물류비·해상운임이 위 두 칸에 바로 들어가요. (두 칸을 직접 고치면 그 값이 우선) -->
               <div class="margin-cbm" id="margin-cbm">
                 <div class="margin-inline">
                   <span class="margin-cbm__title">약식 포장/CBM 추정</span>
                   <span class="text-caption" id="margin-cbm-peek"></span>
                 </div>
                 <div class="form-group"><label class="form-label" for="margin-cbm-preset">단품 용량/형태</label>
-                  <select class="form-control form-control-sm" id="margin-cbm-preset">
-                    <option value="toner" selected>토너/에센스 100~150ml</option>
-                    <option value="serum">세럼/앰플 30ml</option>
-                    <option value="cream">크림/단지 50ml</option>
-                    <option value="mask">마스크팩</option>
-                  </select></div>
+                  <select class="form-control form-control-sm" id="margin-cbm-preset"></select></div>
                 <div class="margin-pair">
                   <div class="form-group"><span class="form-label">카톤당 입수</span>{{ field('cbm-ea', 40, 'ea', '카톤당 입수', 10) }}</div>
-                  <div class="form-group margin-unit-wide"><span class="form-label">카톤 부피</span>{{ field('cbm-box', 0.025, 'CBM', '카톤당 CBM', 0.001) }}</div>
+                  <div class="form-group margin-unit-wide"><span class="form-label">카톤 부피</span>{{ field('cbm-box', 0.024, 'CBM', '카톤당 CBM', 0.001) }}</div>
                 </div>
                 <div class="margin-pair">
                   <div class="form-group"><span class="form-label">내륙·통관 <span class="text-caption">/CBM</span></span>{{ field('cbm-inland', 150000, '원', 'CBM당 FOB 내륙물류비', 10000) }}</div>
                   <div class="form-group"><span class="form-label">LCL 운임 <span class="text-caption">/CBM</span></span>{{ field('cbm-lcl', 50, '$', 'CBM당 LCL 해상운임', 5) }}</div>
                 </div>
                 <div class="margin-cbm-out" id="margin-cbm-out"></div>
-                <button type="button" class="btn btn-soft btn-sm btn-block" id="margin-cbm-apply">운임 반영</button>
+                <button type="button" class="btn btn-soft btn-sm btn-block" id="margin-cbm-apply">물류비 자동 반영</button>
               </div>
             </div>
           </details>

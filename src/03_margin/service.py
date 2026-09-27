@@ -34,9 +34,9 @@ except ImportError:
 
 # 우리 회사 정보 — 견적서 머리글·서명란에 자동으로 들어갑니다. 회사 정보가 바뀌면 여기만 고칩니다.
 COMPANY = {
-    "name": "COSTD Co., Ltd.",
-    "address": "",   # 예: "123, Teheran-ro, Gangnam-gu, Seoul, Republic of Korea"
-    "phone": "",     # 예: "+82-2-1234-5678"
+    "name": "COSTD",
+    "address": "513, Yeongdong-daero, Gangnam-gu, Seoul (COEX 4F, Study Room 3)",   # 내 계정 모달의 회사 주소와 동일 (영문 표기)
+    "phone": "+82-2-6000-5968",
     "email": "",     # 예: "sales@costd.co.kr"
 }
 
@@ -315,16 +315,12 @@ ERP_SAMPLE = {
         "m2min": 15,         # 최소 영업마진 (방어선, %)
         "counter_pct": 5,    # 바이어 목표가 = 연동 후 견적 단가 −5% (역제안 분석 시연값, 흔한 첫 역제안 폭)
     },
-    # 포장 · 물류 (30ml 유리 드롭퍼 48입 카톤 기준)
+    # 포장 · 물류 — ODM 표준 패키징 프리셋 id (margin.js ODM_PACKAGING_PRESETS).
+    # 입수 48ea · 0.015 CBM · 내륙·통관 150,000원/CBM · LCL $50/CBM 은 프리셋에서, FOB 물류비 총액·해상운임은 화면에서 계산
+    # (10,000개 → 209카톤 · 3.14 CBM → 470,000원 · $157)
     "logistics": {
-        "preset": "serum",   # 단품 용량/형태 — 세럼/앰플 30ml
-        "cbm_ea": 48,        # 카톤당 입수 (Tertiary 포장)
-        "cbm_box": 0.015,    # 카톤 부피 (CBM, 실측치)
-        "cbm_inland": 150000,  # 내륙·통관 단가 (원/CBM)
-        "cbm_lcl": 50,       # LCL 해상운임 ($/CBM, 바이어 참고용)
-        "logi": 550000,      # FOB 물류비 총액 (내륙운송 + 수출통관 + 항만 부대비용)
-        "rate_logi": 10,     # 물류 마진율 (%)
-        "freight": 157,      # 해상운임 총액 ($) = ⌈3.14 CBM × $50⌉ (CFR·CIF 에서만 단가에 반영)
+        "preset": "SERUM_30ML",  # 단품 용량/형태 — 세럼/앰플 30ml
+        "rate_logi": 10,         # 물류 마진율 (%)
     },
 }
 
