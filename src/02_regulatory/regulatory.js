@@ -1649,7 +1649,10 @@
       " · 갱신 안내: " + refreshText(anyRes || { source: fileSource() }) + " · 원천 자료 갱신일: 미제공 · 법령 개정·적용일: 미제공 · 데이터 확보·수집 시각은 법령 개정일이나 최신성 보장을 의미하지 않습니다. (KST)");
     setText($("regulatory-cond-market"), fileMarketLabel());
     setText($("regulatory-cond-doc-country"), fileState.doc && fileState.doc.market ? fileState.doc.market.text : "미확인");
-    setText($("regulatory-cond-product"), fileState.doc && fileState.doc.use ? fileState.doc.use.text : "미입력");
+    var productCondition = fileState.doc && fileState.doc.use ? fileState.doc.use.text : "";
+    var productConditionEl = $("regulatory-cond-product");
+    setText(productConditionEl, productCondition || "확인필요");
+    productConditionEl.classList.toggle("regulatory-value--needs-review", !productCondition);
     setText($("regulatory-cond-scope"), "시장 코드 " + market + " · 출처 " + (SOURCE_LABEL[fileSource()] || fileSource()) + " · 확정 성분 " + confirmedRows().length + "건 조회");
     setText($("regulatory-kpi-total"), String(counts.total));
     setText($("regulatory-kpi-found"), String(counts.found));

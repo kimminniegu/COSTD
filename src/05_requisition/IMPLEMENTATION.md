@@ -30,7 +30,9 @@ Responses API의 파일/이미지 입력 및 Structured Outputs를 지원하는 
 
 `POST /api/dev-request/convert`는 multipart `file`, `customer`, `source_language`, `target_language`, `recipients`를 받습니다.
 파일은 1개, 최대 20MB이며 확장자와 파일 시그니처를 확인합니다.
-`recipients`는 JSON 배열입니다. 언어 코드는 `ko/en/zh/ja/fr/de/es`, 원문 언어는 `auto`도 가능합니다.
+`recipients`는 JSON 배열입니다. 출력 언어 코드는 `ko/en/zh/ja/fr/de/es`이며, 원문 언어는 기본값 `auto`, 같은 언어 코드 또는 사용자가 직접 입력한 50자 이하의 언어 이름을 사용할 수 있습니다.
+
+직접 작성·수정 완료 시 고객사, 요청 구분, 제품명, 샘플 구분, 제품 유형, 수출 대상국과 `04 품질 확인사항`의 품질 확인 테스트를 필수로 검사합니다.
 파일은 변환 시 OpenAI로 전송합니다. 응답 저장은 `store: false`로 요청합니다.
 DOCX의 삽입 이미지/차트는 추출되지 않으며 XLSX는 API의 시트별 1,000행 처리 제한이 있습니다.
 한 파일에 제품이 여러 개면 제품별로 파일을 나누어야 합니다.

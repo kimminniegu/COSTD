@@ -40,6 +40,11 @@ class ConversionError(Exception):
         self.status = status
 
 
+def valid_source_language(value):
+    """Allow known codes, automatic detection, or a short user-entered language name."""
+    return bool(value) and len(value) <= 50 and not any(ord(char) < 32 for char in value)
+
+
 def validate_file(filename, content):
     suffix = Path(filename).suffix.lower()
     if suffix not in MIME_TYPES:
@@ -300,10 +305,10 @@ def requisition_convert():
         filename = upload.filename.replace("\\", "/").split("/")[-1][:200]
         content = upload.read(MAX_FILE_BYTES + 1)
         suffix = validate_file(filename, content)
-        source = request.form.get("source_language", "auto")
+        source = request.form.get("source_language", "auto").strip()
         target = request.form.get("target_language", "ko")
         customer = request.form.get("customer", "").strip()
-        if source not in LANGUAGES | {"auto"} or target not in LANGUAGES or len(customer) > 200:
+        if not valid_source_language(source) or target not in LANGUAGES or len(customer) > 200:
             raise ConversionError("고객사 또는 언어 설정을 확인해 주세요.")
         try:
             recipients = json.loads(request.form.get("recipients", "[]"))
