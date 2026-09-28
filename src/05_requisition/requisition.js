@@ -114,7 +114,7 @@
     const provenance = (data.field_provenance || []).find((item) => item.field_key === key);
     if (!editing() && provenance) {
       if (provenance.review_status === "not_applicable") control = '<p class="requisition-field-value">해당 없음</p>';
-      control += '<small class="text-caption">' + ({ confirmed: "✓ 확인 완료", needs_review: "⚠ 확인 필요", missing: "미입력", not_applicable: "해당 없음", user_edited: "✓ 사용자 수정" }[provenance.review_status] || "") + '</small>';
+      control += '<small class="text-caption requisition-review-status requisition-review-status--' + escape(provenance.review_status) + '">' + ({ confirmed: "✓ 확인 완료", needs_review: "⚠ 확인 필요", missing: "미입력", not_applicable: "해당 없음", user_edited: "✓ 사용자 수정" }[provenance.review_status] || "") + '</small>';
     }
     return '<div class="form-group' + (wideNoteFields.has(key) ? ' requisition-field-wide requisition-field-note' : '') + '" id="requisition-field-' + key + '">' +
       (editing() && key !== "target_price_tier" ? '<label class="form-label" for="requisition-input-' + key + '">' : '<p class="form-label">') +
