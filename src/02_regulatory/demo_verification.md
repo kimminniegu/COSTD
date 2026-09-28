@@ -56,3 +56,11 @@
 - 브라우저 실제 업로드 화면은 담당자가 확인해야 한다(검증은 서버 처리 함수 직접 호출 + DOM 스텁 기준).
 - PDF 는 pypdfium2 렌더링 이미지로, PNG 는 축소 이미지로 잘림·겹침·글꼴 깨짐이 없음을 확인했다. **XLSX 는 렌더링 도구가 없어 셀 값·열 폭·병합·숨김·수식·인쇄 영역만 검사했고 실제 Excel 화면 모양은 미확인**이다.
 - K뷰티 API 결과는 2026-09-24 호출 시점 기준이다(제공자 안내 갱신 주기 월 1회). 식약처 DB 는 2026-09-23 수집 완료본 기준.
+
+## 6. EU-SER-041 개발요청서 간소화 (2026-09-28)
+
+- 대상: `samples/EU-SER-041_development_brief_regulatory.pdf` (영어, 가상 바이어 Atelier Mira, EU 페이스 세럼). 현직자 피드백에 따라 초기 영업 단계에서 아직 확정되지 않은 연구·시험·생산 정보를 요구하지 않도록 3쪽 → 2쪽으로 간소화했다. ReportLab·Helvetica·A4 텍스트 PDF 그대로.
+- 구성: `01 / Project & commercial`(거래처·개발 방식·일정·수량·목표 단가·FOB Busan 기준·용량·샘플/견적) → `02 / Formula direction`(대상 국가·콘셉트·요청 효능·사용감/외관·참고 제품·향·제외 원료·Application·사용법 + 요청 성분표) → `03 / Packaging`(기존 08에서 번호 변경). 점도·pH 수치, 안전성·효능 시험표, 안정성·미생물·용기 시험 계획, 전성분·정량 처방·원료 규격서 제출 요구는 삭제하고 “내부 담당 부서가 개발 진행에 따라 정한다”는 한 줄로 갈음했다. 제품명·거래처·시장·일정·수량·가격(USD 2.35/unit, FOB Busan)은 유지.
+- 성분표: 제목 `INCI name / Requested level / Role / status` 와 7개 성분(Hydrolyzed Wheat Protein · Glycerin · Zinc PCA · Retinol · Phenoxyethanol · Chlorphenesin · Aqua)의 표기·순서 유지. 함량은 확정 수치 대신 모두 `TBD`(다른 시연 자료와 같은 표기) — 추출 시 `amount_raw="TBD"` 로 원문 보존되고 ‘함량 형식 확인’ 안내가 붙는다(0·임의 숫자로 바뀌지 않음). 표는 2쪽 안에 한 덩어리로 배치(KeepTogether).
+- 검증 (모두 로컬, 외부 API 호출 0회): `regulatory_extract.extract_upload()` 직접 호출, Flask test client `POST /api/regulatory/extract`, 실행 중인 개발 서버(127.0.0.1:5000) 로그인 후 HTTP 업로드 — 세 경로 모두 7/7 추출, 누락·중복·설명문 유입 0, `document_market`=“European Union: France and Germany”, `document_use`=“Leave-on; adult facial skin. …” 로 수정 전과 동일. 식약처 수집 DB `regulatory_mfds_lookup.lookup(inci_name=…)` EU·KR 14건은 수정 전후 결과가 완전히 같다(EU: Hydrolyzed Wheat Protein·Zinc PCA·Retinol·Phenoxyethanol·Chlorphenesin `found`, Glycerin·Aqua `not_listed`). `python -m unittest discover -s src/02_regulatory/tests` 111건 통과.
+- 미검증: 실제 브라우저 화면 업로드(확인·수정 표 표시)와 K뷰티 API 매칭·조회는 이번에 실행하지 않았다. 다른 탭 영향은 코드 기준으로만 확인: 개발요청서 변환(05)은 OpenAI 호출이라 실행하지 않았고, 삭제한 점도·시험 항목은 해당 Field 가 비거나 ‘R&D 검토 예정’ 문구로 채워진다. AI 제형 시뮬레이션(04)은 파일명만으로 프로필을 고르므로 본문 변경의 영향이 없다.
