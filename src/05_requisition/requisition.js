@@ -13,6 +13,7 @@
   kinds.reference_notes = "textarea";
   const wideNoteFields = new Set(["company_description", "basic_notes", "ingredients.other_notes"]);
   const chipFields = definitions.filter(([, , kind]) => kind === "list").map(([key]) => key);
+  const requiredFields = ["customer", "request_source", "product_name", "sample_request_type", "product_type", "export_countries", "quality.tests"];
   const get = (data, key) => key.split(".").reduce((value, part) => value?.[part], data);
   function set(data, key, value) {
     const parts = key.split("."), last = parts.pop();
@@ -46,8 +47,8 @@
     $("notice").hidden = !message;
   }
   function missing(data) {
-    return ["customer", "request_source", "product_name", "sample_request_type", "product_type", "export_countries"].filter((key) =>
-      !filled(data[key]) || (key === "product_type" && data.product_type === "기타" && !filled(data.product_type_custom)));
+    return requiredFields.filter((key) =>
+      !filled(get(data, key)) || (key === "product_type" && data.product_type === "기타" && !filled(data.product_type_custom)));
   }
   function reviews(data) {
     const result = missing(data).map((key) => labels[key]);
@@ -58,11 +59,11 @@
     return [...new Set(result)];
   }
   function fieldValue(data, key) {
-    if (key === "product_type") return data.product_type === "기타" ? data.product_type_custom || "확인 필요" : data.product_type;
+    if (key === "product_type") return data.product_type === "기타" ? data.product_type_custom || "" : data.product_type;
     if (key === "target_price_tier") return tiers[data[key]] || "";
     if (key === "buyer_prohibited_ingredients") return [...data[key], ...data.regulatory_restricted_ingredients].join(", ");
     const value = get(data, key);
-    if (kinds[key] === "required") return value === true ? "필요" : value === false ? "불필요" : "확인 필요";
+    if (kinds[key] === "required") return value === true ? "필요" : value === false ? "불필요" : "";
     return Array.isArray(value) ? value.join(", ") : value;
   }
   function input(key, placeholder = "") {
@@ -76,10 +77,11 @@
       '</div><div class="requisition-chip-entry"><div class="requisition-chip-input"><input class="form-control form-control-sm" id="requisition-input-' + key + '" data-chip="' + key + '" maxlength="100" placeholder="' + title + '" aria-label="' + title + '"' + (isCountry ? ' role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="requisition-country-list" aria-describedby="requisition-country-help" autocomplete="off"' : "") + '>' +
       (isCountry ? '<div id="requisition-country-list" class="requisition-country-list" role="listbox" aria-label="수출 대상국" hidden></div>' : "") +
       '</div><button type="button" class="btn btn-secondary btn-sm" data-add="' + key + '">추가</button></div>' +
-      (isCountry ? '<p class="form-help" id="requisition-country-help">목록에서 선택하거나, 없는 국가는 직접 입력한 뒤 Enter 또는 추가 버튼을 눌러 주세요.</p>' : "");
+      (isCountry ? '<p class="form-help" id="requisition-country-help">목록에 없으면 ‘기타 (직접 입력)’를 선택해 국가명을 입력해 주세요.</p>' : "");
   }
   function field(key) {
-    const data = current(), required = ["customer", "request_source", "product_name", "sample_request_type", "product_type", "export_countries"].includes(key);
+    const data = current(), required = requiredFields.includes(key);
+    const requiredMissing = !editing() && required && missing(data).includes(key);
     let control;
     if (!editing()) {
       let value = fieldValue(data, key);
@@ -87,7 +89,7 @@
         value = [data.buyer_prohibited_ingredients.length ? "바이어 지정: " + data.buyer_prohibited_ingredients.join(", ") : "",
           data.regulatory_restricted_ingredients.length ? "규제 검토 대상: " + data.regulatory_restricted_ingredients.join(", ") : ""].filter(Boolean).join("\n");
       }
-      control = '<p class="requisition-field-value">' + escape(value || (required ? "확인 필요" : "미입력")) + "</p>";
+      control = '<p class="requisition-field-value">' + escape(value || "") + "</p>";
     } else if (key === "product_type") {
       control = '<select class="form-control" id="requisition-input-product_type" data-field="product_type" aria-required="true"><option value="">선택하세요</option>' +
         types.map((value) => '<option value="' + value + '"' + (data[key] === value ? " selected" : "") + ">" + (value === "기타" ? "기타 / 직접 입력" : value) + "</option>").join("") +
@@ -102,7 +104,7 @@
       control = '<div class="requisition-options" role="group" aria-label="목표 가격대">' + [["", "미정"], ...Object.entries(tiers)].map(([value, name]) =>
         '<label class="form-check"><input type="radio" name="requisition-tier" data-field="target_price_tier" value="' + value + '"' + (data[key] === value ? " checked" : "") + ">" + name + "</label>").join("") + "</div>";
     } else if (kinds[key] === "required" || kinds[key] === "application") {
-      const options = kinds[key] === "required" ? [["", "확인 필요"], ["true", "필요"], ["false", "불필요"]] : [["", "선택하세요"], ...["Leave-on", "Rinse-off", "기타", "확인 필요"].map((v) => [v, v])];
+      const options = kinds[key] === "required" ? [["", "선택하세요"], ["true", "필요"], ["false", "불필요"]] : [["", "선택하세요"], ...["Leave-on", "Rinse-off", "기타", "확인 필요"].map((v) => [v, v])];
       control = '<select class="form-control" id="requisition-input-' + key + '" data-field="' + key + '">' + options.map(([value, label]) => '<option value="' + value + '"' + (String(get(data, key) ?? "") === value ? " selected" : "") + '>' + label + '</option>').join("") + '</select>';
     } else if (kinds[key] === "textarea") {
       control = '<textarea class="form-control" rows="4" maxlength="10000" id="requisition-input-' + key + '" data-field="' + key + '">' + escape(get(data, key)) + '</textarea>';
@@ -112,13 +114,16 @@
         (data.regulatory_restricted_ingredients.length ? '<p class="form-help">규제 검토 대상: ' + escape(data.regulatory_restricted_ingredients.join(", ")) + " · 규제 확인 필요</p>" : "");
     } else control = input(key, labels[key] + " 입력");
     const provenance = (data.field_provenance || []).find((item) => item.field_key === key);
-    if (!editing() && provenance) {
-      if (provenance.review_status === "not_applicable") control = '<p class="requisition-field-value">해당 없음</p>';
-      control += '<small class="text-caption">' + ({ confirmed: "✓ 확인 완료", needs_review: "⚠ 확인 필요", missing: "미입력", not_applicable: "해당 없음", user_edited: "✓ 사용자 수정" }[provenance.review_status] || "") + '</small>';
+    let reviewStatus = provenance ? provenance.review_status : "";
+    if (requiredMissing) reviewStatus = "missing";
+    else if (!editing() && !required && !filled(fieldValue(data, key)) && reviewStatus !== "not_applicable") reviewStatus = "needs_review";
+    if (!editing() && reviewStatus) {
+      if (reviewStatus === "not_applicable" && !required) control = '<p class="requisition-field-value">해당 없음</p>';
+      control += '<small class="text-caption requisition-review-status requisition-review-status--' + escape(reviewStatus) + '">' + ({ confirmed: "✓ 확인 완료", needs_review: "⚠ 확인필요", missing: "미입력", not_applicable: "해당 없음", user_edited: "✓ 사용자 수정" }[reviewStatus] || "") + '</small>';
     }
     return '<div class="form-group' + (wideNoteFields.has(key) ? ' requisition-field-wide requisition-field-note' : '') + '" id="requisition-field-' + key + '">' +
       (editing() && key !== "target_price_tier" ? '<label class="form-label" for="requisition-input-' + key + '">' : '<p class="form-label">') +
-      labels[key] + (editing() && required ? ' <span class="is-required">*</span>' : "") +
+      labels[key] + (required ? ' <span class="is-required" aria-label="필수">*</span>' : "") +
       (editing() && key !== "target_price_tier" ? "</label>" : "</p>") + '<div class="requisition-field-content">' + control +
       '<p class="form-error" id="requisition-error-' + key + '" hidden></p></div></div>';
   }
@@ -195,7 +200,7 @@
     $("method").textContent = methods[data.creation_method];
     $("count-label").textContent = editing() ? "채운 항목" : "입력 완료";
     $("count").textContent = Object.keys(labels).filter((key) => filled(get(data, key)) && !(key === "product_type" && required.includes(key))).length + " / " + definitions.length;
-    $("export-review").textContent = data.export_countries.length ? data.export_countries.join(", ") + " · ⚠ 규제 확인 필요" : "미입력";
+    $("export-review").textContent = data.export_countries.length ? data.export_countries.join(", ") + " · ⚠ 규제 확인 필요" : "";
     $("missing-wrap").hidden = !editing() || !required.length;
     $("missing").textContent = required.map((key) => labels[key]).join(", ");
     $("review").textContent = checks.length ? checks.length + "건 · " + checks.join(", ") : "없음";
@@ -243,7 +248,7 @@
       (originalFile ? '<button type="button" class="btn btn-secondary" data-original-file>원본 RFP 다운로드</button>' : '') +
       (editing() ? '<div class="requisition-reference-upload"><div><p class="form-label">참고자료 추가</p><p class="form-help">PNG, JPG, WEBP, PDF, DOCX, XLSX · 파일당 5MB · 전체 20MB</p></div><input class="requisition-file-input" type="file" id="requisition-reference-input" multiple accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.xlsx"><label class="btn btn-soft" for="requisition-reference-input"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/></svg>파일 선택</label></div><p class="form-help requisition-reference-help">선택한 이미지는 PDF에 함께 표시되고, 문서는 파일명으로 표시돼요.</p>' : !(current().reference_files || []).length ? '<div class="requisition-reference-empty"><p>등록된 참고자료가 없어요.</p></div>' : '') +
       '<div class="form-group requisition-reference-notes requisition-field-note"><label class="form-label" for="requisition-input-reference_notes">기타사항</label><div class="requisition-field-content">' +
-      (editing() ? '<textarea class="form-control" rows="4" maxlength="10000" id="requisition-input-reference_notes" data-field="reference_notes">' + escape(current().reference_notes || "") + '</textarea>' : '<p class="requisition-field-value">' + escape(current().reference_notes || "미입력") + '</p>') + '</div></div>';
+      (editing() ? '<textarea class="form-control" rows="4" maxlength="10000" id="requisition-input-reference_notes" data-field="reference_notes">' + escape(current().reference_notes || "") + '</textarea>' : '<p class="requisition-field-value">' + escape(current().reference_notes || "") + '</p>' + (!current().reference_notes ? '<small class="text-caption requisition-review-status requisition-review-status--needs_review">⚠ 확인필요</small>' : '')) + '</div></div>';
   }
   $("document").addEventListener("change", async (event) => {
     if (!editing()) return;
@@ -290,13 +295,23 @@
   }
   function showCountries() {
     const el = $("input-export_countries"), list = $("country-list");
+    if (el.dataset.directEntry === "true") { closeCountries(); return; }
     const query = el.value.trim().toLocaleLowerCase();
     const options = countries.filter((name) => name.toLocaleLowerCase().includes(query) && !draft.export_countries.includes(name));
-    list.innerHTML = options.map((name, index) => '<button type="button" class="requisition-country-option" role="option" tabindex="-1" aria-selected="false" id="requisition-country-option-' + index + '" data-country="' + escape(name) + '">' + escape(name) + '</button>').join("") ||
-      '<p class="requisition-country-empty">' + (query ? "목록에 없는 국가는 Enter 또는 추가 버튼으로 추가할 수 있어요." : "선택 가능한 국가가 없어요. 국가명을 직접 입력해 주세요.") + '</p>';
+    list.innerHTML = options.map((name, index) => '<button type="button" class="requisition-country-option" role="option" tabindex="-1" aria-selected="false" id="requisition-country-option-' + index + '" data-country="' + escape(name) + '">' + escape(name) + '</button>').join("") +
+      '<button type="button" class="requisition-country-option requisition-country-option--other" role="option" tabindex="-1" aria-selected="false" id="requisition-country-option-other" data-country-other>기타 (직접 입력)</button>';
     list.hidden = false;
     el.setAttribute("aria-expanded", "true");
     el.removeAttribute("aria-activedescendant");
+  }
+  function enableDirectCountryEntry() {
+    const el = $("input-export_countries");
+    el.value = "";
+    el.dataset.directEntry = "true";
+    el.placeholder = "수출국 직접 입력";
+    el.setAttribute("aria-label", "기타 수출 대상국 직접 입력");
+    closeCountries();
+    el.focus();
   }
   ["focusin", "input", "click"].forEach((type) => {
     $("document").addEventListener(type, (event) => {
@@ -307,7 +322,7 @@
     if (event.target.dataset.chip === "export_countries") closeCountries();
   });
   $("document").addEventListener("mousedown", (event) => {
-    if (event.target.closest("[data-country]")) event.preventDefault();
+    if (event.target.closest("[data-country], [data-country-other]")) event.preventDefault();
   });
   document.addEventListener("click", (event) => {
     if (!event.target.closest("#requisition-field-export_countries")) closeCountries();
@@ -328,6 +343,10 @@
   });
   $("document").addEventListener("click", (event) => {
     if (!editing()) return;
+    if (event.target.closest("[data-country-other]")) {
+      enableDirectCountryEntry();
+      return;
+    }
     const country = event.target.closest("[data-country]");
     if (country) {
       $("input-export_countries").value = country.dataset.country;
@@ -351,11 +370,22 @@
     if (!editing() || event.isComposing || event.keyCode === 229) return;
     if (event.target.dataset.chip === "export_countries") {
       const el = event.target, list = $("country-list");
-      if (event.key === "Escape") { event.preventDefault(); closeCountries(); return; }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (el.dataset.directEntry === "true") {
+          delete el.dataset.directEntry;
+          el.value = "";
+          el.placeholder = "국가 선택 또는 입력";
+          el.setAttribute("aria-label", "국가 선택 또는 입력");
+          showCountries();
+        } else closeCountries();
+        return;
+      }
       if (["ArrowDown", "ArrowUp"].includes(event.key)) {
         event.preventDefault();
+        if (el.dataset.directEntry === "true") return;
         if (list.hidden) showCountries();
-        const options = [...list.querySelectorAll("[data-country]")];
+        const options = [...list.querySelectorAll("[role=option]")];
         if (!options.length) return;
         const currentIndex = options.findIndex((option) => option.id === el.getAttribute("aria-activedescendant"));
         const index = currentIndex < 0 ? (event.key === "ArrowDown" ? 0 : options.length - 1) :
@@ -367,6 +397,11 @@
       }
       if (event.key === "Enter" && !list.hidden) {
         const active = document.getElementById(el.getAttribute("aria-activedescendant"));
+        if (active && active.hasAttribute("data-country-other")) {
+          event.preventDefault();
+          enableDirectCountryEntry();
+          return;
+        }
         if (active) el.value = active.dataset.country;
       }
     }
@@ -458,10 +493,16 @@
     const file = files[0];
     if (!/\.(pdf|docx|xlsx|png|jpe?g|webp)$/i.test(file.name)) return notice("지원하지 않는 파일 형식이에요. PDF, DOCX, XLSX 또는 이미지를 선택해 주세요.");
     if (!file.size || file.size > 20 * 1024 * 1024) return notice("0바이트 파일은 사용할 수 없으며, 최대 용량은 20MB예요.");
+    const selectedSourceLanguage = $("source-language").value;
+    const sourceLanguage = selectedSourceLanguage === "other" ? $("source-language-other").value.trim() : selectedSourceLanguage;
+    if (!sourceLanguage) {
+      $("source-language-other").focus();
+      return notice("원문 언어를 직접 입력해 주세요.");
+    }
     const body = new FormData();
     body.append("file", file);
     body.append("customer", $("setting-customer").value.trim());
-    body.append("source_language", $("source-language").value);
+    body.append("source_language", sourceLanguage);
     body.append("target_language", $("target-language").value);
     const requestController = new AbortController();
     controller = requestController;
@@ -486,6 +527,13 @@
       $("file").value = "";
     }
   }
+  $("source-language").addEventListener("change", () => {
+    const direct = $("source-language").value === "other";
+    $("source-language-other-wrap").hidden = !direct;
+    if (direct) $("source-language-other").focus();
+    else $("source-language-other").value = "";
+    notice();
+  });
   $("file").addEventListener("change", (event) => { if (event.target.files.length) convert([...event.target.files]); });
   $("drop").addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") { event.preventDefault(); $("file").click(); }
@@ -515,7 +563,7 @@
       const pdfValue = (key) => {
         const provenance = data.field_provenance.find((item) => item.field_key === key);
         if (provenance?.review_status === "not_applicable") return "해당 없음";
-        return fieldValue(data, key) || (provenance?.review_status === "needs_review" ? "확인 필요" : "미입력");
+        return fieldValue(data, key) || "";
       };
       const prohibitedIngredients = [
           data.buyer_prohibited_ingredients.length ? "바이어 지정: " + data.buyer_prohibited_ingredients.join(", ") : "",
@@ -548,7 +596,7 @@
         '<table class="info"><tr><td style="width: 55%;"><span class="label">Request to</span><br><span class="bold" style="font-size: 11pt;">연구소 (R&amp;D Center)</span><br>제품 개발 요청서 · 연구소 전달용' +
           (filled(data.customer) ? '<br><span class="muted">고객사: ' + escape(data.customer) + '</span>' : '') + '</td>' +
           '<td><table class="meta">' + printMeta("Document No.", data.document_id || "미지정") + printMeta("Date", issuedDate) +
-          printMeta("Product", data.product_name || "미입력") + printMeta("Prepared by", preparedBy || "-") + printMeta("Method", methods[data.creation_method] || "미지정") + '</table></td></tr></table>' +
+          printMeta("Product", data.product_name || "") + printMeta("Prepared by", preparedBy || "-") + printMeta("Method", methods[data.creation_method] || "미지정") + '</table></td></tr></table>' +
         '<table class="terms"><tr>' + termCell("샘플 구분", pdfValue("sample_request_type")) + termCell("제품 유형", pdfValue("product_type")) +
           termCell("목표 가격대", pdfValue("target_price_tier")) + termCell("수출 대상국", listText(fieldValue(data, "export_countries"))) + '</tr></table>' +
         sections.map(printableSection).join('') + referenceSection +

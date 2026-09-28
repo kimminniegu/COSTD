@@ -89,6 +89,10 @@ python app.py
 
 → http://127.0.0.1:5000
 
+### 5. Render 배포
+
+메인(Docker)과 AI 챗봇(Python 런타임)을 Render 무료 서비스 2개로 배포합니다. 설정값·환경변수·식약처 DB·발표 전 준비는 `docs/deploy_render.md` 를 따릅니다.
+
 ## 페이지 URL
 
 | URL | endpoint (`url_for`) | 템플릿 | 담당 |

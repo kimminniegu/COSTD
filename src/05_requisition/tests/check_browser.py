@@ -54,7 +54,7 @@ try {
   assert(by('section-2').textContent.includes('수출 금지 원료'), 'prohibited ingredients moved to ingredients');
   assert(!by('section-0').textContent.includes('수출 금지 원료'), 'prohibited ingredients removed from basic information');
   by('section-tab-3').click();
-  assert(by('section-3').textContent.includes('품질 확인 테스트'), 'quality test list field');
+  assert(by('section-3').textContent.includes('품질 확인 테스트 *'), 'quality test list field is required');
   assert(by('section-3').textContent.includes('품질 관련 추가사항'), 'quality notes field');
   assert(by('section-tab-3').textContent.includes('04') && by('section-tab-4').textContent.includes('05'), 'quality and references order');
   by('section-tab-0').click();
