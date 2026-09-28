@@ -158,12 +158,27 @@
           <div class="grid grid-2-1">
             <div class="form-group">
               <span class="form-label">개발요청서 / 성분표 <span class="is-required">*</span></span>
-              <label class="file-upload" id="regulatory-file-dropzone" for="regulatory-file-input">
+              {# 업로드 영역: 선택 전에는 안내(label), 유효한 파일을 고르면 같은 자리에 '선택된 파일 카드'를 보여 준다.
+                 카드의 버튼은 label 안에 둘 수 없어 바깥 div 가 드롭 영역이며, file input 은 키보드로 열 수 있게 숨김(시각적)만 한다 #}
+              <div class="file-upload regulatory-file-upload" id="regulatory-file-dropzone">
                 <input type="file" id="regulatory-file-input" name="file" accept=".pdf,.xlsx,.jpg,.jpeg,.png">
-                <span class="file-upload__title">파일을 끌어다 놓거나 클릭하여 선택</span>
-                <span class="text-caption">지원: 텍스트 PDF · 스캔 PDF · PNG/JPG · XLSX (10 MB 이하, PDF 20쪽 이하, OCR 은 파일당 10쪽·90초까지)</span>
-              </label>
-              <p class="form-help" id="regulatory-file-name" hidden></p>
+                <label class="regulatory-file-idle" id="regulatory-file-idle" for="regulatory-file-input">
+                  <span class="file-upload__title">파일을 끌어다 놓거나 클릭하여 선택</span>
+                  <span class="text-caption">지원: 텍스트 PDF · 스캔 PDF · PNG/JPG · XLSX (10 MB 이하, PDF 20쪽 이하, OCR 은 파일당 10쪽·90초까지)</span>
+                </label>
+                <div class="regulatory-file-card" id="regulatory-file-card" hidden>
+                  <span class="regulatory-file-card__icon" id="regulatory-file-card-icon" aria-hidden="true"></span>
+                  <div class="regulatory-file-card__body">
+                    <p class="regulatory-file-card__name" id="regulatory-file-card-name"></p>
+                    <p class="regulatory-file-card__meta" id="regulatory-file-card-meta"></p>
+                    <p class="regulatory-file-card__status" id="regulatory-file-card-status" role="status" aria-live="polite"></p>
+                  </div>
+                  <div class="regulatory-file-card__actions">
+                    <button type="button" class="btn btn-secondary btn-sm" id="regulatory-file-change">파일 변경</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="regulatory-file-clear">선택 해제</button>
+                  </div>
+                </div>
+              </div>
               <p class="form-error" id="regulatory-file-error" hidden>파일을 선택해 주세요.</p>
             </div>
 
@@ -450,7 +465,7 @@
         <div class="card-header">
           <div>
             <h3 class="card-title">조회 조건</h3>
-            <p class="card-subtitle">입력하지 않은 조건은 ‘확인필요’로 표시해요</p>
+            <p class="card-subtitle">입력하지 않은 조건은 ‘미입력’으로 표시해요</p>
           </div>
         </div>
         <div class="card-body">
@@ -459,7 +474,7 @@
           <div class="grid grid-4">
             <div class="stat-tile"><p class="stat-tile__label">선택 국가/시장</p><p class="stat-tile__value" id="regulatory-cond-market">—</p></div>
             <div class="stat-tile"><p class="stat-tile__label">문서에 명시된 국가</p><p class="stat-tile__value" id="regulatory-cond-doc-country">—</p></div>
-            <div class="stat-tile"><p class="stat-tile__label">제품 유형·사용 조건 (문서 원문)</p><p class="stat-tile__value regulatory-value--needs-review" id="regulatory-cond-product">확인필요</p></div>
+            <div class="stat-tile"><p class="stat-tile__label">제품 유형·사용 조건 (문서 원문)</p><p class="stat-tile__value" id="regulatory-cond-product">미입력</p></div>
             <div class="stat-tile"><p class="stat-tile__label">실제 조회 범위</p><p class="stat-tile__value" id="regulatory-cond-scope">—</p></div>
           </div>
         </div>
