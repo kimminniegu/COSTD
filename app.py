@@ -403,6 +403,17 @@ def margin_erp_cost():
 
 
 # [D] AI 제형/샘플 시뮬레이션 — 접두사: /api/ai-formulation/...
+# 개발요청서를 OpenAI가 읽어 목표 스펙을 추출합니다. 점수 계산은 브라우저 simulation.js 에서 합니다. (src/04_simulation/service.py)
+simulation_service = importlib.import_module("src.04_simulation.service")
+
+
+@app.route("/api/ai-formulation/brief", methods=["POST"])
+@login_required
+def simulation_brief():
+    try:
+        return jsonify(simulation_service.analyze_brief(request.files.get("file")))
+    except simulation_service.BriefError as e:
+        return jsonify(error=str(e)), e.status
 
 
 # [E] 개발요청서 — 접두사: /api/dev-request/...
