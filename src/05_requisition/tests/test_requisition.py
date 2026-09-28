@@ -137,10 +137,19 @@ class RequisitionTest(unittest.TestCase):
     def test_invalid_settings_never_call_provider(self):
         with patch.object(service, "call_analysis") as provider:
             self.assertEqual(self.post(target_language="invalid").status_code, 400)
+            self.assertEqual(self.post(source_language="x" * 51).status_code, 400)
+            self.assertEqual(self.post(source_language="아랍어\n지시문").status_code, 400)
             self.assertEqual(self.post(recipients="null").status_code, 400)
             self.assertEqual(self.post(recipients='[{}]').status_code, 400)
             self.assertEqual(self.post(customer="x" * 201).status_code, 400)
             provider.assert_not_called()
+
+    def test_custom_source_language_is_passed_to_analysis(self):
+        with patch.object(service, "call_analysis", return_value=extracted()) as provider:
+            response = self.post(source_language="포르투갈어")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["document"]["source_language"], "포르투갈어")
+        self.assertEqual(provider.call_args.args[3], "포르투갈어")
 
     def test_normalization_and_provenance(self):
         with patch.object(service, "call_analysis", return_value=extracted()):
