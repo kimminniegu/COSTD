@@ -95,33 +95,45 @@
     </section>
   </div>
 </div>
-<div class="modal-backdrop simulation-brief-backdrop" id="simulation-brief-modal">
+<div class="modal-backdrop simulation-brief-backdrop" id="simulation-brief-modal" data-analyze-url="{{ url_for('simulation_brief') }}">
   <div class="modal modal-lg simulation-brief-modal" role="dialog" aria-modal="true" aria-labelledby="simulation-brief-title" data-step="select">
     <div class="modal-header">
       <div>
         <h2 class="modal-title" id="simulation-brief-title">개발요청서 업로드 및 AI 분석</h2>
-        <p class="text-caption simulation-brief-subtitle">바이어 개발의뢰서에서 목표 제형 스펙을 추출해 배합·물성·용기 적합도를 동기화합니다.</p>
+        <p class="text-caption simulation-brief-subtitle">OpenAI가 바이어 개발의뢰서 본문을 읽고 목표 제형 스펙을 추출합니다. 근거를 확인한 뒤 시뮬레이터에 적용하세요.</p>
       </div>
       <button type="button" class="modal-close" data-modal-close aria-label="닫기">×</button>
     </div>
     <div class="modal-body">
       <div class="simulation-brief-upload" data-step-panel="select">
         <label class="simulation-brief-drop" id="simulation-brief-drop">
-          <input type="file" id="simulation-brief-file" accept=".pdf,.doc,.docx">
+          <input type="file" id="simulation-brief-file" accept=".pdf,.docx">
           <span class="simulation-brief-drop-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18.5H6.5a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.6 8.1a4.25 4.25 0 0 1-.1 8.5V16.6"/><path d="M12 20.5v-8M8.75 15.25 12 12l3.25 3.25"/></svg></span>
           <strong>바이어 개발의뢰서 파일(PDF, DOCX)을 드래그하거나<br>클릭하여 내 컴퓨터에서 업로드하세요</strong>
-          <span>PDF · DOC · DOCX / 최대 20MB</span>
+          <span>PDF · DOCX / 최대 20MB · 파일은 서버에 저장하지 않습니다</span>
         </label>
         <p class="simulation-brief-error" id="simulation-brief-error" role="alert" hidden></p>
       </div>
       <section class="simulation-brief-analyzing" data-step-panel="analyzing" aria-live="polite">
-        <div class="simulation-brief-file-row"><span class="simulation-brief-file-icon" id="simulation-brief-file-icon" aria-hidden="true">PDF</span><strong class="simulation-brief-filename" data-brief-filename></strong></div>
-        <div class="simulation-brief-loader"><span class="spinner spinner-sm" aria-hidden="true"></span><p>AI 제형 분석 중... <small>(목표 점도, 유효성분 비율 도출)</small></p></div>
-        <div class="simulation-brief-progress" aria-hidden="true"><span id="simulation-brief-progress"></span></div>
-        <ul class="simulation-brief-checks" id="simulation-brief-checks">
-          <li>목표 점도 도출</li><li>유효성분 비율 도출</li><li>용기 적합도 산출</li>
-        </ul>
+        <div class="simulation-brief-file-row"><span class="simulation-brief-file-icon" data-brief-file-icon aria-hidden="true">PDF</span><strong class="simulation-brief-filename" data-brief-filename></strong></div>
+        <div class="simulation-brief-loader"><span class="spinner spinner-sm" aria-hidden="true"></span><p>OpenAI가 문서를 읽고 있어요 <small id="simulation-brief-elapsed">0초</small></p></div>
+        <div class="simulation-brief-progress is-indeterminate" aria-hidden="true"><span></span></div>
+        <p class="text-caption">문서 분량에 따라 10~40초 정도 걸려요. 목표 점도·유효성분·요청 용기와 그 근거 문장을 찾습니다.</p>
       </section>
+      <section class="simulation-brief-result" data-step-panel="result" aria-live="polite">
+        <div class="simulation-brief-file-row"><span class="simulation-brief-file-icon" data-brief-file-icon aria-hidden="true">PDF</span><strong class="simulation-brief-filename" data-brief-filename></strong></div>
+        <p class="simulation-brief-summary" id="simulation-brief-summary"></p>
+        <dl class="simulation-brief-spec" id="simulation-brief-spec"></dl>
+        <div class="simulation-brief-evidence">
+          <h3>문서 근거</h3>
+          <ul id="simulation-brief-evidence"></ul>
+        </div>
+        <p class="text-caption" id="simulation-brief-basis"></p>
+      </section>
+    </div>
+    <div class="modal-footer simulation-brief-footer" data-step-panel="result">
+      <button type="button" class="btn btn-surface btn-sm" id="simulation-brief-retry">다른 파일 올리기</button>
+      <button type="button" class="btn btn-primary btn-sm" id="simulation-brief-apply">시뮬레이터에 적용</button>
     </div>
   </div>
 </div>
