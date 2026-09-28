@@ -1056,6 +1056,7 @@
 
   // items: 서버 추출값(name_raw/amount_raw/location/needs_review/review_reasons) + 화면 편집값(name/amount/include/user_added)
   var fileState = { seq: 0, items: [], nextId: 1, sheets: [], selectedSheet: null, lastFile: null, emptyResult: false,
+                    selectedFile: null,   // 브라우저에서 고른 파일 (카드 표시·선택 창 취소 시 복원용)
                     doc: null,            // 추출 응답의 document_market / document_use / scope / kind
                     matching: false,      // 성분 확인 진행 중 (중복 실행 방지)
                     looking: false,       // 규제 조회 진행 중
@@ -1092,37 +1093,175 @@
 
   function hideFileError() { show($("regulatory-file-result-error"), false); }
 
+  /* ---- 선택된 파일 카드 -------------------------------------------------------
+     업로드 영역 안에서 안내(label) ↔ 카드(파일명·형식·용량·상태·버튼)를 바꿔 보여 준다. 상태는 실제 처리 단계와 같다:
+       selected  브라우저에서 파일만 고른 상태 (서버 전송 전)      invalid  확장자·용량이 맞지 않음 (전송하지 않음)
+       busy      '파일 분석'을 눌러 /api/regulatory/extract 진행 중  sheet    서버가 시트 목록만 돌려줌 (시트 선택 대기)
+       done      추출 성공 응답을 받음                            warning  파일은 읽었지만 성분 표 없음
+       error     서버 처리 실패 (사유는 아래 오류 안내에)
+     진행률은 서버가 주지 않으므로 표시하지 않는다. busy 동안은 파일 변경·해제를 막아 늦은 응답이 새 파일 상태를 덮어쓰지 않게 한다. */
+  var fileCard = $("regulatory-file-card"), fileIdle = $("regulatory-file-idle");
+  var fileChangeBtn = $("regulatory-file-change"), fileClearBtn = $("regulatory-file-clear");
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  var FILE_ICON_PATHS = {
+    pdf:   ["M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z", "M14 3v5h5", "M9 13h6", "M9 17h6"],
+    xlsx:  ["M4 5h16v14H4z", "M4 10h16", "M4 15h16", "M10 5v14"],
+    image: ["M4 5h16v14H4z", "m4 16 4-4 4 4 3-3 5 5", "M16 9h.01"],
+    file:  ["M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z", "M14 3v5h5"]
+  };
+  var STATUS_ICON_PATHS = {
+    check: ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z", "m8.5 12 2.5 2.5 4.5-5"],
+    alert: ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z", "M12 8v4", "M12 16h.01"],
+    list:  ["M8 6h12", "M8 12h12", "M8 18h12", "M4 6h.01", "M4 12h.01", "M4 18h.01"]
+  };
+  var FILE_STATUS_CLASS = { selected: "is-selected", invalid: "is-error", busy: "is-busy", sheet: "is-selected", done: "is-done", warning: "is-warning", error: "is-error" };
+  var FILE_STATUS_ICON = { selected: "check", invalid: "alert", busy: null, sheet: "list", done: "check", warning: "alert", error: "alert" };
+
+  function lineIcon(paths, size) {
+    var svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("width", size); svg.setAttribute("height", size);
+    svg.setAttribute("fill", "none"); svg.setAttribute("stroke", "currentColor"); svg.setAttribute("stroke-width", "2");
+    svg.setAttribute("stroke-linecap", "round"); svg.setAttribute("stroke-linejoin", "round");
+    svg.setAttribute("aria-hidden", "true"); svg.setAttribute("focusable", "false");
+    paths.forEach(function (d) { var p = document.createElementNS(SVG_NS, "path"); p.setAttribute("d", d); svg.appendChild(p); });
+    return svg;
+  }
+
+  function fileKindOf(name) {
+    if (/\.pdf$/i.test(name)) return "pdf";
+    if (/\.xlsx$/i.test(name)) return "xlsx";
+    if (/\.(png|jpe?g)$/i.test(name)) return "image";
+    return "file";
+  }
+
+  function fileTypeLabel(name) {
+    var ext = (name.match(/\.([a-z0-9]+)$/i) || [])[1] || "";
+    var kind = fileKindOf(name);
+    if (kind === "pdf") return "PDF 문서";
+    if (kind === "xlsx") return "Excel 통합 문서 (XLSX)";
+    if (kind === "image") return ext.toUpperCase() + " 이미지";
+    return ext ? ext.toUpperCase() + " 파일" : "형식 미확인";
+  }
+
+  function formatBytes(n) {
+    if (!(n >= 0)) return "—";
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n < 100 * 1024 ? (n / 1024).toFixed(1) : Math.round(n / 1024)) + " KB";
+    return (n / (1024 * 1024)).toFixed(2) + " MB";
+  }
+
+  /* 업로드 전 확인: 확장자·용량. 서버도 같은 검증을 다시 한다. 문제 없으면 null */
+  function clientFileError(f) {
+    if (FILE_NOT_YET_EXT.test(f.name) || !FILE_OK_EXT.test(f.name)) return { kind: "unsupported", message: UNSUPPORTED_MESSAGE };
+    if (f.size > FILE_MAX_BYTES) return { kind: "limit", message: "파일이 너무 커요. 10 MB 이하 파일을 올려 주세요." };
+    return null;
+  }
+
+  function showFileCard(f) {
+    if (!fileCard) return;
+    var name = $("regulatory-file-card-name");
+    if (name) { name.textContent = f.name; name.title = f.name; }              // textContent 로만 넣어 파일명을 안전한 글자로 출력
+    setText($("regulatory-file-card-meta"), fileTypeLabel(f.name) + " · " + formatBytes(f.size));
+    replaceChildren($("regulatory-file-card-icon"), lineIcon(FILE_ICON_PATHS[fileKindOf(f.name)], 22));
+    if (dropzone) { dropzone.classList.add("has-file"); dropzone.classList.remove("is-error"); }
+    show(fileIdle, false);
+    show(fileCard, true);
+  }
+
+  function hideFileCard() {
+    if (dropzone) dropzone.classList.remove("has-file", "is-invalid");
+    show(fileCard, false);
+    show(fileIdle, true);
+  }
+
+  function setFileCardStatus(state, text) {
+    var status = $("regulatory-file-card-status");
+    if (!status) return;
+    status.className = "regulatory-file-card__status " + (FILE_STATUS_CLASS[state] || "");
+    status.innerHTML = "";
+    if (state === "busy") status.appendChild(el("span", "spinner spinner-sm"));
+    else if (FILE_STATUS_ICON[state]) status.appendChild(lineIcon(STATUS_ICON_PATHS[FILE_STATUS_ICON[state]], 16));
+    status.appendChild(el("span", null, text));
+    var busy = state === "busy";
+    if (fileChangeBtn) fileChangeBtn.disabled = busy;
+    if (fileClearBtn) fileClearBtn.disabled = busy;
+    if (fileInput) fileInput.disabled = busy;                                   // 진행 중에는 키보드·클릭으로도 파일을 바꾸지 못하게
+    if (dropzone) dropzone.classList.toggle("is-invalid", state === "invalid");
+  }
+
+  /* 선택 창을 취소하면 일부 브라우저는 기존 선택을 비운다 → 직전 유효 파일을 되돌린다 (되돌리지 못하면 false) */
+  function restoreInputFile(f) {
+    try {
+      var dt = new DataTransfer();
+      dt.items.add(f);
+      fileInput.files = dt.files;
+      return fileInput.files.length === 1;
+    } catch (e) { return false; }
+  }
+
+  /* 새로 고른 파일을 화면에 반영한다. 다른 파일이면 이전 파일의 시트·추출·매칭·조회 결과를 모두 지운다 (새 파일 결과로 보이지 않게) */
+  function applySelectedFile(f) {
+    hideFileError();
+    show($("regulatory-file-error"), false);
+    fileState.sheets = []; fileState.selectedSheet = null;
+    if (fileState.lastFile && f !== fileState.lastFile) { resetFileResults(); setFileStep("upload"); }
+    fileState.selectedFile = f;
+    showFileCard(f);
+    var err = clientFileError(f);
+    if (err) {
+      setFileCardStatus("invalid", err.kind === "limit" ? "용량 초과 — 10 MB 이하 파일로 바꿔 주세요" : "지원하지 않는 형식 — PDF · XLSX · PNG/JPG 파일로 바꿔 주세요");
+      showFileError(err);
+    } else {
+      setFileCardStatus("selected", "파일 선택 완료 — ‘파일 분석’을 누르면 서버로 보내 성분을 추출해요");
+    }
+  }
+
+  /* 선택 해제. 결과가 있으면 함께 지운다. 같은 파일을 다시 골라도 change 가 나도록 값을 비운다 */
+  function clearFileSelection(focusInput) {
+    fileState.selectedFile = null;
+    if (fileInput) { fileInput.disabled = false; fileInput.value = ""; }
+    hideFileCard();
+    hideFileError();
+    show($("regulatory-file-error"), false);
+    if (dropzone) dropzone.classList.remove("is-error");
+    if (fileState.lastFile || fileState.items.length || fileState.sheets.length) { resetFileResults(); setFileStep("upload"); }
+    fileState.sheets = []; fileState.selectedSheet = null;
+    if (focusInput && fileInput) fileInput.focus();
+  }
+
   if (fileInput) {
     fileInput.addEventListener("change", function () {
       var f = currentFile();
-      var label = $("regulatory-file-name");
-      if (label) label.textContent = f ? "선택한 파일: " + f.name + " (" + Math.ceil(f.size / 1024) + " KB)" : "";
-      show(label, !!f);
-      if (dropzone) dropzone.classList.remove("is-error");
-      show($("regulatory-file-error"), false);
-      hideFileError();
-      // 파일이 바뀌면 이전 시트 목록·추출 결과는 무효
-      fileState.sheets = []; fileState.selectedSheet = null;
-      if (fileState.lastFile && f !== fileState.lastFile) setFileStep("upload");
+      if (!f) {
+        // 선택 창 취소: 기존 유효 선택 유지. 되돌릴 수 없는 환경이면 '선택 없음'을 그대로 보여 준다 (선택된 것처럼 두지 않음)
+        if (fileState.selectedFile && restoreInputFile(fileState.selectedFile)) return;
+        clearFileSelection(false);
+        return;
+      }
+      if (f === fileState.selectedFile) return;
+      applySelectedFile(f);
     });
   }
+  if (fileChangeBtn) fileChangeBtn.addEventListener("click", function () { if (fileInput && !fileInput.disabled) fileInput.click(); });
+  if (fileClearBtn) fileClearBtn.addEventListener("click", function () { if (!fileClearBtn.disabled) clearFileSelection(true); });
 
   if (dropzone) {
     ["dragenter", "dragover"].forEach(function (type) {
-      dropzone.addEventListener(type, function (e) { e.preventDefault(); dropzone.classList.add("is-dragover"); });
+      dropzone.addEventListener(type, function (e) { e.preventDefault(); if (!(fileInput && fileInput.disabled)) dropzone.classList.add("is-dragover"); });
     });
     ["dragleave", "drop"].forEach(function (type) {
       dropzone.addEventListener(type, function (e) { e.preventDefault(); dropzone.classList.remove("is-dragover"); });
     });
     dropzone.addEventListener("drop", function (e) {
-      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length && fileInput) {
-        fileInput.files = e.dataTransfer.files;
-        fileInput.dispatchEvent(new Event("change"));
+      if (!fileInput || fileInput.disabled) return;                               // 분석 진행 중에는 드롭으로도 바꾸지 않는다
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+        var first = e.dataTransfer.files[0];
+        if (!restoreInputFile(first)) fileInput.files = e.dataTransfer.files;    // 파일 1개만 (실패하면 목록 그대로)
+        fileInput.dispatchEvent(new Event("change"));                            // 클릭 선택과 같은 경로
       }
     });
   }
 
-  /* 업로드 전 확인: 확장자·용량. 서버도 같은 검증을 다시 한다 */
   function validateFileForm() {
     var f = currentFile();
     var market = $("regulatory-file-market");
@@ -1133,12 +1272,10 @@
     if (market) market.classList.toggle("is-error", marketEmpty);
     show($("regulatory-file-market-error"), marketEmpty);
     if (fileEmpty || marketEmpty) return false;
-    if (FILE_NOT_YET_EXT.test(f.name) || !FILE_OK_EXT.test(f.name)) {
-      showFileError({ kind: "unsupported", message: UNSUPPORTED_MESSAGE });
-      return false;
-    }
-    if (f.size > FILE_MAX_BYTES) {
-      showFileError({ kind: "limit", message: "파일이 너무 커요. 10 MB 이하 파일을 올려 주세요." });
+    var err = clientFileError(f);
+    if (err) {
+      setFileCardStatus("invalid", err.kind === "limit" ? "용량 초과 — 10 MB 이하 파일로 바꿔 주세요" : "지원하지 않는 형식 — PDF · XLSX · PNG/JPG 파일로 바꿔 주세요");
+      showFileError(err);
       return false;
     }
     return true;
@@ -1164,18 +1301,24 @@
     var isImage = /\.(png|jpe?g)$/i.test(f.name);
     setText($("regulatory-file-loading-label"), sheet ? "선택한 시트에서 성분을 추출하는 중이에요"
       : (isImage ? "이미지를 인식(OCR)하는 중이에요 — 최대 25초 정도 걸릴 수 있어요" : "파일을 확인하고 성분을 추출하는 중이에요 (텍스트가 없는 쪽은 OCR 로 읽어요)"));
+    setFileCardStatus("busy", sheet ? "시트 추출 중 — 서버에서 선택한 시트를 읽고 있어요"
+      : (isImage ? "이미지 인식(OCR) 중 — 최대 25초 정도 걸릴 수 있어요" : "파일 분석 중 — 서버에서 성분을 추출하고 있어요"));
     apiPost("/api/regulatory/extract", fd).then(function (body) {
       if (seq !== fileState.seq) return;              // 그 사이 다른 파일·시트로 다시 보냈으면 무시
       setFileBusy(false);
       fileState.lastFile = f;
-      if (body.status === "sheet_required") { renderSheets(body.sheets || []); return; }
+      if (body.status === "sheet_required") { renderSheets(body.sheets || []); setFileCardStatus("sheet", "파일 확인 완료 — 시트를 고르면 성분을 추출해요"); return; }
       renderReview(body);
+      var n = (body.items || []).length;
+      if (body.status === "extracted" && n) setFileCardStatus("done", "분석 완료 — 성분 " + n + "행을 추출했어요");
+      else setFileCardStatus("warning", "분석 완료 — 성분 표를 찾지 못했어요 (아래 안내 참고)");
     }).catch(function (err) {
       if (seq !== fileState.seq) return;
       setFileBusy(false);
       // 실패하면 이전 파일의 확인 표(수정 내용 포함)를 그대로 되살린다. 새 결과로 바꾸지 않았음을 오류 안내로 알린다
       setFileStep(fileState.items.length ? "review" : "upload");
       showFileError(err);
+      setFileCardStatus("error", "분석 실패 — 아래 오류 안내를 확인하고 파일을 바꾸거나 다시 시도해 주세요");
       updateLookupSummary();
     });
   }
@@ -1683,23 +1826,27 @@
   }
 
   var reupload = $("regulatory-review-reupload");
+  /* 파일 결과 초기화 — '다시 업로드', 선택 해제, 다른 파일 선택이 공유한다. 파일 선택 상태(카드·input)는 건드리지 않는다 */
+  function resetFileResults() {
+    fileState.seq++; fileState.batchSeq++;            // 진행 중 응답(추출·매칭·조회) 무시
+    fileState.items = []; fileState.sheets = []; fileState.selectedSheet = null; fileState.lastFile = null; fileState.emptyResult = false;
+    fileState.matching = false; fileState.looking = false; fileState.batchResultKey = null; fileState.batchMarket = null; fileState.doc = null;
+    var rb = $("regulatory-result-body"); if (rb) rb.innerHTML = "";     // 이전 일괄 결과 표 비우기
+    show($("regulatory-batch-stale"), false); show($("regulatory-partial-fail-notice"), false); show($("regulatory-retry-failed"), false);
+    setFileBusy(false);
+    setMatchBusy(false);
+    setText($("regulatory-match-progress"), "조회 포함 행의 성분명으로 후보를 찾아요. 정확히 일치하는 후보가 하나일 때만 자동 확정하고, 여러 후보는 행에서 직접 골라요.");
+    if (!$("regulatory-result-single") || $("regulatory-result-single").hidden) setResult("hidden");
+    if (reviewBody) reviewBody.innerHTML = "";
+    var docMarket = $("regulatory-file-doc-market"); if (docMarket) docMarket.textContent = "미확인";
+  }
+
   if (reupload) {
     reupload.addEventListener("click", function () {
-      fileState.seq++; fileState.batchSeq++;            // 진행 중 응답(추출·매칭·조회) 무시
-      fileState.items = []; fileState.sheets = []; fileState.selectedSheet = null; fileState.lastFile = null; fileState.emptyResult = false;
-      fileState.matching = false; fileState.looking = false; fileState.batchResultKey = null; fileState.batchMarket = null; fileState.doc = null;
-      var rb = $("regulatory-result-body"); if (rb) rb.innerHTML = "";     // 이전 일괄 결과 표 비우기
-      show($("regulatory-batch-stale"), false); show($("regulatory-partial-fail-notice"), false); show($("regulatory-retry-failed"), false);
-      setMatchBusy(false);
-      setText($("regulatory-match-progress"), "조회 포함 행의 성분명으로 후보를 찾아요. 정확히 일치하는 후보가 하나일 때만 자동 확정하고, 여러 후보는 행에서 직접 골라요.");
-      if (!$("regulatory-result-single") || $("regulatory-result-single").hidden) setResult("hidden");
-      if (reviewBody) reviewBody.innerHTML = "";
+      resetFileResults();
       hideFileError();
       setFileStep("upload");
-      if (fileInput) fileInput.value = "";
-      show($("regulatory-file-name"), false);
-      var docMarket = $("regulatory-file-doc-market"); if (docMarket) docMarket.textContent = "미확인";
-      if (fileInput) fileInput.focus();
+      clearFileSelection(true);
     });
   }
 
