@@ -66,35 +66,6 @@ const PRESETS = {
   cream: { name: '영양 크림', a: 2.0, c: 0.80, o: 28, h: 10, pack: 'jar' }
 };
 
-// 개발요청서 분석 프로필. result는 요청 용기(pack) 기준 분석값이며, 의뢰서가 적용된 동안
-// 점도·유동성·질감은 result를 유지하고 다른 용기를 고르면 그 점도로 궁합 점수를 다시 계산합니다.
-const BRIEFS = {
-  toner: {
-    kind: '토너', a: 2.0, c: 0.02, o: 1, h: 6, pack: 'dropper',
-    result: {
-      v: 180, flow: 95, score: 52, tone: 'caution', label: '주의 · 비효율', texture: '워터리 플루이드 (Watery)',
-      diagnosis: '점도가 너무 낮아(180 cPs) 스포이드 개봉 시 흘러내림 및 누수 위험. 정밀 토출 불필요.',
-      risk: '저점도로 인한 흘러내림·누수 가능성 확인', recs: ['onetouch', 'mist']
-    }
-  },
-  serum: {
-    kind: '세럼', a: 10.0, c: 0.15, o: 12, h: 15, pack: 'dropper',
-    result: {
-      v: 3850, flow: 65, score: 98, tone: 'excellent', label: '최적 적합', texture: '소프트 글라이딩 세럼',
-      diagnosis: '점도 3,850 cPs는 스포이드 팁 흡입 압력 및 드롭당 용량 제어에 완벽히 호환됩니다.',
-      risk: '흡입 압력·드롭 용량 제어 적합', recs: ['dropper', 'airless']
-    }
-  },
-  balm: {
-    kind: '밤', a: 15.0, c: 0.65, o: 45, h: 10, pack: 'dropper',
-    result: {
-      v: 52400, flow: 12, score: 18, tone: 'incompatible', label: '토출 불가', texture: '고밀도 리치 밤 (Balm)',
-      diagnosis: '초고점도(52,400 cPs)로 인해 스포이드 흡입 불가 및 팁 막힘 발생. 패키징 변경 필수.',
-      risk: '흡입 불가 및 팁 막힘 위험 확인', recs: ['jar', 'airless']
-    }
-  }
-};
-
 // min~max 적합, low~high 주의, 그 밖은 부적합. ideal은 적합 구간 안에서 만점에 가까운 점도입니다.
 const PACKS = {
   dropper: { name: '스포이드 (Dropper Pipette)', min: 500, max: 5000, low: 100, high: 8500, ideal: 2500, detail: '저·중점도 제형 (흡입/드롭 토출 제어)' },
@@ -151,6 +122,25 @@ function getEligiblePacks(v) {
   return Object.keys(PACKS).filter(key => evaluatePackage(v, key) === 'optimal');
 }
 
+function textureLabel(v) {
+  return v < 2500 ? '묽은 워터리' : v < 9000 ? '산뜻한 점성' : v < 25000 ? '농축 리치' : '고밀도 밤(Balm)';
+}
+
+function packDiagnosis(v, key, state) {
+  const packName = PACKS[key].name.split(' (')[0];
+  return state === 'optimal'
+    ? `${fmt(v)} cPs · ${packName}의 권장 점도 범위입니다. 실제 토출량과 안정성 시험으로 최종 확인하세요.`
+    : v < PACKS[key].min
+      ? `저점도 제형(${fmt(v)} cPs)으로 ${packName} 사용 시 누액·비산 가능성이 있습니다.`
+      : `고점도 제형(${fmt(v)} cPs)으로 ${packName} 사용 시 흡입 불량·토출 저항 및 노즐 막힘 위험이 있습니다.`;
+}
+
+function packRisk(v, key, state) {
+  return state === 'optimal'
+    ? '예측 점도 기준 적합 범위 확인'
+    : v < PACKS[key].min ? '저점도로 인한 누액·비산 가능성 확인' : '흡입 불량·토출 저항 및 노즐 막힘 가능성 확인';
+}
+
 // 추천 용기 버튼 UI 생성
 const PACK_ICONS = {
   dropper: 'M8 3h4v5l2 3v6H6v-6l2-3z',
@@ -198,9 +188,7 @@ $('recommendations').append(emptyMsg);
 function generateReports(v, key, state, score, brief) {
   const name = PACKS[key].name.split(' (')[0];
   const names = (brief ? brief.recs : getEligiblePacks(v)).filter(candidate => candidate !== key).map(candidate => PACKS[candidate].name.split(' (')[0]).join(' 또는 ');
-  const risk = brief ? brief.risk : state === 'optimal'
-    ? '예측 점도 기준 적합 범위 확인'
-    : v < PACKS[key].min ? '저점도로 인한 누액·비산 가능성 확인' : '흡입 불량·토출 저항 및 노즐 막힘 가능성 확인';
+  const risk = brief ? brief.risk : packRisk(v, key, state);
   const report = `점도 ${fmt(v)} cPs · ${name}: ${risk} (호환도 ${score}점).`;
   const action = state === 'optimal'
     ? '현 용기 유지 후 실제 토출량·안정성 시험 권장.'
@@ -269,7 +257,7 @@ function update() {
   $('lab-flow').textContent = `${flow} / 100`;
   $('lab-cycle').textContent = `${(.9 / (1 + v / 9000) + .08).toFixed(2)} /s`;
 
-  $('texture').textContent = spec ? spec.texture : v < 2500 ? '묽은 워터리' : v < 9000 ? '산뜻한 점성' : v < 25000 ? '농축 리치' : '고밀도 밤(Balm)';
+  $('texture').textContent = spec ? spec.texture : textureLabel(v);
   $('flow-caption').textContent = v < 9000 ? '빠른 유동성 · 얇은 퍼짐성' : v < 25000 ? '완만한 레벨링 · 보습 밀착' : '형태 유지 · 높은 응집력';
 
 
@@ -281,12 +269,7 @@ function update() {
   $('status-score').textContent = score;
   $('score-ring').style.setProperty('--simulation-score', `${score}%`);
   $('score-ring').setAttribute('aria-label', `예측 호환도 ${score}점 / 100, ${stateLabel}`);
-  const packName = PACKS[key].name.split(' (')[0];
-  $('diagnosis').textContent = brief ? brief.diagnosis : state === 'optimal'
-    ? `${fmt(v)} cPs · ${packName}의 권장 점도 범위입니다. 실제 토출량과 안정성 시험으로 최종 확인하세요.`
-    : v < PACKS[key].min
-      ? `저점도 제형(${fmt(v)} cPs)으로 ${packName} 사용 시 누액·비산 가능성이 있습니다.`
-      : `고점도 제형(${fmt(v)} cPs)으로 ${packName} 사용 시 흡입 불량·토출 저항 및 노즐 막힘 위험이 있습니다.`;
+  $('diagnosis').textContent = brief ? brief.diagnosis : packDiagnosis(v, key, state);
 
   // 권장 대체 용기 버튼 갱신 (요청 용기 분석 중에는 분석 결과의 권장 용기를 표시)
   const eligible = brief ? brief.recs : getEligiblePacks(v);
@@ -338,12 +321,14 @@ $('pack').addEventListener('change', () => testPack($('pack').value));
   $(id).addEventListener('keydown', stopBriefAnimation);
 });
 
-// 개발요청서 업로드 및 AI 분석: 로컬 파일 업로드 → 분석 진행 → 시뮬레이터 동기화
+// 개발요청서 업로드 및 AI 분석: 파일 업로드 → OpenAI가 본문을 읽고 스펙·근거 추출 → 결과 확인 → 시뮬레이터 적용
+// AI는 문서에서 목표 점도·배합 추정치·요청 용기를 읽고, 용기 호환도 점수는 이 파일의 4장 기준으로 계산합니다.
 const SLIDERS = ['active', 'carb', 'oil', 'hum'];
 const SLIDER_STEPS = Object.fromEntries(SLIDERS.map(id => [id, $(id).step]));
 const briefModal = $('brief-modal');
 const briefDialog = briefModal.querySelector('.modal');
-let analyzeTimers = [];
+let analyzeRequest = null; // 진행 중인 분석 요청: { controller, timer }
+let pendingBrief = null; // 결과 확인 단계에서 적용을 기다리는 의뢰서
 let briefFrame = 0;
 let toastTimer = 0;
 document.body.append(briefModal, $('toast')); // 페이지 container 밖에 두어 fixed 위치를 유지합니다.
@@ -360,50 +345,125 @@ function setBriefStep(step) {
   briefDialog.dataset.step = step;
   briefModal.querySelectorAll('[data-step-panel]').forEach(panel => { panel.hidden = panel.dataset.stepPanel !== step; });
 }
-function clearAnalyzeTimers() { analyzeTimers.forEach(clearTimeout); analyzeTimers = []; }
-function resetBriefModal() {
-  clearAnalyzeTimers();
-  $('brief-file').value = '';
-  $('brief-error').hidden = true;
-  $('brief-drop').classList.remove('is-dragover', 'is-error');
-  setBriefStep('select');
+function cancelAnalyze() {
+  if (!analyzeRequest) return;
+  analyzeRequest.controller.abort();
+  clearInterval(analyzeRequest.timer);
+  analyzeRequest = null;
 }
-
-
-// 업로드 파일은 파일명의 제형 키워드·문서 코드로 분석 프로필을 고릅니다. (문서 본문은 읽지 않음)
-function matchBrief(name) {
-  if (/토너|toner|GL-/i.test(name)) return 'toner';
-  if (/세럼|serum|DM-/i.test(name)) return 'serum';
-  if (/밤|balm|크림|cream|AN-/i.test(name)) return 'balm';
-  return 'serum';
-}
-function handleBriefFile(file) {
-  if (!file) return;
-  const message = !/\.(pdf|docx?)$/i.test(file.name) ? 'PDF 또는 Word(.doc, .docx) 파일만 업로드할 수 있어요.'
-    : file.size > 20 * 1024 * 1024 ? '20MB 이하의 파일만 업로드할 수 있어요.' : '';
+function showBriefError(message) {
   $('brief-error').textContent = message;
   $('brief-error').hidden = !message;
   $('brief-drop').classList.toggle('is-error', Boolean(message));
-  if (!message) analyzeBrief(matchBrief(file.name), file.name, 1200);
+}
+function resetBriefModal() {
+  cancelAnalyze();
+  pendingBrief = null;
+  $('brief-file').value = '';
+  showBriefError('');
+  $('brief-drop').classList.remove('is-dragover');
+  setBriefStep('select');
 }
 
-function analyzeBrief(key, fileName, duration) {
-  clearAnalyzeTimers();
-  const code = fileName.match(/\b([A-Z]{2}-\d{4})\b/)?.[1] ?? fileName.replace(/\.[^.]+$/, '');
-  const brief = { ...BRIEFS[key], file: fileName, code, title: code };
-  briefModal.querySelectorAll('[data-brief-filename]').forEach(el => { el.textContent = fileName; });
-  $('brief-file-icon').textContent = /\.docx?$/i.test(fileName) ? 'DOC' : 'PDF';
-  const checks = [...$('brief-checks').children];
-  checks.forEach(li => li.classList.remove('is-done'));
-  const bar = $('brief-progress');
-  bar.style.transitionDuration = '0s';
-  bar.style.width = '0%';
+function handleBriefFile(file) {
+  if (!file) return;
+  const message = !/\.(pdf|docx)$/i.test(file.name) ? 'PDF 또는 Word(.docx) 파일만 업로드할 수 있어요.'
+    : file.size > 20 * 1024 * 1024 ? '20MB 이하의 파일만 업로드할 수 있어요.' : '';
+  showBriefError(message);
+  if (!message) analyzeBrief(file);
+}
+
+async function analyzeBrief(file) {
+  cancelAnalyze();
+  briefModal.querySelectorAll('[data-brief-filename]').forEach(el => { el.textContent = file.name; });
+  briefModal.querySelectorAll('[data-brief-file-icon]').forEach(el => { el.textContent = /\.docx$/i.test(file.name) ? 'DOC' : 'PDF'; });
+  const started = Date.now();
+  $('brief-elapsed').textContent = '0초';
+  const request = { controller: new AbortController(), timer: setInterval(() => { $('brief-elapsed').textContent = `${Math.floor((Date.now() - started) / 1000)}초`; }, 1000) };
+  analyzeRequest = request;
   setBriefStep('analyzing');
-  void bar.offsetWidth;
-  bar.style.transitionDuration = `${duration}ms`;
-  bar.style.width = '100%';
-  checks.forEach((li, i) => analyzeTimers.push(setTimeout(() => li.classList.add('is-done'), duration * (i + 1) / (checks.length + 1))));
-  analyzeTimers.push(setTimeout(() => applyBrief(brief), duration + 120));
+  const body = new FormData();
+  body.append('file', file);
+  let data;
+  try {
+    const response = await fetch(briefModal.dataset.analyzeUrl, { method: 'POST', body, signal: request.controller.signal });
+    data = await response.json().catch(() => ({ error: '분석 결과를 받지 못했어요. 로그인 상태를 확인하고 다시 시도해 주세요.' }));
+    if (!response.ok || data.error) throw new Error(data.error || '분석하지 못했어요. 잠시 후 다시 시도해 주세요.');
+  } catch (error) {
+    if (request.controller.signal.aborted) return; // 사용자가 모달을 닫았거나 다른 파일을 올림
+    cancelAnalyze();
+    setBriefStep('select');
+    $('brief-file').value = '';
+    showBriefError(error instanceof TypeError ? '서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.' : error.message);
+    return;
+  }
+  if (analyzeRequest !== request) return;
+  cancelAnalyze();
+  pendingBrief = buildBrief(data);
+  renderBriefResult(data, pendingBrief);
+  setBriefStep('result');
+  $('brief-apply').focus();
+}
+
+// OpenAI가 읽은 스펙을 시뮬레이터 의뢰서로 바꿉니다. 점도가 문서에 없으면 추정 배합의 예측 점도식을 씁니다.
+function buildBrief(data) {
+  const f = data.formula;
+  const stated = data.viscosity.value != null;
+  const v = stated ? data.viscosity.value : calculateViscosity(f.active, f.carbomer, f.oil, f.humectant);
+  // 요청 용기가 없으면 점도에 가장 잘 맞는 용기를 기준으로 삼습니다.
+  const scoreOf = key => calculateScore(v, key, evaluatePackage(v, key));
+  const pack = data.pack || Object.keys(PACKS).reduce((best, key) => scoreOf(key) > scoreOf(best) ? key : best);
+  const state = evaluatePackage(v, pack);
+  const score = calculateScore(v, pack, state);
+  const tone = state === 'optimal' && score >= 95 ? 'excellent' : state;
+  return {
+    kind: data.kind, a: f.active, c: f.carbomer, o: f.oil, h: f.humectant, pack,
+    file: data.file, code: data.code, title: data.product_name ? `${data.code} · ${data.product_name}` : data.code,
+    viscosityStated: stated, packStated: Boolean(data.pack),
+    result: {
+      v, flow: Math.round(100 / (1 + v / 6500)), score, tone, label: STATES[tone].label,
+      texture: data.texture || textureLabel(v),
+      diagnosis: `${stated ? '의뢰서 명시 점도' : '추정 배합의 예측 점도'} 기준. ${packDiagnosis(v, pack, state)}`,
+      risk: packRisk(v, pack, state), recs: getEligiblePacks(v)
+    }
+  };
+}
+
+// 결과 확인 단계: 추출값과 문서 근거 문장을 보여줍니다. 문서 내용은 textContent로만 넣습니다.
+function renderBriefResult(data, brief) {
+  const el = (tag, text) => Object.assign(document.createElement(tag), { textContent: text ?? '' });
+  const badge = (text, basis) => {
+    const small = el('small', text);
+    small.dataset.basis = basis;
+    return small;
+  };
+  $('brief-summary').textContent = data.summary;
+  const rows = [
+    ['제품', [data.product_name, brief.kind].filter(Boolean).join(' · ')],
+    ['목표 점도', `${fmt(brief.result.v)} cPs`, brief.viscosityStated ? badge('의뢰서 명시', 'stated') : badge('배합으로 추정', 'estimated')],
+    ['추정 배합', `유효 ${brief.a}% · 점증 ${brief.c}% · 오일 ${brief.o}% · 보습 ${brief.h}%`, badge('AI 추정', 'estimated')],
+    ['요청 용기', PACKS[brief.pack].name.split(' (')[0], brief.packStated ? badge('의뢰서 명시', 'stated') : badge('미지정 · 점도 기준 선택', 'estimated')],
+    ['유효성분', data.actives.map(a => a.percent ? `${a.name} ${a.percent}` : a.name).join(', ') || '문서에 명시 없음'],
+    ['질감', brief.result.texture],
+    ['용기 호환도', `${brief.result.score}점 · ${brief.result.label}`]
+  ];
+  $('brief-spec').replaceChildren(...rows.flatMap(([label, value, tag]) => {
+    const dd = el('dd', value);
+    if (tag) dd.append(tag);
+    return [el('dt', label), dd];
+  }));
+  const quotes = [...data.evidence];
+  if (data.viscosity.quote) quotes.unshift({ label: '목표 점도', quote: data.viscosity.quote, page: data.viscosity.page });
+  if (data.pack_quote) quotes.push({ label: '요청 용기', quote: data.pack_quote, page: '' });
+  const seen = new Set();
+  const items = quotes.filter(q => !seen.has(q.quote) && seen.add(q.quote)).map(q => {
+    const li = el('li');
+    li.append(el('b', q.label), el('q', q.quote));
+    if (q.page) li.append(el('span', `p.${String(q.page).replace(/^p\.?\s*/i, '')}`));
+    return li;
+  });
+  $('brief-evidence').replaceChildren(...(items.length ? items : [el('li', '문서에서 직접 인용할 근거를 찾지 못했어요. 추정값을 확인한 뒤 적용하세요.')]));
+  $('brief-basis').textContent = data.formula_basis ? `배합 추정 근거: ${data.formula_basis}` : '';
 }
 
 function stopBriefAnimation() {
@@ -473,7 +533,7 @@ function testPack(key) {
 }
 // 모달을 닫고 슬라이더·지표·점수를 0.5초 동안 새 값으로 롤링 전환합니다.
 function applyBrief(brief) {
-  clearAnalyzeTimers();
+  cancelAnalyze();
   window.Common.closeModal('simulation-brief-modal');
   appliedBrief = brief;
   let option = $('preset').querySelector('option[value=brief]');
@@ -510,8 +570,13 @@ $('brief-drop').addEventListener('drop', event => {
   $('brief-drop').classList.remove('is-dragover');
   handleBriefFile(event.dataTransfer.files[0]);
 });
-// 분석 중 모달을 닫으면 진행 중인 분석을 취소합니다.
-new MutationObserver(() => { if (!briefModal.classList.contains('is-open')) clearAnalyzeTimers(); })
+$('brief-apply').addEventListener('click', () => { if (pendingBrief) applyBrief(pendingBrief); });
+$('brief-retry').addEventListener('click', () => {
+  resetBriefModal();
+  requestAnimationFrame(() => $('brief-drop').focus());
+});
+// 분석 중 모달을 닫으면 진행 중인 분석 요청을 취소합니다.
+new MutationObserver(() => { if (!briefModal.classList.contains('is-open')) cancelAnalyze(); })
   .observe(briefModal, { attributes: true, attributeFilter: ['class'] });
 setBriefStep('select');
 
