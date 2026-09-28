@@ -165,7 +165,7 @@
 .regulatory-file-card__body { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); }
 .regulatory-file-card__name {
   margin: 0;
-  font-size: var(--font-size-body);
+  font-size: var(--font-size-label);      /* 14px — 본문 16px 보다 2px 작게 (공통 단계 값). 굵기·색은 그대로 */
   font-weight: var(--font-weight-bold);
   line-height: 1.4;
   color: var(--color-text-primary);
