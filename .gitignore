@@ -18,6 +18,12 @@ env/
 # Flask
 instance/
 
+# 로컬 DB (계정·캐시 등) — 배포용 식약처 규제 DB 한 개만 예외 (docs/deploy_render.md)
+*.db
+*.sqlite
+*.sqlite3
+!data/regulatory/mfds_use_restriction.sqlite
+
 # IDE / OS
 .vscode/
 .idea/

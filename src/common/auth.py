@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import sqlite3
 from datetime import datetime
@@ -22,7 +23,15 @@ from werkzeug.security import check_password_hash, generate_password_hash
 _DB_PATH: Path | None = None
 
 
-def init(db_path: Path) -> None:
+log = logging.getLogger("cosmoa.auth")
+
+_DEFAULT_DEMO_PASSWORD = "cosmoa1234"
+
+
+def init(db_path: Path, production: bool = False) -> None:
+    """users 테이블 준비. 계정이 하나도 없으면 데모 계정을 만듭니다.
+    production=True 이면 COSMOA_DEMO_EMAIL / COSMOA_DEMO_PASSWORD 가 모두 설정돼 있고 공개 기본값이 아닐 때만 만듭니다.
+    이미 있는 계정은 환경변수를 바꿔도 비밀번호가 바뀌지 않습니다 → 아래 set_password() / 파일 하단 명령 사용."""
     global _DB_PATH
     _DB_PATH = db_path
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -42,6 +51,10 @@ def init(db_path: Path) -> None:
         c.execute("DELETE FROM users WHERE trim(email) = ''")
         if c.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
             email, password, name, team = demo_account()
+            if production and not _demo_env_ok():
+                log.warning("계정이 없지만 COSMOA_DEMO_EMAIL / COSMOA_DEMO_PASSWORD 가 설정되지 않았거나 공개 기본값이라 "
+                            "데모 계정을 만들지 않았습니다. 환경변수를 설정하고 다시 시작하세요.")
+                return
             c.execute(   # 같은 연결로 넣습니다 (위 DELETE 가 쓰기 잠금을 잡고 있어 새 연결은 잠김)
                 "INSERT OR IGNORE INTO users (email, name, team, password_hash) VALUES (?,?,?,?)",
                 (email.lower(), name, team, generate_password_hash(password)),
@@ -52,10 +65,16 @@ def demo_account() -> tuple[str, str, str, str]:
     """데모 계정 (email, password, name, team). .env 값이 없거나 비어 있으면 기본값."""
     return (
         os.getenv("COSMOA_DEMO_EMAIL", "").strip() or "demo@costd.kr",
-        os.getenv("COSMOA_DEMO_PASSWORD", "").strip() or "cosmoa1234",
+        os.getenv("COSMOA_DEMO_PASSWORD", "").strip() or _DEFAULT_DEMO_PASSWORD,
         os.getenv("COSMOA_DEMO_NAME", "").strip() or "데모 사용자",
         os.getenv("COSMOA_DEMO_TEAM", "").strip() or "해외영업팀",
     )
+
+
+def _demo_env_ok() -> bool:
+    email = os.getenv("COSMOA_DEMO_EMAIL", "").strip()
+    password = os.getenv("COSMOA_DEMO_PASSWORD", "").strip()
+    return bool(email) and bool(password) and password != _DEFAULT_DEMO_PASSWORD
 
 
 def _conn() -> sqlite3.Connection:
@@ -71,6 +90,14 @@ def create_user(email: str, password: str, name: str, team: str = "") -> None:
             "INSERT OR IGNORE INTO users (email, name, team, password_hash) VALUES (?,?,?,?)",
             (email.strip().lower(), name.strip(), team.strip(), generate_password_hash(password)),
         )
+
+
+def set_password(email: str, password: str) -> bool:
+    """이미 있는 계정의 비밀번호를 바꿉니다. 계정이 없으면 False."""
+    with _conn() as c:
+        cur = c.execute("UPDATE users SET password_hash=? WHERE email=?",
+                        (generate_password_hash(password), email.strip().lower()))
+        return cur.rowcount == 1
 
 
 def authenticate(email: str, password: str) -> dict | None:
@@ -113,3 +140,23 @@ def login_required(view):
             return redirect(url_for("login", next=request.full_path.rstrip("?")))
         return view(*args, **kwargs)
     return wrapped
+
+
+if __name__ == "__main__":
+    # 기존 계정 비밀번호 변경 (저장소 루트에서 실행, 서버 재시작 불필요)
+    #   python -m src.common.auth set-password <email>
+    # 새 비밀번호는 화면에 표시되지 않는 입력으로 받습니다. (명령 기록·로그에 남지 않도록 인자로 받지 않음)
+    import getpass
+    import sys
+
+    if len(sys.argv) != 3 or sys.argv[1] != "set-password":
+        sys.exit("사용법: python -m src.common.auth set-password <email>")
+    _DB_PATH = Path(__file__).resolve().parents[2] / "instance" / "cosmoa.db"   # app.py DB_PATH 와 같은 파일
+    if not _DB_PATH.is_file():
+        sys.exit("계정 DB가 없습니다: %s" % _DB_PATH)
+    new_password = getpass.getpass("새 비밀번호: ")
+    if len(new_password) < 8 or new_password != getpass.getpass("새 비밀번호 확인: "):
+        sys.exit("비밀번호가 8자 미만이거나 확인 값과 다릅니다. 변경하지 않았습니다.")
+    if not set_password(sys.argv[2], new_password):
+        sys.exit("해당 이메일의 계정이 없습니다.")
+    print("비밀번호를 변경했습니다.")
